@@ -139,8 +139,8 @@ def transcribe_video(filename):
 
 if __name__ == "__main__":
 
-    video_list = load_channels_list_from_file("transcription.txt")
-    save_channels_list_to_file("transcription.txt", [])
+    video_list = load_source_list_from_file("transcription.txt")
+    save_source_list_to_file("transcription.txt", [])
 
     for fn in video_list:
         file_path = "yt-video/" + fn
