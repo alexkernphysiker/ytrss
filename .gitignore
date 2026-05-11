@@ -1,0 +1,12 @@
+yt-video/
+*.txt
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.bak
+*.swp
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,6 @@
+# ytrss
+
+ytrss is a lightweight utility for generating RSS feeds from YouTube channels and videos. It fetches YouTube content and exposes it in a simple RSS-compatible format for feed readers and automation workflows.
+
+Additionally, ytrss supports video transcription, allowing users to obtain text transcripts of YouTube videos for accessibility, searchability, or further processing.
+
