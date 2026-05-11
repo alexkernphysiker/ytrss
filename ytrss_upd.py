@@ -61,9 +61,9 @@ def download_video(link, filename):
 def update_channels_feed():
     print(f"Fetching channels")
     links=[]
-    for channel_id in load_channels_list_from_file("channels.txt"):
+    for channel_id in load_source_list_from_file("channels.txt"):
         links.append(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
-    for playlist_id in load_channels_list_from_file("playlists.txt"):
+    for playlist_id in load_source_list_from_file("playlists.txt"):
         links.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}")
 
     for link in links:
