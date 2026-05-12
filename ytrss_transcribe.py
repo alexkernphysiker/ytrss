@@ -14,13 +14,13 @@ def convert_video_to_audio(video_file_path, audio_file_path):
     subprocess.call(command, shell=True)
 
 def split_mp3_file(mp3_file_path, chunk_length_s=1000):
-    for file in sorted(Path("yt-video").glob("out.*.mp3")):
+    for file in sorted(Path("yt-video").glob("chunk.*.mp3")):
         if file.is_file():
             print(f"Removing old mp3 chunk file: {file}")
             file.unlink()
-    command = "ffmpeg -i {} -f segment -segment_time {} -c copy yt-video/out.%03d.mp3".format(mp3_file_path, chunk_length_s)
+    command = "ffmpeg -i {} -f segment -segment_time {} -c copy yt-video/chunk.%05d.mp3".format(mp3_file_path, chunk_length_s)
     subprocess.call(command, shell=True)
-    for file in sorted(Path("yt-video").glob("out.*.mp3")):
+    for file in sorted(Path("yt-video").glob("chunk.*.mp3")):
         if file.is_file():
             print(f"mp3 chunk file: {file}")
             yield(f"{file}")
