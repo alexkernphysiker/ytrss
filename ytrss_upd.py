@@ -14,7 +14,7 @@ from openai import OpenAI
 from sklearn import tree
 from utils import *
 
-max_days = 35
+max_days = 18
 
 def cleanup():
     now = arrow.now()
