@@ -159,56 +159,19 @@ def transcribe(filename):
 
 ### rss feed generation
 
-@app.route("/")
+@app.route("/feed")
 def yt_feed():
     global url_link
-    output="<feed xmlns=\"http://www.w3.org/2005/Atom\">  <title>Моя стрічка YouTube</title><link href=\"http://youtube.com/\" />\n"
-    for description_path in Path("yt-video").glob("*.desc"):
-        transcription_path = str(description_path).replace(".desc", ".txt")
-        fn = os.path.basename(description_path).replace(".desc", "")
-        
-        parser1 = etree.XMLParser(encoding="utf-8", recover=True)
-        entry = etree.parse(description_path, parser1)
-        title_element = entry.find("title")
-        description_element = entry.find("summary")
-        try:
-            duration_element = entry.find("duration")
-            duration=int(duration_element.text)
-        except:
-            duration=10000
-        
-        enclosure_element = entry.find("enclosure")
-        if enclosure_element is not None:
-            enclosure_element.set("url", enclosure_element.get("url").replace("__URL_LINK__", url_link))
+    return generate_feed(url_link, False)
 
-        modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
-        age = datetime.now() - modified_time
-        duration_string = f"{duration//3600}:{(duration%3600)//60:02d}:{duration%60:02d}"
-
-        if os.path.exists(transcription_path):
-            string_list = open(transcription_path, "r").read().split('\n')
-            descr = description_element.text if description_element.text is not None else ""
-            description_element.text = f"<p>[VIDEO TRANSCRIPTION]</p> <br/><p>[{duration_string}]</p> <br/>"
-            for line in string_list:
-                description_element.text += "<p>"+line+"</p> <br/>"
-            description_element.text += "<p>[VIDEO DESCRIPTION]</p> <br/>" + descr
-            title_element.text = "transcribed: " + title_element.text
-        elif duration < 9000 and age < timedelta(days=7):
-            transcribe_link = f"<br/> <a href='{url_link}/transcribe/{fn}'>Transcribe this video</a> <br/>[Video description] <br/><p>[{duration_string}]</p> <br/>"
-            if not description_element.text is None:
-                description_element.text = transcribe_link + description_element.text
-            else:
-                description_element.text = transcribe_link
-        else:
-            description_element.text = f"[Video description] <br/> <p>[{duration_string}]</p> <br/>" + (description_element.text if description_element.text is not None else "")
-
-        output += etree.tostring(entry, encoding="unicode") + "\n"
-    output += "</feed>\n"
-    return output
+@app.route("/")
+def index():
+    global url_link
+    return generate_feed(url_link, False)
 
 @app.route("/file/<path:filename>.mp4")
 def download(filename):
-    return send_file("yt-video/"+filename)
+    return return_file(filename)
 
 if __name__ == "__main__":
     app.run(host=host, port=port)
