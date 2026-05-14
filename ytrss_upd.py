@@ -121,6 +121,12 @@ def update_channels_feed():
                                 file_duration_yt = get_file_duration(link_element.get("href"))
                                 duration_element = ElementTree.SubElement(entry_element, "duration")
                                 duration_element.text = file_duration_yt
+                                try:
+                                    duration_secs = int(file_duration_yt)
+                                    duration_string_element = ElementTree.SubElement(entry_element, "itunes:duration")
+                                    duration_string_element.text = duration_string(duration_secs)
+                                except:
+                                    print(f"Could not parse duration for video {fn}, skipping duration string")
                                 if file_size_yt > 0:
                                     try:
                                         file_size = os.path.getsize(file_path)

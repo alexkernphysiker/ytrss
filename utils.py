@@ -50,6 +50,9 @@ def save_source_list_to_file(filename, sources):
         for source in sources:
             f.write(source + '\n') 
 
+def duration_string(duration_secs):
+    return f"{duration_secs//3600}:{(duration_secs%3600)//60:02d}:{duration_secs%60:02d}"
+
 from lxml import etree
 def generate_feed(url_link, is_public):
     output="<feed xmlns=\"http://www.w3.org/2005/Atom\">  <title>Моя стрічка YouTube</title><link href=\"http://youtube.com/\" />\n"
@@ -73,24 +76,24 @@ def generate_feed(url_link, is_public):
 
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
-        duration_string = f"{duration//3600}:{(duration%3600)//60:02d}:{duration%60:02d}"
+        duration_str = duration_string(duration)
 
         if os.path.exists(transcription_path):
             string_list = open(transcription_path, "r").read().split('\n')
             descr = description_element.text if description_element.text is not None else ""
-            description_element.text = f"<p>[VIDEO TRANSCRIPTION]</p> <br/><p>[{duration_string}]</p> <br/>"
+            description_element.text = f"<p>[VIDEO TRANSCRIPTION]</p> <br/><p>[{duration_str}]</p> <br/>"
             for line in string_list:
                 description_element.text += "<p>"+line+"</p> <br/>"
             description_element.text += "<p>[VIDEO DESCRIPTION]</p> <br/>" + descr
             title_element.text = "transcribed: " + title_element.text
         elif duration < 9000 and age < timedelta(days=7) and not is_public:
-                transcribe_link = f"<br/> <a href='{url_link}/transcribe/{fn}'>Transcribe this video</a> <br/>[Video description] <br/><p>[{duration_string}]</p> <br/>"
+                transcribe_link = f"<br/> <a href='{url_link}/transcribe/{fn}'>Transcribe this video</a> <br/>[Video description] <br/><p>[{duration_str}]</p> <br/>"
                 if not description_element.text is None:
                     description_element.text = transcribe_link + description_element.text
                 else:
                     description_element.text = transcribe_link
         else:
-            description_element.text = f"[Video description] <br/> <p>[{duration_string}]</p> <br/>" + (description_element.text if description_element.text is not None else "")
+            description_element.text = f"[Video description] <br/> <p>[{duration_str}]</p> <br/>" + (description_element.text if description_element.text is not None else "")
 
         output += etree.tostring(entry, encoding="unicode") + "\n"
     output += "</feed>\n"
