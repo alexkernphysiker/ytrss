@@ -15,7 +15,7 @@ from utils import *
 
 max_days = 30
 recheck_size_days = 7
-auto_transcript_days = 1
+auto_transcript_hours = 6
 auto_transcript_max_duration_mins = 120
 
 def cleanup():
@@ -194,8 +194,8 @@ def update_channels_feed():
                         with open(description_path, "w") as f:
                             item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
                             f.write(item_string)
-                        if auto_transcript_days >0 and os.path.exists(file_path):
-                            if time_since_insertion < timedelta(days=auto_transcript_days):
+                        if auto_transcript_hours > 0 and os.path.exists(file_path):
+                            if time_since_insertion < timedelta(hours=auto_transcript_hours):
                                 print(f"Processing auto-transcription for video {fn}")
                                 transcription_path = "yt-video/" + fn + ".txt"
                                 if not os.path.exists(transcription_path):
