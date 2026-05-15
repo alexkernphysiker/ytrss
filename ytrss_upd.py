@@ -10,12 +10,12 @@ import dateutil.parser
 import time
 from pathlib import Path
 import arrow
-from openai import OpenAI
-from sklearn import tree
 from utils import *
 
 max_days = 30
-auto_transcript = True
+recheck_size_days = 7
+auto_transcript_days = 1
+auto_transcript_max_duration_mins = 120
 
 def cleanup():
     now = arrow.now()
@@ -120,7 +120,7 @@ def update_channels_feed():
                         file_path = "yt-video/" + fn
                         description_path = "yt-video/" + fn + ".desc"
                         if os.path.exists(file_path):
-                            if time_since_insertion < timedelta(days=5):
+                            if time_since_insertion < timedelta(days=recheck_size_days):
                                 file_size_yt = get_yt_file_size(link_element.get("href"))
                                 time.sleep(5)
                                 file_duration_yt = get_file_duration(link_element.get("href"))
@@ -193,20 +193,28 @@ def update_channels_feed():
                         with open(description_path, "w") as f:
                             item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
                             f.write(item_string)
-                        if auto_transcript:
-                            if file_duration_yt != "" and time_since_insertion < timedelta(days=1):
+                        if auto_transcript_days >0 and os.path.exists(file_path):
+                            if time_since_insertion < timedelta(days=auto_transcript_days):
+                                print(f"Processing auto-transcription for video {fn}")
                                 transcription_path = "yt-video/" + fn + ".txt"
                                 if not os.path.exists(transcription_path):
+                                    print(f"This video has no transcription but auto transcription is enabled, trying to get duration and schedule transcription if duration is reasonable...")
                                     try:
                                         duration_secs = int(file_duration_yt)
-                                        if duration_secs > 0 and duration_secs < 60*60:
+                                        if duration_secs > 0 and duration_secs < auto_transcript_max_duration_mins * 60:
                                             video_list = load_source_list_from_file("transcription.txt")
                                             if not fn in video_list:
                                                 print(f"Automatically scheduled video transcription {fn} with duration {duration_string(duration_secs)}")
                                                 video_list.append(fn)
-                                                save_source_list_to_file("transcription.txt", video_list)                                   
+                                                save_source_list_to_file("transcription.txt", video_list)
+                                            else:
+                                                print(f"Video {fn} is already scheduled for transcription")
+                                        else:
+                                            print(f"Video {fn} has unreasonable duration {duration_string(duration_secs)}, skipping transcription")
                                     except:
-                                        print(f"Could not parse duration for video {fn}, skipping transcription")
+                                        print(f"Could not parse duration for video {fn}")
+                                else:
+                                    print(f"Video {fn} already has transcription")
                         modTime = time.mktime(insertion_date.timetuple())
                         os.utime(description_path, (modTime, modTime))
                         count_used += 1

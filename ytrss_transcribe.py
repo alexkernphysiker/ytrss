@@ -5,6 +5,7 @@ import os
 import subprocess
 import re
 from pathlib import Path
+from time import time
 from urllib import response
 from lxml import etree
 from utils import *
@@ -37,23 +38,14 @@ def split_mp3_file(mp3_file_path, chunk_length_s=1000):
 
 def detect_language(description_path):
     if os.path.exists(description_path):
-        parser1 = etree.XMLParser(encoding="utf-8", recover=True)
-        entry = etree.parse(description_path, parser1)
-        title_element = entry.find("title")
-        source_element = entry.find("yt:channelname")
-        if source_element is None:
-            source_element = entry.find("yt:playlistname")
-        title = ""
-        if source_element is not None:
-            title += source_element.text + "\n"
-        if title_element is not None:
-            title += title_element.text
-        if bool(re.search('[а-яА-Я]', title)):
-                return "uk"
-        elif bool(re.search('[ąęłżĄĘŁŻ]', title)):
-                return "pl"
+        file=open(description_path, "r", encoding="utf-8")
+        text=file.read()
+        if bool(re.search('[а-яА-ЯЇЄїєҐґ]', text)):
+            return "uk"
+        elif bool(re.search('[ąęłżĄĘŁŻ]', text)):
+            return "pl"
         else:
-            return "en"
+            return ""
     else:
         return ""
 
@@ -172,33 +164,19 @@ def transcribe_video(filename):
         print(f"Transcription for video {filename} already exists, skipping transcription.")
         return
     
-    try:
-        print(f"Transcribing video {filename}...")
+    print(f"Transcribing video {filename}...")
+    #OpenAI seems to be too expesive for everyday use
+    #text = run_openai(filename, list(split_mp3_file(convert_video_to_audio(video_path))), detect_language(description_path))
+    text = run_gemini(filename, get_video_link(description_path), detect_language(description_path))
 
-        try:
-            #OpenAI seems to be too expesive for everyday use
-            #text = run_openai(filename, list(split_mp3_file(convert_video_to_audio(video_path))), detect_language(description_path))
-            text = run_gemini(filename, get_video_link(description_path), detect_language(description_path))
-        except Exception as e:
-            print(f"An error occurred while transcribing video {filename}: {str(e)}")
-            text = ""
-
-        if text is not None and text.strip() != "":
-            with open(transcription_path, "w") as f:
-                f.write(text)
-            print(f"Transcription for video {filename} completed")
-        else:
-            print(f"Transcription for video {filename} is empty, not creating transcription file.")
-
-    except Exception as e:
-        print(f"An error occurred during transcription: {str(e)}")
+    if text is not None and text.strip() != "":
         with open(transcription_path, "w") as f:
-            f.write(f"An error occurred during transcription: {str(e)}")
-
-    if os.path.exists(transcription_path):
+            f.write(text)
         modTime = os.path.getmtime(video_path)
         os.utime(transcription_path, (modTime, modTime))
-        return
+        print(f"Transcription for video {filename} completed")
+    else:
+        print(f"Transcription for video {filename} is empty, not creating transcription file.")
 
 
 
