@@ -15,6 +15,7 @@ from sklearn import tree
 from utils import *
 
 max_days = 30
+auto_transcript = True
 
 def cleanup():
     now = arrow.now()
@@ -57,6 +58,7 @@ def download_video(link, filename):
         if re.search('live', proc.stderr.decode(), re.IGNORECASE):
             print(f"Video {filename} is a future live, skipping item.")
             return False
+        return False
 
 def update_channels_feed():
     print(f"Fetching channels")
@@ -100,6 +102,7 @@ def update_channels_feed():
                     else:
                         media_description = entry.find("{http://www.w3.org/2005/Atom}summary")
                     if "shorts" not in link_element.get("href") and time_since_insertion < timedelta(days=max_days):
+                        file_duration_yt=""
                         entry_element = ElementTree.Element("entry")
                         title_element = ElementTree.SubElement(entry_element, "title")
                         title_element.text = "[" + source_name + "] " + title.text
@@ -119,6 +122,7 @@ def update_channels_feed():
                         if os.path.exists(file_path):
                             if time_since_insertion < timedelta(days=5):
                                 file_size_yt = get_yt_file_size(link_element.get("href"))
+                                time.sleep(5)
                                 file_duration_yt = get_file_duration(link_element.get("href"))
                                 try:
                                     duration_secs = int(file_duration_yt)
@@ -137,7 +141,10 @@ def update_channels_feed():
                                     if file_size_yt != file_size:
                                         print(f"File for video {fn} has different size than expected, redownloading...")
                                         os.remove(file_path)
-                                        download_video(link_element.get("href"), file_path)
+                                        time.sleep(5)
+                                        if not download_video(link_element.get("href"), file_path):
+                                            print(f"Failed to download video {fn}, skipping item.")
+                                            continue
                                     else:
                                         print(f"Existing file for video {fn} is of expected size, using existing file")
                                 else:
@@ -148,6 +155,7 @@ def update_channels_feed():
                                 continue
                         else:
                             print(f"No existing file for video {fn}, downloading...")
+                            time.sleep(5)
                             if not download_video(link_element.get("href"), file_path):
                                 print(f"Failed to download video {fn}, skipping item.")
                                 continue
@@ -185,6 +193,20 @@ def update_channels_feed():
                         with open(description_path, "w") as f:
                             item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
                             f.write(item_string)
+                        if auto_transcript:
+                            if file_duration_yt != "" and time_since_insertion < timedelta(days=1):
+                                transcription_path = "yt-video/" + fn + ".txt"
+                                if not os.path.exists(transcription_path):
+                                    try:
+                                        duration_secs = int(file_duration_yt)
+                                        if duration_secs > 0 and duration_secs < 60*60:
+                                            video_list = load_source_list_from_file("transcription.txt")
+                                            if not fn in video_list:
+                                                print(f"Automatically scheduled video transcription {fn} with duration {duration_string(duration_secs)}")
+                                                video_list.append(fn)
+                                                save_source_list_to_file("transcription.txt", video_list)                                   
+                                    except:
+                                        print(f"Could not parse duration for video {fn}, skipping transcription")
                         modTime = time.mktime(insertion_date.timetuple())
                         os.utime(description_path, (modTime, modTime))
                         count_used += 1

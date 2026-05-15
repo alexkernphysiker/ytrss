@@ -40,11 +40,17 @@ def detect_language(description_path):
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
         entry = etree.parse(description_path, parser1)
         title_element = entry.find("title")
-        if title_element is None:
-            return ""
-        if bool(re.search('[а-яА-Я]', title_element.text)):
+        source_element = entry.find("yt:channelname")
+        if source_element is None:
+            source_element = entry.find("yt:playlistname")
+        title = ""
+        if source_element is not None:
+            title += source_element.text + "\n"
+        if title_element is not None:
+            title += title_element.text
+        if bool(re.search('[а-яА-Я]', title)):
                 return "uk"
-        elif bool(re.search('[ąęłżĄĘŁŻ]', title_element.text)):
+        elif bool(re.search('[ąęłżĄĘŁŻ]', title)):
                 return "pl"
         else:
             return "en"
@@ -175,7 +181,7 @@ def transcribe_video(filename):
             text = run_gemini(filename, get_video_link(description_path), detect_language(description_path))
         except Exception as e:
             print(f"An error occurred while transcribing video {filename}: {str(e)}")
-            text = f"An error occurred while transcribing: {str(e)}"
+            text = ""
 
         if text is not None and text.strip() != "":
             with open(transcription_path, "w") as f:

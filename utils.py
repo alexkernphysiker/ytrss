@@ -113,7 +113,6 @@ def generate_feed(url_link, is_public):
             for line in string_list:
                 description_element.text += "<p>"+line+"</p> <br/>"
             description_element.text += "<p>[VIDEO DESCRIPTION]</p> <br/>" + descr
-            title_element.text = "transcribed: " + title_element.text
         elif age < timedelta(days=7) and not is_public:
                 transcribe_link = f"<br/> <a href='{url_link}/transcribe/{fn}'>Transcribe this video</a> <br/>[Video description] <br/><p>[{duration_str}]</p> <br/>"
                 if not description_element.text is None:
