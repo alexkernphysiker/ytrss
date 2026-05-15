@@ -10,6 +10,7 @@ import dateutil.parser
 import time
 from pathlib import Path
 import arrow
+from random import shuffle
 from utils import *
 
 max_days = 30
@@ -67,7 +68,7 @@ def update_channels_feed():
         links.append(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
     for playlist_id in load_source_list_from_file("playlists.txt"):
         links.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}")
-
+    shuffle(links)
     for link in links:
         time.sleep(5)
         try:
