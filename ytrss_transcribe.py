@@ -1,17 +1,27 @@
+from email.mime import text
+from http import client
+from http import client
 import os
 import subprocess
 import re
 from pathlib import Path
-from openai import OpenAI
+from urllib import response
 from lxml import etree
 from utils import *
 
-def convert_video_to_audio(video_file_path, audio_file_path):
+def convert_video_to_audio(video_file_path):
+    audio_file_path = video_file_path + ".mp3"
     if os.path.exists(audio_file_path):
         print(f"Audio file {audio_file_path} already exists, skipping conversion.")
         return
     command = "ffmpeg -i {} -vn -ar 44100 -ac 1 -b:a 48k {}".format(video_file_path, audio_file_path)
     subprocess.call(command, shell=True)
+    if os.path.exists(audio_file_path):
+        modTime = os.path.getmtime(video_file_path)
+        os.utime(audio_file_path, (modTime, modTime))
+        return audio_file_path
+    else:
+        return None
 
 def split_mp3_file(mp3_file_path, chunk_length_s=1000):
     for file in sorted(Path("yt-video").glob("chunk.*.mp3")):
@@ -25,43 +35,37 @@ def split_mp3_file(mp3_file_path, chunk_length_s=1000):
             print(f"mp3 chunk file: {file}")
             yield(f"{file}")
 
-def has_cyrillic(text):
-    return bool(re.search('[а-яА-Я]', text))
+def detect_language(description_path):
+    if os.path.exists(description_path):
+        parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+        entry = etree.parse(description_path, parser1)
+        title_element = entry.find("title")
+        if title_element is None:
+            return ""
+        if bool(re.search('[а-яА-Я]', title_element.text)):
+                return "uk"
+        elif bool(re.search('[ąęłżĄĘŁŻ]', title_element.text)):
+                return "pl"
+        else:
+            return "en"
+    else:
+        return ""
 
-def transcribe_video(filename):
-    video_path = "yt-video/" + filename
-    modTime = os.path.getmtime(video_path)
-    transcription_path = "yt-video/" + filename + ".txt"
-    description_path = "yt-video/" + filename + ".desc"
-    audio_path = "yt-video/" + filename + ".mp3"
-    
-    if os.path.exists(transcription_path):
-        print(f"Transcription for video {filename} already exists, skipping transcription.")
-        os.utime(transcription_path, (modTime, modTime))
-        return
-    
-    try:
-        print(f"Transcribing video {filename}...")
-        convert_video_to_audio(video_path, audio_path)
-        os.utime(audio_path, (modTime, modTime))
-        print(f"Audio file for video {filename} created, starting transcription...")
-        if not os.path.exists(audio_path):
-            print(f"Audio file {audio_path} does not exist, cannot transcribe video {filename}.")
-            return
+def get_video_link(description_path):
+    if os.path.exists(description_path):
+        parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+        entry = etree.parse(description_path, parser1)
+        link_element = entry.find("link")
+        if link_element is not None:
+            return link_element.get("href")
+    return None
 
-        lang=""
-        if os.path.exists(description_path):
-            description = open(description_path, "r").read()
-            if has_cyrillic(description):
-                #The only language with cyrillic I use is Ukrainian
-                #I will set the language explicitly to decrease the number of transcription errors
-                lang="uk"
-        print(f"Language for video {filename}: {lang}")
-        text = ""
+def run_openai(filename, mp3_list, lang=""):
+        from openai import OpenAI
         client = OpenAI()
 
         #Stage 1: Transcribe audio in chunks and concatenate text
-        for chunk in split_mp3_file(audio_path):
+        for chunk in mp3_list:
             try:
                 print(f"Transcribing chunk {chunk} for video {filename}...")
                 audio_file= open(chunk, "rb")
@@ -126,13 +130,52 @@ def transcribe_video(filename):
             except Exception as e:
                 print(f"An error occurred during text splitting for video {filename}: {str(e)}")
                 text += f"\n[An error occurred during text splitting: {str(e)}]\n"
+        return text
 
-        # Finally, save the transcription to a file
+def run_gemini(filename, youtube_link, lang):
+    from google import genai
+    from google.genai import types
+    client = genai.Client()
+    response = client.models.generate_content(
+        model='gemini-3-flash-preview',
+        contents=types.Content(
+            parts=[
+                types.Part(
+                    file_data=types.FileData(file_uri=youtube_link)
+                ),
+                types.Part(text='Please transcribe the video.')
+            ]
+        )
+    )
+    return response.text
+
+def transcribe_video(filename):
+    video_path = "yt-video/" + filename
+    transcription_path = "yt-video/" + filename + ".txt"
+    description_path = "yt-video/" + filename + ".desc"
+
+    
+    if os.path.exists(transcription_path):
+        print(f"Transcription for video {filename} already exists, skipping transcription.")
+        return
+    
+    try:
+        print(f"Transcribing video {filename}...")
+        lang=detect_language(description_path)
+        print(f"Detected language for video {filename}: {lang}")
+
+        try:
+            #OpenAI seems to be too expesive for everyday use
+            #text = run_openai(filename, list(split_mp3_file(convert_video_to_audio(video_path))), lang)
+            text = run_gemini(filename, get_video_link(description_path), lang)
+        except Exception as e:
+            print(f"An error occurred while transcribing video {filename}: {str(e)}")
+            text = f"An error occurred while transcribing: {str(e)}"
+
         if text.strip() != "":
             with open(transcription_path, "w") as f:
                 f.write(text)
             print(f"Transcription for video {filename} completed")
-            os.utime(transcription_path, (modTime, modTime))
         else:
             print(f"Transcription for video {filename} is empty, not creating transcription file.")
 
@@ -140,7 +183,13 @@ def transcribe_video(filename):
         print(f"An error occurred during transcription: {str(e)}")
         with open(transcription_path, "w") as f:
             f.write(f"An error occurred during transcription: {str(e)}")
+
+    if os.path.exists(transcription_path):
+        modTime = os.path.getmtime(video_path)
         os.utime(transcription_path, (modTime, modTime))
+        return
+
+
 
 if __name__ == "__main__":
 
