@@ -132,7 +132,7 @@ def run_openai(filename, mp3_list, lang=""):
                 text += f"\n[An error occurred during text splitting: {str(e)}]\n"
         return text
 
-def run_gemini(filename, youtube_link, lang):
+def run_gemini(filename, youtube_link):
     from google import genai
     from google.genai import types
     client = genai.Client()
@@ -147,7 +147,17 @@ def run_gemini(filename, youtube_link, lang):
             ]
         )
     )
-    return response.text
+    transcription = response.text
+    if len(transcription.strip()) <= 4096:
+        return transcription
+
+    response = client.models.generate_content(
+        model="gemini-3-flash-preview",
+        config=types.GenerateContentConfig(
+            system_instruction="Annotation length should be up to 10 percent of the whole text length"),
+        contents="Please write annotation for this text:\n\n"+transcription
+    )
+    return "Annotation:\n"+response.text+"\nTranscription:\n"+transcription
 
 def transcribe_video(filename):
     video_path = "yt-video/" + filename
@@ -161,13 +171,11 @@ def transcribe_video(filename):
     
     try:
         print(f"Transcribing video {filename}...")
-        lang=detect_language(description_path)
-        print(f"Detected language for video {filename}: {lang}")
 
         try:
             #OpenAI seems to be too expesive for everyday use
-            #text = run_openai(filename, list(split_mp3_file(convert_video_to_audio(video_path))), lang)
-            text = run_gemini(filename, get_video_link(description_path), lang)
+            #text = run_openai(filename, list(split_mp3_file(convert_video_to_audio(video_path))), detect_language(description_path))
+            text = run_gemini(filename, get_video_link(description_path))
         except Exception as e:
             print(f"An error occurred while transcribing video {filename}: {str(e)}")
             text = f"An error occurred while transcribing: {str(e)}"
