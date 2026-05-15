@@ -112,10 +112,15 @@ def transcribe_video(filename):
         #Stage 3: Split text into chapters and add titles to them
         if text.strip() != "":
             try:
+                input="Split the text into the chapters and add titles to them. Preserve the text literally. "
+                annotation_length = len(text.strip()) // 20
+                if annotation_length >= 256:
+                    input += f"Add short annotation for the whole text at the beginning (up to {annotation_length} characters). "
+                input += "The text is:\n\n" + text
                 print(f"Splitting text into chapters for video {filename}...")
                 response = client.responses.create(
                     model="gpt-5.2",
-                    input="Split the text into the chapters and add titles to them. Preserve the text literally. Add short annotation for the whole text at the beginning (up to 256 characters). The text is:\n\n"+text
+                    input=input
                 )
                 text = response.output[0].content[0].text
             except Exception as e:

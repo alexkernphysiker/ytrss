@@ -17,6 +17,7 @@ app = Flask(__name__)
 
 @app.route("/subscribtion")
 def subscribtion():
+    update_names_dicts()
     return input_channel_id() + input_playlist_id()
 
 
@@ -35,7 +36,6 @@ def show_channel_list():
     chanlist_str = ""
     channels_list = load_source_list_from_file("channels.txt")
     for channel_id in channels_list:
-        sleep(0.3)  # To avoid hitting YouTube too hard when fetching channel names
         channel_name = get_channel_name(channel_id)
         chanlist_str += "<li>" + channel_id + " - [" + channel_name + "] " + "<form action='/unsubscribe/channel/"+channel_id+"' method='post'><input type='submit' value='Unsubscribe'></form></li>"
     return "<ul>"+ chanlist_str + "</ul><form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"

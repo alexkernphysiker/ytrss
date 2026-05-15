@@ -14,7 +14,7 @@ from openai import OpenAI
 from sklearn import tree
 from utils import *
 
-max_days = 18
+max_days = 30
 
 def cleanup():
     now = arrow.now()
@@ -67,8 +67,9 @@ def update_channels_feed():
         links.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}")
 
     for link in links:
+        time.sleep(5)
         try:
-            response = requests.get(link, timeout=20)
+            response = requests.get(link, timeout=30)
             if response.status_code == 200:
                 count_all=0
                 count_used=0
@@ -116,7 +117,7 @@ def update_channels_feed():
                         file_path = "yt-video/" + fn
                         description_path = "yt-video/" + fn + ".desc"
                         if os.path.exists(file_path):
-                            if time_since_insertion < timedelta(days=3):
+                            if time_since_insertion < timedelta(days=5):
                                 file_size_yt = get_yt_file_size(link_element.get("href"))
                                 file_duration_yt = get_file_duration(link_element.get("href"))
                                 try:
@@ -166,10 +167,18 @@ def update_channels_feed():
                                 description_element.text += "<p>"+line+"</p> <br/>"
                         id_element = ElementTree.SubElement(entry_element, "id")
                         id_element.text = link_element.get("href")
-                        chanid_element = ElementTree.SubElement(entry_element, "yt:channelid")
-                        chanid_element.text = channel_id
-                        channame_element = ElementTree.SubElement(entry_element, "yt:channelname")
-                        channame_element.text = source_name
+
+                        if "playlist_id" in link:
+                            playlist_name_element = ElementTree.SubElement(entry_element, "yt:playlistname")
+                            playlist_name_element.text = source_name
+                            playlistid_element = ElementTree.SubElement(entry_element, "yt:playlistid")
+                            playlistid_element.text = link.split("playlist_id=")[-1]
+                        else:
+                            channelid_element = ElementTree.SubElement(entry_element, "yt:channelid")
+                            channelid_element.text = link.split("channel_id=")[-1]
+                            channelname_element = ElementTree.SubElement(entry_element, "yt:channelname")
+                            channelname_element.text = source_name
+
                         if media_group is not None:
                             for media_content in media_group.findall("{http://search.yahoo.com/mrss/}content"):
                                 media_content_element = ElementTree.SubElement(entry_element, "media:content", url=media_content.get("url"), type=media_content.get("type"))
@@ -180,16 +189,12 @@ def update_channels_feed():
                         os.utime(description_path, (modTime, modTime))
                         count_used += 1
                 print(f"Source {link}: {source_name} [{count_used} entries used, {count_all} total entries].")
-                time.sleep(1)
             else:
                 print(f"Failed to fetch {link}: HTTP {response.status_code}")
         except requests.RequestException as e:
             print(f"Error fetching {link}: {e}")
 
 if __name__ == "__main__":
-    while True:
+        update_names_dicts()
         cleanup()
         update_channels_feed()
-        print("Sleeping before next update...")
-        time.sleep(120)
-    

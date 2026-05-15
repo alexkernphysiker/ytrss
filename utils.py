@@ -15,7 +15,32 @@ def get_local_ip():
     s.close()
     return ip
 
+channel_names_dict = {}
+playlist_names_dict = {}
+
+def update_names_dicts():
+    global channel_names_dict, playlist_names_dict
+    for description_path in Path("yt-video").glob("*.desc"):
+            try:
+                parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+                entry = etree.parse(description_path, parser1)
+                channel_id_element = entry.find("yt:channelid")
+                if channel_id_element is not None:
+                    channel_name_element = entry.find("yt:channelname")
+                    if channel_name_element is not None:
+                        channel_names_dict[channel_id_element.text] = channel_name_element.text
+                playlist_id_element = entry.find("yt:playlistid")
+                if playlist_id_element is not None:
+                    playlist_name_element = entry.find("yt:playlistname")
+                    if playlist_name_element is not None:
+                        playlist_names_dict[playlist_id_element.text] = playlist_name_element.text
+            except Exception as e:
+                continue
+
 def get_channel_name(channel_id):
+    global channel_names_dict
+    if channel_id in channel_names_dict:
+        return channel_names_dict[channel_id]
     try:
         response = requests.get("https://www.youtube.com/feeds/videos.xml?channel_id=" + channel_id, timeout=20)
         if response.status_code == 200:
@@ -27,6 +52,9 @@ def get_channel_name(channel_id):
         return "<Exception fetching channel name>"
 
 def get_playlist_name(playlist_id):
+    global playlist_names_dict
+    if playlist_id in playlist_names_dict:
+        return playlist_names_dict[playlist_id]
     try:
         response = requests.get("https://www.youtube.com/feeds/videos.xml?playlist_id=" + playlist_id, timeout=20)
         if response.status_code == 200:
@@ -86,7 +114,7 @@ def generate_feed(url_link, is_public):
                 description_element.text += "<p>"+line+"</p> <br/>"
             description_element.text += "<p>[VIDEO DESCRIPTION]</p> <br/>" + descr
             title_element.text = "transcribed: " + title_element.text
-        elif age < timedelta(days=5) and not is_public:
+        elif age < timedelta(days=7) and not is_public:
                 transcribe_link = f"<br/> <a href='{url_link}/transcribe/{fn}'>Transcribe this video</a> <br/>[Video description] <br/><p>[{duration_str}]</p> <br/>"
                 if not description_element.text is None:
                     description_element.text = transcribe_link + description_element.text
