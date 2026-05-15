@@ -109,18 +109,18 @@ def generate_feed(url_link, is_public):
         if os.path.exists(transcription_path):
             string_list = open(transcription_path, "r").read().split('\n')
             descr = description_element.text if description_element.text is not None else ""
-            description_element.text = f"<p>[VIDEO TRANSCRIPTION]</p> <br/><p>[{duration_str}]</p> <br/>"
+            description_element.text = f"<p>[{duration_str}]</p> <br/><p>[VIDEO TRANSCRIPTION]</p> <br/>"
             for line in string_list:
                 description_element.text += "<p>"+line+"</p> <br/>"
             description_element.text += "<p>[VIDEO DESCRIPTION]</p> <br/>" + descr
         elif age < timedelta(days=7) and not is_public:
-                transcribe_link = f"<br/> <a href='{url_link}/transcribe/{fn}'>Transcribe this video</a> <br/>[Video description] <br/><p>[{duration_str}]</p> <br/>"
+                transcribe_link = f"<br/> <a href='{url_link}/transcribe/{fn}'>Transcribe this video</a> <br/><p>[{duration_str}]</p> <br/>[Video description] <br/>"
                 if not description_element.text is None:
                     description_element.text = transcribe_link + description_element.text
                 else:
                     description_element.text = transcribe_link
         else:
-            description_element.text = f"[Video description] <br/> <p>[{duration_str}]</p> <br/>" + (description_element.text if description_element.text is not None else "")
+            description_element.text = f"<p>[{duration_str}]</p> <br/>[Video description] <br/> " + (description_element.text if description_element.text is not None else "")
 
         output += etree.tostring(entry, encoding="unicode") + "\n"
     output += "</feed>\n"

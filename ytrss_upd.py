@@ -16,7 +16,7 @@ from utils import *
 max_days = 30
 recheck_size_days = 7
 auto_transcript_hours = 10
-auto_transcript_max_duration_mins = 120
+auto_transcript_max_duration_mins = 90
 
 def cleanup():
     now = arrow.now()
