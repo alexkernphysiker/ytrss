@@ -89,7 +89,7 @@ def run_openai(filename, mp3_list, lang=""):
                 text += f"\n[An error occurred during transcription of chunk {chunk}: {str(e)}]\n"
         
         #Stage 2: Eliminate 'transcription noise' and correct text if language is Ukrainian
-        if lang == "uk" and text.strip() != "":
+        if lang == "uk" and text is not None and text.strip() != "":
             # Unfortunately, gpt-4o-transcribe-diarize model makes a lot of mistakes for Ukrainian language, so we will try to correct them
             try:
                 print(f"Correcting text in Ukrainian for video {filename}...")
@@ -114,7 +114,7 @@ def run_openai(filename, mp3_list, lang=""):
                 text += f"\n[An error occurred during text correcting: {str(e)}]\n"
 
         #Stage 3: Split text into chapters and add titles to them
-        if text.strip() != "":
+        if text is not None and text.strip() != "":
             try:
                 input="Split the text into the chapters and add titles to them. Preserve the text literally. "
                 annotation_length = len(text.strip()) // 20
@@ -132,10 +132,17 @@ def run_openai(filename, mp3_list, lang=""):
                 text += f"\n[An error occurred during text splitting: {str(e)}]\n"
         return text
 
-def run_gemini(filename, youtube_link):
+def run_gemini(filename, youtube_link, lang="en"):
     from google import genai
     from google.genai import types
     client = genai.Client()
+    if lang == "uk":
+        prompt = "Будь ласка, транскрибуй це відео."
+    elif lang == "pl":
+        prompt = "Proszę, przetranskrybuj ten film."
+    else:        
+        prompt = "Please transcribe the video."
+
     response = client.models.generate_content(
         model='gemini-3-flash-preview',
         contents=types.Content(
@@ -143,21 +150,11 @@ def run_gemini(filename, youtube_link):
                 types.Part(
                     file_data=types.FileData(file_uri=youtube_link)
                 ),
-                types.Part(text='Please transcribe the video.')
+                types.Part(text=prompt)
             ]
         )
     )
-    transcription = response.text
-    if len(transcription.strip()) <= 4096:
-        return transcription
-
-    response = client.models.generate_content(
-        model="gemini-3-flash-preview",
-        config=types.GenerateContentConfig(
-            system_instruction="Annotation length should be up to 10 percent of the whole text length"),
-        contents="Please write annotation for this text:\n\n"+transcription
-    )
-    return "Annotation:\n"+response.text+"\nTranscription:\n"+transcription
+    return response.text
 
 def transcribe_video(filename):
     video_path = "yt-video/" + filename
@@ -175,12 +172,12 @@ def transcribe_video(filename):
         try:
             #OpenAI seems to be too expesive for everyday use
             #text = run_openai(filename, list(split_mp3_file(convert_video_to_audio(video_path))), detect_language(description_path))
-            text = run_gemini(filename, get_video_link(description_path))
+            text = run_gemini(filename, get_video_link(description_path), detect_language(description_path))
         except Exception as e:
             print(f"An error occurred while transcribing video {filename}: {str(e)}")
             text = f"An error occurred while transcribing: {str(e)}"
 
-        if text.strip() != "":
+        if text is not None and text.strip() != "":
             with open(transcription_path, "w") as f:
                 f.write(text)
             print(f"Transcription for video {filename} completed")
