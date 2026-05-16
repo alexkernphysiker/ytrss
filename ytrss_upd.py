@@ -182,11 +182,13 @@ def update_channels_feed():
                             playlist_name_element.text = source_name
                             playlistid_element = ElementTree.SubElement(entry_element, "yt:playlistid")
                             playlistid_element.text = link.split("playlist_id=")[-1]
+                            source_id= link.split("playlist_id=")[-1]
                         else:
                             channelid_element = ElementTree.SubElement(entry_element, "yt:channelid")
                             channelid_element.text = link.split("channel_id=")[-1]
                             channelname_element = ElementTree.SubElement(entry_element, "yt:channelname")
                             channelname_element.text = source_name
+                            source_id= link.split("channel_id=")[-1]
 
                         if media_group is not None:
                             for media_content in media_group.findall("{http://search.yahoo.com/mrss/}content"):
@@ -194,7 +196,7 @@ def update_channels_feed():
                         with open(description_path, "w") as f:
                             item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
                             f.write(item_string)
-                        if auto_transcript_hours > 0 and os.path.exists(file_path):
+                        if auto_transcript_hours > 0 and os.path.exists(file_path) and not source_id in get_config()["sources_with_disabled_auto_transcription"]:
                             if time_since_insertion < timedelta(hours=auto_transcript_hours):
                                 print(f"Processing auto-transcription for video {fn}")
                                 transcription_path = "yt-video/" + fn + ".txt"

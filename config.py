@@ -13,6 +13,7 @@ def default_config():
         "manual_transcript_days" : 7,
         "channel_subscriptions" : [],
         "playlist_subscriptions" : [],
+        "sources_with_disabled_auto_transcription" : [],
         "channel_names_dict": {},
         "playlist_names_dict": {}
     }

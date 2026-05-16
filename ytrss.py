@@ -19,7 +19,8 @@ app = Flask(__name__)
 @app.route("/subscribtion")
 def subscribtion():
      
-    return input_channel_id() + input_playlist_id()
+    return input_channel_id() + input_playlist_id() + \
+           "<form action='/auto-transcription/show' method='get'><input type='submit' value='Auto-transcription'></form>"
 
 
 
@@ -34,12 +35,18 @@ def input_channel_id():
 
 @app.route("/show_channel_list")
 def show_channel_list():
-    chanlist_str = ""
-    channels_list = get_config()["channel_subscriptions"]
-    for channel_id in channels_list:
+    chanlist_str = "<a> Subscribed Channels </a><br/>"
+    for channel_id in get_config()["channel_subscriptions"]:
         channel_name = get_channel_name(channel_id)
-        chanlist_str += "<li>" + channel_id + " - [" + channel_name + "] " + "<form action='/unsubscribe/channel/"+channel_id+"' method='post'><input type='submit' value='Unsubscribe'></form></li>"
-    return "<ul>"+ chanlist_str + "</ul><form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
+        if channel_id in get_config()["sources_with_disabled_auto_transcription"]:
+             auto_transcription=f"<form action='/auto-transcription/enable/{channel_id}' method='post'>auto-transcription is disabled<input type='submit' value='Enable'>"
+        else:
+            auto_transcription=f"<form action='/auto-transcription/disable/{channel_id}' method='post'>auto-transcription is enabled<input type='submit' value='Disable'>"
+        chanlist_str += f"<li> <form action='/unsubscribe/channel/{channel_id}' method='post'>[{channel_name}] is subscribed <input type='submit' value='Unsubscribe'></form></li>"
+    for channel_id in get_config()["channel_names_dict"].keys():
+        if  not channel_id in get_config()["channel_subscriptions"]:
+                chanlist_str += f"<li> <form action='/subscribe/channel/{channel_id}' method='post'>[{get_channel_name(channel_id)}] not subscribed <input type='submit' value='Subscribe'></form></li>"
+    return f"<ul>{chanlist_str}</ul><br /><form action='/subscribtion' method='get'><input type='submit' value='Main page'></form>"
 
 @app.route("/get_chan_info", methods=['POST'])
 def get_chan_info():
@@ -51,11 +58,11 @@ def get_chan_info():
         if not subscribed:
             return f"Channel '{channel_name}' is not subscribed."+ \
                     "<form action='/subscribe/channel/"+channel_id+"' method='post'><input type='submit' value='Subscribe'></form>" + \
-                    "<form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
+                    "<form action='/subscribtion' method='get'><input type='submit' value='Main page'></form>"
         else:
             return f"Channel '{channel_name}' is subscribed."+ \
                     "<form action='/unsubscribe/channel/"+channel_id+"' method='post'><input type='submit' value='Unsubscribe'></form>" + \
-                    "<form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
+                    "<form action='/subscribtion' method='get'><input type='submit' value='Main page'></form>"
     else:
         return "No channel ID provided."
 
@@ -65,8 +72,7 @@ def subscribe_channel(channel_id):
     if channel_id not in sources_list:
         sources_list.append(channel_id)
         save_config()
-    return f"Subscribed to channel {channel_id}." + \
-              "<form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
+    return show_channel_list()
 
 @app.route("/unsubscribe/channel/<channel_id>", methods=['POST'])
 def unsubscribe_channel(channel_id):
@@ -74,12 +80,7 @@ def unsubscribe_channel(channel_id):
     if channel_id in sources_list:
         sources_list.remove(channel_id)
         save_config()
-    return f"Unsubscribed from channel {channel_id}." + \
-              "<form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
-
-
-
-
+    return show_channel_list()
 
 
 
@@ -93,12 +94,14 @@ def input_playlist_id():
 
 @app.route("/show_playlist_list")
 def show_playlist_list():
-    playlistlist_str = ""
-    playlists_list = get_config()["playlist_subscriptions"]
-    for playlist_id in playlists_list:
-        playlist_name = get_playlist_name(playlist_id)
-        playlistlist_str += "<li>" + playlist_id + " - [" + playlist_name + "] " + "<form action='/unsubscribe/playlist/"+playlist_id+"' method='post'><input type='submit' value='Unsubscribe'></form></li>"
-    return "<ul>"+ playlistlist_str + "</ul><form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
+    playlistlist_str = "<a> Subscribed Playlists </a><br/>"
+    for playlist_id in get_config()["playlist_subscriptions"]:
+        playlistlist_str += f"<li><form action='/unsubscribe/playlist/{playlist_id}' method='post'>[{get_playlist_name(playlist_id)}] is subscribed <input type='submit' value='Unsubscribe'></form></li>"
+    for playlist_id in get_config()["playlist_names_dict"].keys():
+        if playlist_id in get_config()["playlist_subscriptions"]:
+                continue
+        playlistlist_str += f"<li><form action='/subscribe/playlist/{playlist_id}' method='post'>[{get_playlist_name(playlist_id)}] not subscribed <input type='submit' value='Subscribe'></form></li>"
+    return f"<ul>{playlistlist_str}</ul><br /><form action='/subscribtion' method='get'><input type='submit' value='Main page'></form>"
 
 @app.route("/get_playlist_info", methods=['POST'])
 def get_playlist_info():
@@ -110,11 +113,11 @@ def get_playlist_info():
         if not subscribed:
             return f"Playlist '{playlist_name}' is not subscribed."+ \
                     "<form action='/subscribe/playlist/"+playlist_id+"' method='post'><input type='submit' value='Subscribe'></form>" + \
-                    "<form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
+                    "<form action='/show_playlist_list' method='get'><input type='submit' value='Main page'></form>"
         else:
             return f"Playlist '{playlist_name}' is subscribed."+ \
                     "<form action='/unsubscribe/playlist/"+playlist_id+"' method='post'><input type='submit' value='Unsubscribe'></form>" + \
-                    "<form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
+                    "<form action='/show_playlist_list' method='get'><input type='submit' value='Main page'></form>"
     else:
         return "No playlist ID provided."
 
@@ -124,8 +127,7 @@ def subscribe_playlist(playlist_id):
     if playlist_id not in playlists_list:
         playlists_list.append(playlist_id)
         save_config()
-    return f"Subscribed to playlist {playlist_id}." + \
-              "<form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
+    return show_playlist_list()
 
 @app.route("/unsubscribe/playlist/<playlist_id>", methods=['POST'])
 def unsubscribe_playlist(playlist_id):
@@ -133,9 +135,37 @@ def unsubscribe_playlist(playlist_id):
     if playlist_id in playlists_list:
         playlists_list.remove(playlist_id)
         save_config()
-    return f"Unsubscribed from playlist {playlist_id}." + \
-              "<form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
+    return show_playlist_list()
 
+
+
+#auto-transcription management for channels and playlists
+@app.route("/auto-transcription/show")
+def show_auto_transcription_status():
+    auto_transcription_str = "<a> Auto-transcription status for subscribed channels and playlists </a><br/>"
+    for source_id in get_config()["channel_subscriptions"] + get_config()["playlist_subscriptions"]:
+        source_name = get_channel_name(source_id) if source_id in get_config()["channel_subscriptions"] else get_playlist_name(source_id)
+        if source_id in get_config()["sources_with_disabled_auto_transcription"]:
+             auto_transcription_str+=f"<li><form action='/auto-transcription/enable/{source_id}' method='post'>[{source_name}] disabled<input type='submit' value='Enable'></form></li>"
+        else:
+            auto_transcription_str+=f"<li><form action='/auto-transcription/disable/{source_id}' method='post'>[{source_name}] enabled<input type='submit' value='Disable'></form></li>"
+    return f"<ul>{auto_transcription_str}</ul><br /><form action='/subscribtion' method='get'><input type='submit' value='Main page'></form>"
+
+@app.route("/auto-transcription/disable/<source_id>", methods=['POST'])
+def disable_auto_transcription(source_id):
+    sources_list = get_config()["sources_with_disabled_auto_transcription"]
+    if source_id not in sources_list:
+        sources_list.append(source_id)
+        save_config()
+    return show_auto_transcription_status()
+
+@app.route("/auto-transcription/enable/<source_id>", methods=['POST'])
+def enable_auto_transcription(source_id):
+    sources_list = get_config()["sources_with_disabled_auto_transcription"]
+    if source_id in sources_list:
+        sources_list.remove(source_id)
+        save_config()
+    return show_auto_transcription_status()
 
 
 ### video transcription
