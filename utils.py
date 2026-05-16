@@ -98,7 +98,7 @@ def generate_feed(url_link, is_public):
             duration_element = entry.find("duration")
             duration_str = duration_element.text
         except Exception as e:
-            duration_str = ""
+            duration_str = "unknown duration"
         
         enclosure_element = entry.find("enclosure")
         if enclosure_element is not None:
@@ -107,21 +107,21 @@ def generate_feed(url_link, is_public):
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
         descr = description_element.text if description_element.text is not None else ""
-        description_element.text = ""
+        description_element.text = f"<p>[{duration_str}]</p> <br/>"
         if os.path.exists(log_path) and not is_public:
             log_content = open(log_path, "r").read()
             description_element.text += "<p>[LOG]</p> <br/>" + log_content + "<br/>"
         if os.path.exists(transcription_path):
             string_list = open(transcription_path, "r").read().split('\n')
-            description_element.text = f"<p>[{duration_str}]</p> <br/><p>[VIDEO TRANSCRIPTION]</p> <br/>"
+            description_element.text += f"<p>[VIDEO TRANSCRIPTION]</p> <br/>"
             for line in string_list:
                 description_element.text += "<p>"+line+"</p> <br/>"
             description_element.text += "<p>[VIDEO DESCRIPTION]</p> <br/>" + descr
         elif age < timedelta(days=7) and not is_public:
-                transcribe_link = f"<br/> <a href='{url_link}/transcribe/{fn}'>Transcribe this video</a> <br/><p>[{duration_str}]</p> <br/>[Video description] <br/>"
-                description_element.text = transcribe_link + descr
+                transcribe_link = f"<br/> <a href='{url_link}/transcribe/{fn}'>Transcribe this video</a> <br/>[Video description] <br/>"
+                description_element.text += transcribe_link + descr
         else:
-            description_element.text = f"<p>[{duration_str}]</p> <br/>[Video description] <br/> " + descr
+            description_element.text += f"[Video description] <br/> " + descr
 
         output += etree.tostring(entry, encoding="unicode") + "\n"
     output += "</feed>\n"

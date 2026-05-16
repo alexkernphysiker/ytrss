@@ -175,7 +175,9 @@ def transcribe_video(filename):
         print(f"An error occurred during transcription of video {filename}: {str(e)}")
         text = ""
         with open(log_path, "w") as f:
-            f.write(f"Transcriptio error: {str(e)}")
+            f.write(f"Transcription error: {str(e)}")
+        modTime = os.path.getmtime(video_path)
+        os.utime(log_path, (modTime, modTime))
 
     if text is not None and text.strip() != "":
         with open(transcription_path, "w") as f:
