@@ -108,7 +108,7 @@ def generate_feed(url_link, is_public):
         age = datetime.now() - modified_time
         descr = description_element.text if description_element.text is not None else ""
         description_element.text = ""
-        if os.path.exists(log_path):
+        if os.path.exists(log_path) and not is_public:
             log_content = open(log_path, "r").read()
             description_element.text += "<p>[LOG]</p> <br/>" + log_content + "<br/>"
         if os.path.exists(transcription_path):
