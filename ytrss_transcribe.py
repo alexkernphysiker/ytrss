@@ -157,6 +157,7 @@ def run_gemini(filename, youtube_link, lang="en"):
 def transcribe_video(filename):
     video_path = "yt-video/" + filename
     transcription_path = "yt-video/" + filename + ".txt"
+    log_path = "yt-video/" + filename + ".log"
     description_path = "yt-video/" + filename + ".desc"
 
     
@@ -165,9 +166,16 @@ def transcribe_video(filename):
         return
     
     print(f"Transcribing video {filename}...")
-    #OpenAI seems to be too expesive for everyday use
-    #text = run_openai(filename, list(split_mp3_file(convert_video_to_audio(video_path))), detect_language(description_path))
-    text = run_gemini(filename, get_video_link(description_path), detect_language(description_path))
+
+    try:
+        #OpenAI seems to be too expesive for everyday use
+        #text = run_openai(filename, list(split_mp3_file(convert_video_to_audio(video_path))), detect_language(description_path))
+        text = run_gemini(filename, get_video_link(description_path), detect_language(description_path))
+    except Exception as e:
+        print(f"An error occurred during transcription of video {filename}: {str(e)}")
+        text = ""
+        with open(log_path, "w") as f:
+            f.write(f"Transcriptio error: {str(e)}")
 
     if text is not None and text.strip() != "":
         with open(transcription_path, "w") as f:
