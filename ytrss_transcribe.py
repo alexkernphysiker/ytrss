@@ -61,10 +61,9 @@ def get_video_link(description_path):
 def run_openai(filename, mp3_list, lang=""):
         from openai import OpenAI
         client = OpenAI()
-
+        text = ""
         #Stage 1: Transcribe audio in chunks and concatenate text
         for chunk in mp3_list:
-            try:
                 print(f"Transcribing chunk {chunk} for video {filename}...")
                 audio_file= open(chunk, "rb")
                 transcription = client.audio.transcriptions.create(
@@ -82,38 +81,35 @@ def run_openai(filename, mp3_list, lang=""):
                     else:
                         text += " "+segment.text
                 text += "\n"
-            except Exception as e:
-                print(f"An error occurred during transcription of chunk {chunk} for video {filename}: {str(e)}")
-                text += f"\n[An error occurred during transcription of chunk {chunk}: {str(e)}]\n"
         
         #Stage 2: Eliminate 'transcription noise' and correct text if language is Ukrainian
-        if lang == "uk" and text is not None and text.strip() != "":
-            # Unfortunately, gpt-4o-transcribe-diarize model makes a lot of mistakes for Ukrainian language, so we will try to correct them
-            try:
-                print(f"Correcting text in Ukrainian for video {filename}...")
-                response = client.responses.create(
-                    model="gpt-5.2",
-                    input="Прибери 'шум' транскрипції. Зроби **повну вичитку всього тексту**. Якщо в тексті є якісь слова чи фрази російською, переклади їх українською та заміни. Ось текст:\n\n"+text
-                )
-                text = response.output[0].content[0].text
-            except Exception as e:
-                print(f"An error occurred during text correcting for video {filename}: {str(e)}")
-                text += f"\n[An error occurred during text correcting: {str(e)}]\n"
-        else:
-            try:
-                print(f"Eliminating 'transcription noise' for video {filename}...")
-                response = client.responses.create(
-                    model="gpt-5.2",
-                    input="Please eliminate 'transcription noise' from the text below:\n\n"+text
-                )
-                text = response.output[0].content[0].text
-            except Exception as e:
-                print(f"An error occurred during text correcting for video {filename}: {str(e)}")
-                text += f"\n[An error occurred during text correcting: {str(e)}]\n"
+        if text is not None and text.strip() != "":
+            if lang == "uk":
+                    # Unfortunately, gpt-4o-transcribe-diarize model makes a lot of mistakes for Ukrainian language, so we will try to correct them
+                    print(f"Correcting text in Ukrainian for video {filename}...")
+                    response = client.responses.create(
+                        model="gpt-5.2",
+                        input="Прибери 'шум' транскрипції. Зроби **повну вичитку всього тексту**. Якщо в тексті є якісь слова чи фрази російською, переклади їх українською та заміни. Ось текст:\n\n"+text
+                    )
+                    text = response.output[0].content[0].text
+            elif lang == "pl":
+                    # For Polish language, we will also try to correct text, but with a different prompt
+                    print(f"Correcting text in Polish for video {filename}...")
+                    response = client.responses.create(
+                        model="gpt-5.2",
+                        input="Proszę usunąć 'szum' transkrypcji. Wykonaj **pełne sprawdzenie pisowni całego tekstu**. Oto tekst:\n\n"+text
+                    )
+                    text = response.output[0].content[0].text
+            else:
+                    print(f"Eliminating 'transcription noise' for video {filename}...")
+                    response = client.responses.create(
+                        model="gpt-5.2",
+                        input="Please eliminate 'transcription noise' from the text below:\n\n"+text
+                    )
+                    text = response.output[0].content[0].text
 
         #Stage 3: Split text into chapters and add titles to them
         if text is not None and text.strip() != "":
-            try:
                 input="Split the text into the chapters and add titles to them. Preserve the text literally. "
                 annotation_length = len(text.strip()) // 20
                 if annotation_length >= 256:
@@ -125,9 +121,6 @@ def run_openai(filename, mp3_list, lang=""):
                     input=input
                 )
                 text = response.output[0].content[0].text
-            except Exception as e:
-                print(f"An error occurred during text splitting for video {filename}: {str(e)}")
-                text += f"\n[An error occurred during text splitting: {str(e)}]\n"
         return text
 
 def run_gemini(filename, youtube_link, lang="en"):
@@ -154,30 +147,44 @@ def run_gemini(filename, youtube_link, lang="en"):
     )
     return response.text
 
-def transcribe_video(filename):
+
+def transcribe_video(filename, engine):
     video_path = "yt-video/" + filename
     transcription_path = "yt-video/" + filename + ".txt"
     log_path = "yt-video/" + filename + ".log"
     description_path = "yt-video/" + filename + ".desc"
 
-    
     if os.path.exists(transcription_path):
         print(f"Transcription for video {filename} already exists, skipping transcription.")
         return
     
-    print(f"Transcribing video {filename}...")
+    if engine == "openai":
+        print(f"Transcribing video {filename} with OpenAI...")
+    elif engine == "gemini":
+        print(f"Transcribing video {filename} with Gemini...")
+    else:
+        print(f"Unknown transcript engine: {engine}, skipping transcription.")
 
+    text = ""
     try:
-        #OpenAI seems to be too expesive for everyday use
-        #text = run_openai(filename, list(split_mp3_file(convert_video_to_audio(video_path))), detect_language(description_path))
-        text = run_gemini(filename, get_video_link(description_path), detect_language(description_path))
+        if engine == "openai":
+            if os.path.exists(video_path):
+                text = run_openai(filename, list(split_mp3_file(convert_video_to_audio(video_path))), detect_language(description_path))
+            else:
+                print(f"Video file {video_path} does not exist, skipping transcription.")
+                text = ""
+        elif engine == "gemini":
+            text = run_gemini(filename, get_video_link(description_path), detect_language(description_path))
+        else:
+            print(f"Unknown transcript engine: {engine}, skipping transcription.")
+
     except Exception as e:
         print(f"An error occurred during transcription of video {filename}: {str(e)}")
-        text = ""
         with open(log_path, "w") as f:
             f.write(f"Transcription error: {str(e)}")
         modTime = os.path.getmtime(video_path)
         os.utime(log_path, (modTime, modTime))
+        return
 
     if text is not None and text.strip() != "":
         with open(transcription_path, "w") as f:
@@ -188,21 +195,38 @@ def transcribe_video(filename):
     else:
         print(f"Transcription for video {filename} is empty, not creating transcription file.")
 
-
-
 if __name__ == "__main__":
 
-    video_list = load_source_list_from_file("transcription.txt")
+    video_list_auto = load_source_list_from_file("transcription.txt")
     save_source_list_to_file("transcription.txt", [])
 
-    for fn in video_list:
+    video_list_gemini = load_source_list_from_file("gemini.txt")
+    save_source_list_to_file("gemini.txt", [])
+    video_list_openai = load_source_list_from_file("openai.txt")
+    save_source_list_to_file("openai.txt", [])
+
+    engine=get_config().get("auto_transcript_engine", "gemini")
+    if engine == "openai":
+        video_list_openai = video_list_auto + video_list_openai
+    elif engine == "gemini":
+        video_list_gemini = video_list_auto + video_list_gemini
+    else:
+        print(f"Unknown auto transcript engine: {engine}, skipping auto transcription.")
+
+
+    for fn in video_list_gemini:
         file_path = "yt-video/" + fn
         description_path = "yt-video/" + fn + ".desc"
         transcription_path = "yt-video/" + fn + ".txt"
         if not os.path.exists(transcription_path) and os.path.exists(file_path):
-            if fn in video_list:
-                print(f"Video {fn} is scheduled for transcription, adding link to description.")
-                transcribe_video(fn)
+            transcribe_video(fn, engine="gemini")
+    
+    for fn in video_list_openai:
+        file_path = "yt-video/" + fn
+        description_path = "yt-video/" + fn + ".desc"
+        transcription_path = "yt-video/" + fn + ".txt"
+        if not os.path.exists(transcription_path) and os.path.exists(file_path):
+            transcribe_video(fn, engine="openai")
 
     for mp3 in Path("yt-video").glob("*.mp3"):
         if mp3.is_file():

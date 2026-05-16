@@ -126,7 +126,7 @@ def generate_feed(url_link, is_public):
                 description_element.text += "<p>"+line+"</p> <br/>"
             description_element.text += "<p>[VIDEO DESCRIPTION]</p> <br/>" + descr
         elif age < timedelta(days=get_config()["manual_transcript_days"]) and not is_public:
-                transcribe_link = f"<br/> <a href='{url_link}/transcribe/{fn}'>Transcribe this video</a> <br/>[Video description] <br/>"
+                transcribe_link = f"<br/> Transcript with <a href='{url_link}/transcribe/gemini/{fn}'>Gemini</a> or <a href='{url_link}/transcribe/openai/{fn}'>OpenAI</a> <br/>[Video description] <br/>"
                 description_element.text += transcribe_link + descr
         else:
             description_element.text += f"[Video description] <br/> " + descr

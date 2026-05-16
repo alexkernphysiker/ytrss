@@ -8,6 +8,7 @@ def default_config():
         "host_public" : "",
         "max_days" : 30,
         "recheck_size_days" : 7,
+        "auto_transcript_engine" : "gemini",
         "auto_transcript_hours" : 10,
         "manual_transcript_days" : 7,
         "channel_subscriptions" : [],
@@ -28,6 +29,11 @@ def get_config():
 def save_config():
     config_file="ytrss_config.json"
     global config
+    output = {}
+    if os.path.exists(config_file):
+        with open(config_file, "r") as f:
+            output.update(json.load(f))
+    output.update(config)
     with open(config_file, "w") as f:
-        json.dump(config, f, indent=2)
+        json.dump(output, f, indent=2)
 

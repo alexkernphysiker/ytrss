@@ -6,7 +6,7 @@ while [ 1 ]; do
 	sleep 10m
 done &
 while [ 1 ]; do
-	if [ "$(cat transcription.txt)" != "" ]; then
+	if [ "$(cat gemini.txt;cat openai.txt;cat transcription.txt)" != "" ]; then
 		python3 ytrss_transcribe.py > ytrss_transcribe.log 2>&1
 	fi
 	sleep 1m
