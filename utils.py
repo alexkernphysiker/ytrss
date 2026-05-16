@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from time import sleep
 import os
 import subprocess
 import re
@@ -7,6 +8,7 @@ import requests
 from xml.etree import ElementTree
 from pathlib import Path
 import socket
+from config import *
 
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -15,11 +17,9 @@ def get_local_ip():
     s.close()
     return ip
 
-channel_names_dict = {}
-playlist_names_dict = {}
-
 def update_names_dicts():
-    global channel_names_dict, playlist_names_dict
+    channel_names_dict = get_config()["channel_names_dict"]
+    playlist_names_dict = get_config()["playlist_names_dict"]
     for description_path in Path("yt-video").glob("*.desc"):
             try:
                 parser1 = etree.XMLParser(encoding="utf-8", recover=True)
@@ -36,30 +36,39 @@ def update_names_dicts():
                         playlist_names_dict[playlist_id_element.text] = playlist_name_element.text
             except Exception as e:
                 continue
+    save_config()
 
 def get_channel_name(channel_id):
-    global channel_names_dict
+    channel_names_dict = get_config()["channel_names_dict"]
     if channel_id in channel_names_dict:
         return channel_names_dict[channel_id]
+    sleep(5)  # To avoid hitting YouTube's rate limits
     try:
         response = requests.get("https://www.youtube.com/feeds/videos.xml?channel_id=" + channel_id, timeout=20)
         if response.status_code == 200:
             channel_content = ElementTree.fromstring(response.text)
-            return channel_content.find("{http://www.w3.org/2005/Atom}title").text
+            channel_name = channel_content.find("{http://www.w3.org/2005/Atom}author/{http://www.w3.org/2005/Atom}name").text
+            channel_names_dict[channel_id] = channel_name
+            save_config()
+            return channel_name
         else:
             return "<Error fetching channel name>"
     except Exception as e:
         return "<Exception fetching channel name>"
 
 def get_playlist_name(playlist_id):
-    global playlist_names_dict
+    playlist_names_dict = get_config()["playlist_names_dict"]
     if playlist_id in playlist_names_dict:
         return playlist_names_dict[playlist_id]
+    sleep(5)  # To avoid hitting YouTube's rate limits
     try:
         response = requests.get("https://www.youtube.com/feeds/videos.xml?playlist_id=" + playlist_id, timeout=20)
         if response.status_code == 200:
             playlist_content = ElementTree.fromstring(response.text)
-            return playlist_content.find("{http://www.w3.org/2005/Atom}title").text
+            playlist_name = playlist_content.find("{http://www.w3.org/2005/Atom}title").text
+            playlist_names_dict[playlist_id] = playlist_name
+            save_config()
+            return playlist_name
         else:
             return "<Error fetching playlist name>"
     except Exception as e:
@@ -70,7 +79,6 @@ def load_source_list_from_file(filename):
         with open(filename, 'r') as f:
             return [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
-        print(f"File {filename} not found")
         return []
 
 def save_source_list_to_file(filename, sources):
@@ -108,7 +116,7 @@ def generate_feed(url_link, is_public):
         age = datetime.now() - modified_time
         descr = description_element.text if description_element.text is not None else ""
         description_element.text = f"<p>[{duration_str}]</p> <br/>"
-        if os.path.exists(log_path) and not is_public:
+        if os.path.exists(log_path) and not os.path.exists(transcription_path) and not is_public:
             log_content = open(log_path, "r").read()
             description_element.text += "<p>[LOG]</p> <br/>" + log_content + "<br/>"
         if os.path.exists(transcription_path):
@@ -117,7 +125,7 @@ def generate_feed(url_link, is_public):
             for line in string_list:
                 description_element.text += "<p>"+line+"</p> <br/>"
             description_element.text += "<p>[VIDEO DESCRIPTION]</p> <br/>" + descr
-        elif age < timedelta(days=7) and not is_public:
+        elif age < timedelta(days=get_config()["manual_transcript_days"]) and not is_public:
                 transcribe_link = f"<br/> <a href='{url_link}/transcribe/{fn}'>Transcribe this video</a> <br/>[Video description] <br/>"
                 description_element.text += transcribe_link + descr
         else:

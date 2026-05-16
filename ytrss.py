@@ -8,8 +8,9 @@ from flask import request
 from utils import *
 from lxml import etree
 
+ 
 host=get_local_ip()
-port=5000
+port=get_config()["port"]
 url_link=f"http://{host}:{port}"
 
 app = Flask(__name__)
@@ -17,7 +18,7 @@ app = Flask(__name__)
 
 @app.route("/subscribtion")
 def subscribtion():
-    update_names_dicts()
+     
     return input_channel_id() + input_playlist_id()
 
 
@@ -34,7 +35,7 @@ def input_channel_id():
 @app.route("/show_channel_list")
 def show_channel_list():
     chanlist_str = ""
-    channels_list = load_source_list_from_file("channels.txt")
+    channels_list = get_config()["channel_subscriptions"]
     for channel_id in channels_list:
         channel_name = get_channel_name(channel_id)
         chanlist_str += "<li>" + channel_id + " - [" + channel_name + "] " + "<form action='/unsubscribe/channel/"+channel_id+"' method='post'><input type='submit' value='Unsubscribe'></form></li>"
@@ -44,7 +45,7 @@ def show_channel_list():
 def get_chan_info():
     channel_id = request.form['channel_id']
     if channel_id:
-        sources_list = load_source_list_from_file("channels.txt")
+        sources_list = get_config()["channel_subscriptions"]
         subscribed = channel_id in sources_list
         channel_name = get_channel_name(channel_id)
         if not subscribed:
@@ -60,19 +61,19 @@ def get_chan_info():
 
 @app.route("/subscribe/channel/<channel_id>", methods=['POST'])
 def subscribe_channel(channel_id):
-    sources_list = load_source_list_from_file("channels.txt")
+    sources_list = get_config()["channel_subscriptions"]
     if channel_id not in sources_list:
         sources_list.append(channel_id)
-        save_source_list_to_file("channels.txt", sources_list)
+        save_config()
     return f"Subscribed to channel {channel_id}." + \
               "<form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
 
 @app.route("/unsubscribe/channel/<channel_id>", methods=['POST'])
 def unsubscribe_channel(channel_id):
-    sources_list = load_source_list_from_file("channels.txt")
+    sources_list = get_config()["channel_subscriptions"]
     if channel_id in sources_list:
         sources_list.remove(channel_id)
-        save_source_list_to_file("channels.txt", sources_list)
+        save_config()
     return f"Unsubscribed from channel {channel_id}." + \
               "<form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
 
@@ -93,9 +94,8 @@ def input_playlist_id():
 @app.route("/show_playlist_list")
 def show_playlist_list():
     playlistlist_str = ""
-    playlists_list = load_source_list_from_file("playlists.txt")
+    playlists_list = get_config()["playlist_subscriptions"]
     for playlist_id in playlists_list:
-        sleep(0.3)  # To avoid hitting YouTube too hard when fetching playlist names
         playlist_name = get_playlist_name(playlist_id)
         playlistlist_str += "<li>" + playlist_id + " - [" + playlist_name + "] " + "<form action='/unsubscribe/playlist/"+playlist_id+"' method='post'><input type='submit' value='Unsubscribe'></form></li>"
     return "<ul>"+ playlistlist_str + "</ul><form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
@@ -104,7 +104,7 @@ def show_playlist_list():
 def get_playlist_info():
     playlist_id = request.form['playlist_id']
     if playlist_id:
-        playlists_list = load_source_list_from_file("playlists.txt")
+        playlists_list = get_config()["playlist_subscriptions"]
         subscribed = playlist_id in playlists_list
         playlist_name = get_playlist_name(playlist_id)
         if not subscribed:
@@ -120,29 +120,21 @@ def get_playlist_info():
 
 @app.route("/subscribe/playlist/<playlist_id>", methods=['POST'])
 def subscribe_playlist(playlist_id):
-    playlists_list = load_source_list_from_file("playlists.txt")
+    playlists_list = get_config()["playlist_subscriptions"]
     if playlist_id not in playlists_list:
         playlists_list.append(playlist_id)
-        save_source_list_to_file("playlists.txt", playlists_list)
+        save_config()
     return f"Subscribed to playlist {playlist_id}." + \
               "<form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
 
 @app.route("/unsubscribe/playlist/<playlist_id>", methods=['POST'])
 def unsubscribe_playlist(playlist_id):
-    playlists_list = load_source_list_from_file("playlists.txt")
+    playlists_list = get_config()["playlist_subscriptions"]
     if playlist_id in playlists_list:
         playlists_list.remove(playlist_id)
-        save_source_list_to_file("playlists.txt", playlists_list)
+        save_config()
     return f"Unsubscribed from playlist {playlist_id}." + \
               "<form action='/subscribtion' method='get'><input type='submit' value='Back'></form>"
-
-
-
-
-
-
-
-
 
 
 
@@ -158,17 +150,14 @@ def transcribe(filename):
 
 
 ### rss feed generation
-
 @app.route("/feed")
 def yt_feed():
     global url_link
     return generate_feed(url_link, False)
-
 @app.route("/")
 def index():
     global url_link
     return generate_feed(url_link, False)
-
 @app.route("/file/<path:filename>.mp4")
 def download(filename):
     return return_file(filename)

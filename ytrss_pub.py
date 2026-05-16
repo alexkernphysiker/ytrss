@@ -1,17 +1,9 @@
-import sys
 from flask import Flask
-from flask import send_file
-from flask import request
 from utils import *
+from config import *
 
-
-
-if len(sys.argv) < 2:
-    print("Usage: python ytrss_pub.py <ip>")
-    sys.exit(1)
-
-host = sys.argv[1]
-port=2000
+host = get_config()["host_public"]
+port=get_config()["port_public"]
 url_link=f"http://{host}:{port}"
 print(f"Using IP: {host} for public access. Make sure this IP is correct and accessible from the outside.")
 

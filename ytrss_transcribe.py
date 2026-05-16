@@ -5,7 +5,7 @@ import os
 import subprocess
 import re
 from pathlib import Path
-from time import time
+
 from urllib import response
 from lxml import etree
 from utils import *

@@ -7,15 +7,16 @@ from xml.etree import ElementTree
 from xml.etree import cElementTree
 from datetime import datetime, timedelta, timezone
 import dateutil.parser
-import time
+from time import sleep, mktime
 from pathlib import Path
 import arrow
 from random import shuffle
 from utils import *
+from config import *
 
-max_days = 30
-recheck_size_days = 7
-auto_transcript_hours = 10
+max_days = get_config()["max_days"]
+recheck_size_days = get_config()["recheck_size_days"]
+auto_transcript_hours = get_config()["auto_transcript_hours"]
 
 def cleanup():
     now = arrow.now()
@@ -63,13 +64,13 @@ def download_video(link, filename):
 def update_channels_feed():
     print(f"Fetching channels")
     links=[]
-    for channel_id in load_source_list_from_file("channels.txt"):
+    for channel_id in get_config()["channel_subscriptions"]:
         links.append(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
-    for playlist_id in load_source_list_from_file("playlists.txt"):
+    for playlist_id in get_config()["playlist_subscriptions"]:
         links.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}")
     shuffle(links)
     for link in links:
-        time.sleep(5)
+        sleep(5)
         try:
             response = requests.get(link, timeout=30)
             if response.status_code == 200:
@@ -122,7 +123,7 @@ def update_channels_feed():
                         if os.path.exists(file_path):
                             if time_since_insertion < timedelta(days=recheck_size_days):
                                 file_size_yt = get_yt_file_size(link_element.get("href"))
-                                time.sleep(5)
+                                sleep(5)
                                 file_duration_yt = get_file_duration(link_element.get("href"))
                                 try:
                                     duration_secs = int(file_duration_yt)
@@ -141,7 +142,7 @@ def update_channels_feed():
                                     if file_size_yt != file_size:
                                         print(f"File for video {fn} has different size than expected, redownloading...")
                                         os.remove(file_path)
-                                        time.sleep(5)
+                                        sleep(5)
                                         if not download_video(link_element.get("href"), file_path):
                                             print(f"Failed to download video {fn}, skipping item.")
                                             continue
@@ -155,13 +156,13 @@ def update_channels_feed():
                                 continue
                         else:
                             print(f"No existing file for video {fn}, downloading...")
-                            time.sleep(5)
+                            sleep(5)
                             if not download_video(link_element.get("href"), file_path):
                                 print(f"Failed to download video {fn}, skipping item.")
                                 continue
                         if os.path.exists(file_path):
                             length = os.path.getsize(file_path)
-                            modTime = time.mktime(insertion_date.timetuple())
+                            modTime = mktime(insertion_date.timetuple())
                             os.utime(file_path, (modTime, modTime))
                             enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url="__URL_LINK__/file/"+fn+".mp4", type="video/mpeg", length=str(length))
                         else:
@@ -207,7 +208,7 @@ def update_channels_feed():
                                                 print(f"Video {fn} is already scheduled for transcription")
                                 else:
                                     print(f"Video {fn} already has transcription")
-                        modTime = time.mktime(insertion_date.timetuple())
+                        modTime = mktime(insertion_date.timetuple())
                         os.utime(description_path, (modTime, modTime))
                         count_used += 1
                 print(f"Source {link}: {source_name} [{count_used} entries used, {count_all} total entries].")
@@ -217,6 +218,7 @@ def update_channels_feed():
             print(f"Error fetching {link}: {e}")
 
 if __name__ == "__main__":
-    update_names_dicts()
     cleanup()
     update_channels_feed()
+    update_names_dicts()
+    save_config()
