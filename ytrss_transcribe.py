@@ -5,10 +5,10 @@ import os
 import subprocess
 import re
 from pathlib import Path
-
 from urllib import response
 from lxml import etree
 from utils import *
+import json
 
 def convert_video_to_audio(video_file_path):
     audio_file_path = video_file_path + ".mp3"
@@ -111,9 +111,9 @@ def run_openai(filename, mp3_list, lang=""):
         #Stage 3: Split text into chapters and add titles to them
         if text is not None and text.strip() != "":
                 input="Split the text into the chapters and add titles to them. Preserve the text literally. "
-                annotation_length = len(text.strip()) // 20
-                if annotation_length >= 256:
-                    input += f"Add short annotation for the whole text at the beginning (up to {annotation_length} characters). "
+                #annotation_length = len(text.strip()) // 20
+                #if annotation_length >= 256:
+                #    input += f"Add short annotation for the whole text at the beginning (up to {annotation_length} characters). "
                 input += "The text is:\n\n" + text
                 print(f"Splitting text into chapters for video {filename}...")
                 response = client.responses.create(
@@ -147,6 +147,32 @@ def run_gemini(filename, youtube_link, lang="en"):
     )
     return response.text
 
+def run_claude(filename, link, lang="en"):
+    #not working for now
+    import anthropic
+    client = anthropic.Anthropic()
+    if lang == "uk":
+        prompt = "Будь ласка, транскрибуй це відео."
+    elif lang == "pl":
+        prompt = "Proszę, przetranskrybuj to wideo."
+    else:
+        prompt = "Please transcribe this video."
+
+    response = client.beta.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=1024,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "text", "text": link},
+                ],
+            }
+        ],
+        betas=["files-api-2025-04-14"],
+    )
+    return response.content[0].text
 
 def transcribe_video(filename, engine):
     video_path = "yt-video/" + filename
@@ -162,6 +188,8 @@ def transcribe_video(filename, engine):
         print(f"Transcribing video {filename} with OpenAI...")
     elif engine == "gemini":
         print(f"Transcribing video {filename} with Gemini...")
+    elif engine == "claude":
+        print(f"Transcribing video {filename} with Claude...")
     else:
         print(f"Unknown transcript engine: {engine}, skipping transcription.")
 
@@ -175,6 +203,8 @@ def transcribe_video(filename, engine):
                 text = ""
         elif engine == "gemini":
             text = run_gemini(filename, get_video_link(description_path), detect_language(description_path))
+        elif engine == "claude":
+            text = run_claude(filename, get_video_link(description_path), detect_language(description_path))
         else:
             print(f"Unknown transcript engine: {engine}, skipping transcription.")
 
@@ -195,38 +225,32 @@ def transcribe_video(filename, engine):
     else:
         print(f"Transcription for video {filename} is empty, not creating transcription file.")
 
+def get_engine_list():
+    return ["gemini", "openai"]
+
 if __name__ == "__main__":
 
     video_list_auto = load_source_list_from_file("transcription.txt")
     save_source_list_to_file("transcription.txt", [])
-
-    video_list_gemini = load_source_list_from_file("gemini.txt")
-    save_source_list_to_file("gemini.txt", [])
-    video_list_openai = load_source_list_from_file("openai.txt")
-    save_source_list_to_file("openai.txt", [])
-
-    engine=get_config().get("auto_transcript_engine", "gemini")
-    if engine == "openai":
-        video_list_openai = video_list_auto + video_list_openai
-    elif engine == "gemini":
-        video_list_gemini = video_list_auto + video_list_gemini
-    else:
-        print(f"Unknown auto transcript engine: {engine}, skipping auto transcription.")
-
-
-    for fn in video_list_gemini:
-        file_path = "yt-video/" + fn
-        description_path = "yt-video/" + fn + ".desc"
-        transcription_path = "yt-video/" + fn + ".txt"
-        if not os.path.exists(transcription_path) and os.path.exists(file_path):
-            transcribe_video(fn, engine="gemini")
     
-    for fn in video_list_openai:
-        file_path = "yt-video/" + fn
-        description_path = "yt-video/" + fn + ".desc"
-        transcription_path = "yt-video/" + fn + ".txt"
-        if not os.path.exists(transcription_path) and os.path.exists(file_path):
-            transcribe_video(fn, engine="openai")
+    video_list_map = {}
+    for engine in get_engine_list():
+        video_list_map[engine] = load_source_list_from_file(engine + ".txt")
+        save_source_list_to_file(engine + ".txt", [])
+
+    auto_engine = get_config()["auto_transcript_engine"]
+    if auto_engine in get_engine_list():
+        video_list_map[auto_engine] += video_list_auto
+    else:
+        print(f"Unknown auto transcript engine: {auto_engine}, skipping auto transcription.")
+
+    for engine, video_list in video_list_map.items():
+        for fn in video_list:
+            file_path = "yt-video/" + fn
+            description_path = "yt-video/" + fn + ".desc"
+            transcription_path = "yt-video/" + fn + ".txt"
+            if not os.path.exists(transcription_path) and os.path.exists(file_path):
+                transcribe_video(fn, engine=engine)
 
     for mp3 in Path("yt-video").glob("*.mp3"):
         if mp3.is_file():

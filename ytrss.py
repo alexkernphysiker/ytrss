@@ -169,31 +169,18 @@ def enable_auto_transcription(source_id):
 
 
 ### video transcription
-@app.route("/transcribe/gemini/<filename>")
-def transcribe(filename):
-    video_list = load_source_list_from_file("gemini.txt")
+@app.route("/transcribe/<engine>/<filename>")
+def transcribe(engine, filename):
+    video_list = load_source_list_from_file(f"{engine}.txt")
     if filename not in video_list:
         video_list.append(filename)
-        save_source_list_to_file("gemini.txt", video_list)
+        save_source_list_to_file(f"{engine}.txt", video_list)
         log_path = f"yt-video/{filename}.log"
         if os.path.exists(log_path):
             os.remove(log_path)
-        return f"Scheduled transcribing video {filename} with Gemini."
+        return f"Scheduled transcribing video {filename} with {engine}."
     else:
-        return f"Video {filename} is already scheduled for transcription with Gemini."
-
-@app.route("/transcribe/openai/<filename>")
-def transcribe_openai(filename):
-    video_list = load_source_list_from_file("openai.txt")
-    if filename not in video_list:
-        video_list.append(filename)
-        save_source_list_to_file("openai.txt", video_list)
-        log_path = f"yt-video/{filename}.log"
-        if os.path.exists(log_path):
-            os.remove(log_path)
-        return f"Scheduled transcribing video {filename} with OpenAI."
-    else:
-        return f"Video {filename} is already scheduled for transcription with OpenAI."
+        return f"Video {filename} is already scheduled for transcription with {engine}."
 
 
 @app.route("/remove_transcription/<filename>")

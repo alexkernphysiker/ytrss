@@ -9,6 +9,7 @@ from xml.etree import ElementTree
 from pathlib import Path
 import socket
 from config import *
+from ytrss_transcribe import get_engine_list
 
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -127,8 +128,10 @@ def generate_feed(url_link, is_public):
             description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"
             description_element.text += "<p>[VIDEO DESCRIPTION]</p> <br/>" + descr
         elif age < timedelta(days=get_config()["manual_transcript_days"]) and not is_public:
-                transcribe_link = f"<br/> Transcript with <a href='{url_link}/transcribe/gemini/{fn}'>Gemini</a> or <a href='{url_link}/transcribe/openai/{fn}'>OpenAI</a> <br/>[Video description] <br/>"
-                description_element.text += transcribe_link + descr
+                transcribe_link = f"<br/> <a>Transcript with</a> <a>|</a> "
+                for engine in get_engine_list():
+                    transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine.capitalize()}</a> <a>|</a> "
+                description_element.text += transcribe_link + "<br/>[Video description] <br/>" + descr
         else:
             description_element.text += f"[Video description] <br/> " + descr
 
