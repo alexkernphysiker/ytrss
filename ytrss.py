@@ -175,19 +175,37 @@ def transcribe(filename):
     if filename not in video_list:
         video_list.append(filename)
         save_source_list_to_file("gemini.txt", video_list)
+        log_path = f"yt-video/{filename}.log"
+        if os.path.exists(log_path):
+            os.remove(log_path)
         return f"Scheduled transcribing video {filename} with Gemini."
     else:
         return f"Video {filename} is already scheduled for transcription with Gemini."
-    
+
 @app.route("/transcribe/openai/<filename>")
 def transcribe_openai(filename):
     video_list = load_source_list_from_file("openai.txt")
     if filename not in video_list:
         video_list.append(filename)
         save_source_list_to_file("openai.txt", video_list)
+        log_path = f"yt-video/{filename}.log"
+        if os.path.exists(log_path):
+            os.remove(log_path)
         return f"Scheduled transcribing video {filename} with OpenAI."
     else:
         return f"Video {filename} is already scheduled for transcription with OpenAI."
+
+
+@app.route("/remove_transcription/<filename>")
+def remove_transcription(filename):
+    transcription_path = f"yt-video/{filename}.txt"
+    log_path = f"yt-video/{filename}.log"
+    if os.path.exists(transcription_path):
+        os.remove(transcription_path)
+    if os.path.exists(log_path):
+        os.remove(log_path)
+    return f"Transcription for video {filename} has been removed."
+
 
 ### rss feed generation
 @app.route("/feed")
