@@ -155,18 +155,21 @@ def update_channels_feed():
                                 print(f"Video {fn} is old enough, skip updating")
                                 continue
                         else:
-                            print(f"No existing file for video {fn}, downloading...")
-                            sleep(5)
-                            if not download_video(link_element.get("href"), file_path):
-                                print(f"Failed to download video {fn}, skipping item.")
-                                continue
+                            if source_id not in get_config()["sources_with_disabled_downloading"]:
+                                print(f"No existing file for video {fn}, downloading...")
+                                sleep(5)
+                                if not download_video(link_element.get("href"), file_path):
+                                    print(f"Failed to download video {fn}, skipping item.")
+                                    continue
+                            else:
+                                print(f"Downloading is disabled for source {source_id}")
                         if os.path.exists(file_path):
                             length = os.path.getsize(file_path)
                             modTime = mktime(insertion_date.timetuple())
                             os.utime(file_path, (modTime, modTime))
                             enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url="__URL_LINK__/file/"+fn+".mp4", type="video/mpeg", length=str(length))
                         else:
-                            print(f"Failed to download video {fn}")
+                            print(f"The entry {fn} does not have a file after download attempt, skipping enclosure element.")
                         
                         description_element = ElementTree.SubElement(entry_element, "summary")
                         description_element.text = ""

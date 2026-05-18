@@ -14,6 +14,7 @@ def default_config():
         "channel_subscriptions" : [],
         "playlist_subscriptions" : [],
         "sources_with_disabled_auto_transcription" : [],
+        "sources_with_disabled_downloading" : [],
         "channel_names_dict": {},
         "playlist_names_dict": {}
     }
