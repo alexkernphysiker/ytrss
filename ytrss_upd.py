@@ -30,6 +30,15 @@ def cleanup():
 
 format = "18/93/139/140/249/251"
 
+def is_live(link):
+    try:
+        proc = subprocess.run("yt-dlp --skip-download --print is_live "+link, shell=True, capture_output=True)
+        output = proc.stdout.decode().strip()
+        return output.lower() == "true"
+    except Exception as e:
+        print(f"Error occurred while trying to check if video {link} is live: {str(e)}")
+        return False
+
 def get_yt_file_size(link):
     try:
         proc = subprocess.run("yt-dlp  -f " + format + " --print \"%(filesize,filesize_approx)s\" "+link, shell=True, capture_output=True)
@@ -123,7 +132,7 @@ def update_channels_feed():
                         if os.path.exists(file_path):
                             if time_since_insertion < timedelta(days=recheck_size_days):
                                 file_size_yt = get_yt_file_size(link_element.get("href"))
-                                sleep(5)
+                                sleep(3)
                                 file_duration_yt = get_file_duration(link_element.get("href"))
                                 try:
                                     duration_secs = int(file_duration_yt)
@@ -142,7 +151,7 @@ def update_channels_feed():
                                     if file_size_yt != file_size:
                                         print(f"File for video {fn} has different size than expected, redownloading...")
                                         os.remove(file_path)
-                                        sleep(5)
+                                        sleep(3)
                                         if not download_video(link_element.get("href"), file_path):
                                             print(f"Failed to download video {fn}, skipping item.")
                                             continue
@@ -155,9 +164,13 @@ def update_channels_feed():
                                 print(f"Video {fn} is old enough, skip updating")
                                 continue
                         else:
+                            sleep(1)
+                            if is_live(link_element.get("href")):
+                                print(f"Video {fn} is currently live, skipping item.")
+                                continue
                             if source_id not in get_config()["sources_with_disabled_downloading"]:
                                 print(f"No existing file for video {fn}, downloading...")
-                                sleep(5)
+                                sleep(3)
                                 if not download_video(link_element.get("href"), file_path):
                                     print(f"Failed to download video {fn}, skipping item.")
                                     continue
