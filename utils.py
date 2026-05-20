@@ -91,7 +91,7 @@ def duration_string(duration_secs):
     return f"{duration_secs//3600}:{(duration_secs%3600)//60:02d}:{duration_secs%60:02d}" if duration_secs >= 3600 else f"{duration_secs//60}:{duration_secs%60:02d}"
 
 from lxml import etree
-def generate_feed(url_link, is_public):
+def generate_atom_feed(url_link, is_public):
     output="<feed xmlns=\"http://www.w3.org/2005/Atom\">  <title>Моя стрічка YouTube</title><link href=\"http://youtube.com/\" />\n"
     for description_path in Path("yt-video").glob("*.desc"):
         transcription_path = str(description_path).replace(".desc", ".txt")
@@ -139,6 +139,30 @@ def generate_feed(url_link, is_public):
     output += "</feed>\n"
     return output
 
+def generate_transcriptions_page():
+    pubs = {}
+    for description_path in Path("yt-video").glob("*.desc"):
+        transcription_path = str(description_path).replace(".desc", ".txt")
+        fn = os.path.basename(description_path).replace(".desc", "")
+        parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+        entry = etree.parse(description_path, parser1)
+        title_element = entry.find("title")
+        modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
+        age = datetime.now() - modified_time
+        if age > timedelta(days=get_config()["max_days_read_page"]):
+            continue
+        if os.path.exists(transcription_path):
+            output = f"<p><b>{title_element.text}</b></p><br/>"
+            string_list = open(transcription_path, "r").read().split('\n')
+            for line in string_list:
+                output += "<p>"+line+"</p> <br/>"
+            output += "<br/><br/>"
+            pubs[age] = output
+    asc = {k: v for k, v in sorted(pubs.items(), key=lambda item: item[0])}
+    output = "<html><body><h1>Transcriptions</h1><br/>"
+    for age, content in asc.items():
+        output += content + "<br/>"
+    return output + "</body></html>"
 
 def return_file(filename):
     return send_file("yt-video/"+filename)

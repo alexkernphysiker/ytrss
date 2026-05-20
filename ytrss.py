@@ -229,11 +229,11 @@ def remove_transcription(filename):
 @app.route("/feed")
 def yt_feed():
     global url_link
-    return generate_feed(url_link, False)
+    return generate_atom_feed(url_link, False)
 @app.route("/")
 def index():
     global url_link
-    return generate_feed(url_link, False)
+    return generate_atom_feed(url_link, False)
 @app.route("/file/<path:filename>.mp4")
 def download(filename):
     return return_file(filename)

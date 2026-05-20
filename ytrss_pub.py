@@ -11,7 +11,11 @@ app = Flask(__name__)
 @app.route("/feed")
 def yt_feed():
     global url_link
-    return generate_feed(url_link, True)
+    return generate_atom_feed(url_link, True)
+
+@app.route("/readfeed")
+def yt_rss():
+    return generate_transcriptions_page()
 
 @app.route("/file/<path:filename>.mp4")
 def download(filename):
