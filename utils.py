@@ -152,7 +152,7 @@ def generate_transcriptions_page():
         if age > timedelta(days=get_config()["max_days_read_page"]):
             continue
         if os.path.exists(transcription_path):
-            output = f"<h2><b>{title_element.text}</b></h2><br/>"
+            output = ""
             string_list = open(transcription_path, "r").read().split('\n')
             for line in string_list:
                 output += "<p>"+line+"</p> <br/>"
@@ -163,7 +163,7 @@ def generate_transcriptions_page():
     output = ""
     for age, (fn, title, content) in asc.items():
         titles += f"<div id='{fn}-title'><a href='#{fn}'>{title}</a><br/></div>"
-        output += f"<div id='{fn}'>{content} <br/> <a href='#{fn}-title'>Back to top</a></div>"
+        output += f"<div id='{fn}'> <h2><b>{title}</b></h2><br/> <a href='#{fn}-title'>Back to top</a><br/>" + content + "<br/> <a href='#{fn}-title'>Back to top</a></div>"
     return "<html><body><h1>List of transcribed videos</h1><br/>" + titles + "<br/> <h1>Transcriptions</h1><br/>" + output + "</body></html>"
 
 def return_file(filename):
