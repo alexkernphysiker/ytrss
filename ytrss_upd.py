@@ -87,6 +87,10 @@ def update_channels_feed():
                 count_used=0
                 channel_content = ElementTree.fromstring(response.text)
                 source_name = channel_content.find("{http://www.w3.org/2005/Atom}title").text
+                if "playlist_id" in link:
+                    source_id= link.split("playlist_id=")[-1]
+                else:
+                    source_id= link.split("channel_id=")[-1]
                 print(f"{link}: {source_name}")
                 for entry in channel_content.findall("{http://www.w3.org/2005/Atom}entry"):
                     title = entry.find("{http://www.w3.org/2005/Atom}title")
@@ -198,13 +202,11 @@ def update_channels_feed():
                             playlist_name_element.text = source_name
                             playlistid_element = ElementTree.SubElement(entry_element, "yt:playlistid")
                             playlistid_element.text = link.split("playlist_id=")[-1]
-                            source_id= link.split("playlist_id=")[-1]
                         else:
                             channelid_element = ElementTree.SubElement(entry_element, "yt:channelid")
                             channelid_element.text = link.split("channel_id=")[-1]
                             channelname_element = ElementTree.SubElement(entry_element, "yt:channelname")
                             channelname_element.text = source_name
-                            source_id= link.split("channel_id=")[-1]
 
                         if media_group is not None:
                             for media_content in media_group.findall("{http://search.yahoo.com/mrss/}content"):
