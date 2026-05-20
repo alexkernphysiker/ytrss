@@ -152,17 +152,19 @@ def generate_transcriptions_page():
         if age > timedelta(days=get_config()["max_days_read_page"]):
             continue
         if os.path.exists(transcription_path):
-            output = f"<p><b>{title_element.text}</b></p><br/>"
+            output = f"<h2><b>{title_element.text}</b></h2><br/>"
             string_list = open(transcription_path, "r").read().split('\n')
             for line in string_list:
                 output += "<p>"+line+"</p> <br/>"
             output += "<br/><br/>"
-            pubs[age] = output
+            pubs[age] = (fn, title_element.text, output)
     asc = {k: v for k, v in sorted(pubs.items(), key=lambda item: item[0])}
-    output = "<html><body><h1>Transcriptions</h1><br/>"
-    for age, content in asc.items():
-        output += content + "<br/>"
-    return output + "</body></html>"
+    titles = ""
+    output = ""
+    for age, (fn, title, content) in asc.items():
+        titles += f"<div id='{fn}-title'><a href='#{fn}'>{title}</a><br/></div>"
+        output += f"<div id='{fn}'>{content} <br/> <a href='#{fn}-title'>Back to top</a></div>"
+    return "<html><body><h1>List of transcribed videos</h1><br/>" + titles + "<br/> <h1>Transcriptions</h1><br/>" + output + "</body></html>"
 
 def return_file(filename):
     return send_file("yt-video/"+filename)
