@@ -155,16 +155,19 @@ def generate_transcriptions_page():
             output = ""
             string_list = open(transcription_path, "r").read().split('\n')
             for line in string_list:
-                output += "<p>"+line+"</p> <br/>"
-            output += "<br/><br/>"
+                if line.strip() != "":
+                    output += f"<p>{line}</p> <br/>"
+                else:
+                    output += f"<a href='#{fn}-title'>[back]</a>"
             pubs[age] = (fn, title_element.text, output)
     asc = {k: v for k, v in sorted(pubs.items(), key=lambda item: item[0])}
     titles = ""
     output = ""
     for age, (fn, title, content) in asc.items():
-        titles += f"<div id='{fn}-title'><a href='#{fn}'>{title}</a><br/></div>"
-        output += f"<div id='{fn}'> <h2><b>{title}</b></h2><br/> <a href='#{fn}-title'>Back to top</a><br/>" + content + "<br/> <a href='#{fn}-title'>Back to top</a></div>"
-    return "<html><body><h1>List of transcribed videos</h1><br/>" + titles + "<br/> <h1>Transcriptions</h1><br/>" + output + "</body></html>"
+        titles += f"<li><div id='{fn}-title'><a href='#{fn}'>{title}</a><br/></div></li>"
+        content = content
+        output += f"<div id='{fn}'> <h2><li>{title}<\li></h2><br/>{content}<br/> <a href='#{fn}-title'>Back to top</a></div>"
+    return f"<html><body><h1>List of transcribed videos</h1><ul>{titles}</ul> <h1>Transcriptions</h1><ul>{output}</ul></body></html>"
 
 def return_file(filename):
     return send_file("yt-video/"+filename)
