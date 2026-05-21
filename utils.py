@@ -166,7 +166,7 @@ def generate_transcriptions_page():
     for age, (fn, title, content) in asc.items():
         titles += f"<li><div id='{fn}-title'><a href='#{fn}'>{title}</a><br/></div></li>"
         content = content
-        output += f"<div id='{fn}'> <h2><li>{title}<\li></h2><br/>{content}<br/> <a href='#{fn}-title'>Back to top</a></div>"
+        output += f"<div id='{fn}'> <h2><li>{title}</li></h2><br/>{content}<br/> <a href='#{fn}-title'>Back to top</a></div>"
     return f"<html><body><h1>List of transcribed videos</h1><ul>{titles}</ul> <h1>Transcriptions</h1><ul>{output}</ul></body></html>"
 
 def return_file(filename):
