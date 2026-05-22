@@ -159,12 +159,12 @@ def generate_transcriptions_page():
                     output += f"<p>{line}</p> <br/>"
                 else:
                     output += f"<a href='#{fn}-title'>[back]</a>"
-            pubs[age] = (fn, title_element.text, output)
+            pubs[age] = (fn, title_element.text, output, modified_time)
     asc = {k: v for k, v in sorted(pubs.items(), key=lambda item: item[0])}
     titles = ""
     output = ""
-    for age, (fn, title, content) in asc.items():
-        titles += f"<li><div id='{fn}-title'><a href='#{fn}'>{title}</a><br/></div></li>"
+    for age, (fn, title, content, modified_time) in asc.items():
+        titles += f"<li><div id='{fn}-title'><a href='#{fn}'>[{modified_time.strftime('%Y-%m-%d %H:%M')}]{title}</a><br/></div></li>"
         content = content
         output += f"<div id='{fn}'> <h2><li>{title}</li></h2><br/>{content}<br/> <a href='#{fn}-title'>Back to top</a></div>"
     return f"<html><body><h1>List of transcribed videos</h1><ul>{titles}</ul> <h1>Transcriptions</h1><ul>{output}</ul></body></html>"
