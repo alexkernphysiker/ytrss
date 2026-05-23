@@ -10,6 +10,24 @@ from lxml import etree
 from utils import *
 import json
 
+def download_subtitles(link, filename):
+    try:
+        description_path = "yt-video/" + filename + ".desc"
+        proc = subprocess.run(f"yt-dlp --skip-download --write-auto-subs --write-subs --sub-lang {detect_language(description_path)} {link}", shell=True, capture_output=True)
+        for line in proc.stdout.decode().splitlines():
+            if line.strip().startswith("[download] Destination: "):
+                srtname = line.strip().split("[download] Destination: ")[-1]
+                if os.path.exists(srtname):
+                    with open(srtname, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    os.remove(srtname)
+                    return content
+        print(f"Failed to download subtitles for video {filename}. yt-dlp output: {proc.stderr.decode()}")
+        return ""
+    except Exception as e:
+        print(f"Error occurred while trying to download subtitles for video {link}: {str(e)}")
+        return ""
+
 def convert_video_to_audio(video_file_path):
     audio_file_path = video_file_path + ".mp3"
     if os.path.exists(audio_file_path):
@@ -134,6 +152,35 @@ def run_gemini(filename, youtube_link, lang="en"):
     )
     return response.text
 
+def run_claude(filename, youtube_link, lang="en"):
+    srt = download_subtitles(youtube_link, filename)
+    if srt.strip() == "":
+        print(f"No subtitles found for video {filename}, skipping Claude transcription.")
+        return f"No subtitles found for this video for language {lang}, so Claude transcription was skipped."
+    import anthropic
+    client = anthropic.Client()
+    if lang == "uk":
+        prompt = "Будь ласка, зроби з цих субтитрів текстову транскрипцію відео з повною вичиткою тексту та розбивкою на розділи"
+    elif lang == "pl":
+        prompt = "Proszę, zrób z tych napisów tekstową transkrypcję filmu z pełną korektą tekstu i podziałem na rozdziały"
+    else:        
+        prompt = "Please make from these subtitles a text transcription of the video with full proofreading of the text and division into chapters"
+
+    response = client.beta.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=1024,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "text", "text": srt},
+                ],
+            }
+        ],
+    )
+    return response.content[0].text
+
 def transcribe_video(filename, engine):
     video_path = "yt-video/" + filename
     transcription_path = "yt-video/" + filename + ".txt"
@@ -148,6 +195,8 @@ def transcribe_video(filename, engine):
         print(f"Transcribing video {filename} with OpenAI...")
     elif engine == "gemini":
         print(f"Transcribing video {filename} with Gemini...")
+    elif engine == "claude":
+        print(f"Transcribing video {filename} with Claude...")
     else:
         print(f"Unknown transcript engine: {engine}, skipping transcription.")
 
@@ -161,6 +210,8 @@ def transcribe_video(filename, engine):
                 text = ""
         elif engine == "gemini":
             text = run_gemini(filename, get_video_link(description_path), detect_language(description_path))
+        elif engine == "claude":
+            text = run_claude(filename, get_video_link(description_path), detect_language(description_path))
         else:
             print(f"Unknown transcript engine: {engine}, skipping transcription.")
 
@@ -181,8 +232,8 @@ def transcribe_video(filename, engine):
     else:
         print(f"Transcription for video {filename} is empty, not creating transcription file.")
 
-def get_engine_list():
-    return ["gemini", "openai"]
+def get_engine_map():
+    return {"gemini": "Gemini(link)", "openai": "OpenAI(mp3)", "claude": "Claude(srt)"}
 
 if __name__ == "__main__":
 
@@ -190,12 +241,12 @@ if __name__ == "__main__":
     save_source_list_to_file("transcription.txt", [])
     
     video_list_map = {}
-    for engine in get_engine_list():
+    for engine, engine_name in get_engine_map().items():
         video_list_map[engine] = load_source_list_from_file(engine + ".txt")
         save_source_list_to_file(engine + ".txt", [])
 
     auto_engine = get_config()["auto_transcript_engine"]
-    if auto_engine in get_engine_list():
+    if auto_engine in get_engine_map().keys():
         video_list_map[auto_engine] += video_list_auto
     else:
         print(f"Unknown auto transcript engine: {auto_engine}, skipping auto transcription.")

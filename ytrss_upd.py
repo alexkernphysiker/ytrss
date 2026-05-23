@@ -39,25 +39,6 @@ def is_live(link):
         print(f"Error occurred while trying to check if video {link} is live: {str(e)}")
         return False
 
-def download_subtitles(link, filename):
-    try:
-        description_path = "yt-video/" + filename + ".desc"
-        transcription_path = "yt-video/" + filename + ".txt"
-        proc = subprocess.run(f"yt-dlp --skip-download --write-auto-subs --write-subs --sub-lang {detect_language(description_path)} --convert-subs srt --sub-format txt --postprocessor-args \"-ss 00:00:00 -to 99:59:59 -f srt - | sed '/^[0-9]*:[0-9]*:[0-9]*,[0-9]* --> [0-9]*:[0-9]*:[0-9]*,[0-9]*$/d' | tr -s '\\n' ' ' > {transcription_path}\" {link}", shell=True, capture_output=True)
-        for line in proc.stdout.decode().splitlines():
-            if line.strip().startswith("[download] Destination: "):
-                srtname = line.strip().split("[download] Destination: ")[-1]
-                if os.path.exists(srtname):
-                    os.rename(srtname, transcription_path)
-                    modtime = os.path.getmtime(description_path)
-                    os.utime(transcription_path, (modtime, modtime))
-                    print(f"Successfully downloaded subtitles for video {filename}")
-                    return True
-        print(f"Failed to download subtitles for video {filename}. yt-dlp output: {proc.stderr.decode()}")
-        return False
-    except Exception as e:
-        print(f"Error occurred while trying to download subtitles for video {link}: {str(e)}")
-        return False
 
 def get_yt_file_size(link):
     try:
@@ -239,8 +220,6 @@ def update_channels_feed():
                                 print(f"Processing auto-transcription for video {fn}")
                                 transcription_path = "yt-video/" + fn + ".txt"
                                 if not os.path.exists(transcription_path) and not source_id in get_config()["sources_with_disabled_auto_transcription"]:
-                                    sleep(1)
-                                    download_subtitles(link_element.get("href"), fn)
                                     if not os.path.exists(transcription_path):
                                         video_list = load_source_list_from_file("transcription.txt")
                                         if not fn in video_list:

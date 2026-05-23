@@ -9,7 +9,7 @@ from xml.etree import ElementTree
 from pathlib import Path
 import socket
 from config import *
-from ytrss_transcribe import get_engine_list
+from ytrss_transcribe import get_engine_map
 
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -99,7 +99,7 @@ def detect_language(description_path):
         elif bool(re.search('[ąęłżĄĘŁŻ]', text)):
             return "pl"
         else:
-            return ""
+            return "en"
     else:
         return ""
 
@@ -134,17 +134,18 @@ def generate_atom_feed(url_link, is_public):
             log_content = open(log_path, "r").read()
             description_element.text += "<p>[LOG]</p> <br/>" + log_content + "<br/>"
         if os.path.exists(transcription_path):
-            string_list = open(transcription_path, "r").read().split('\n')
-            description_element.text += f"<p>[VIDEO TRANSCRIPTION]</p> <br/>"
-            description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"
-            for line in string_list:
-                description_element.text += "<p>"+line+"</p> <br/>"
-            description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"
+            if age < timedelta(days=get_config()["manual_transcript_days"]):
+                string_list = open(transcription_path, "r").read().split('\n')
+                description_element.text += f"<p>[VIDEO TRANSCRIPTION]</p> <br/>"
+                description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"
+                for line in string_list:
+                    description_element.text += "<p>"+line+"</p> <br/>"
+                description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"
             description_element.text += "<p>[VIDEO DESCRIPTION]</p> <br/>" + descr
         elif age < timedelta(days=get_config()["manual_transcript_days"]) and not is_public:
                 transcribe_link = f"<br/> <a>Transcript with</a> <a>|</a> "
-                for engine in get_engine_list():
-                    transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine.capitalize()}</a> <a>|</a> "
+                for engine, engine_name in get_engine_map().items():
+                    transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine_name}</a> <a>|</a> "
                 description_element.text += transcribe_link + "<br/>[Video description] <br/>" + descr
         else:
             description_element.text += f"[Video description] <br/> " + descr

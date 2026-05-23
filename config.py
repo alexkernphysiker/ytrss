@@ -10,7 +10,7 @@ def default_config():
         "max_days_read_page" : 3,
         "recheck_size_days" : 7,
         "auto_transcript_engine" : "gemini",
-        "auto_transcript_hours" : 10,
+        "auto_transcript_hours" : 12,
         "manual_transcript_days" : 7,
         "channel_subscriptions" : [],
         "playlist_subscriptions" : [],
