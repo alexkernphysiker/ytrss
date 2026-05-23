@@ -39,6 +39,24 @@ def is_live(link):
         print(f"Error occurred while trying to check if video {link} is live: {str(e)}")
         return False
 
+def download_subtitles(link, filename):
+    try:
+        description_path = "yt-video/" + filename + ".desc"
+        transcription_path = "yt-video/" + filename + ".txt"
+        proc = subprocess.run(f"yt-dlp --skip-download --write-auto-subs --write-subs --sub-lang {detect_language(description_path)} --convert-subs srt --sub-format txt --postprocessor-args \"-ss 00:00:00 -to 99:59:59 -f srt - | sed '/^[0-9]*:[0-9]*:[0-9]*,[0-9]* --> [0-9]*:[0-9]*:[0-9]*,[0-9]*$/d' | tr -s '\\n' ' ' > {filename} {link}", shell=True, capture_output=True)
+        for line in proc.stdout.decode().splitlines():
+            if line.strip().startswith("[download] Destination: "):
+                srtname = line.strip().split("[download] Destination: ")[-1]
+                if os.path.exists(srtname):
+                    os.rename(srtname, transcription_path)
+                    print(f"Successfully downloaded subtitles for video {filename}")
+                    return True
+        print(f"Failed to download subtitles for video {filename}. yt-dlp output: {proc.stderr.decode()}")
+        return False
+    except Exception as e:
+        print(f"Error occurred while trying to download subtitles for video {link}: {str(e)}")
+        return False
+
 def get_yt_file_size(link):
     try:
         proc = subprocess.run("yt-dlp  -f " + format + " --print \"%(filesize,filesize_approx)s\" "+link, shell=True, capture_output=True)
@@ -79,7 +97,7 @@ def update_channels_feed():
         links.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}")
     shuffle(links)
     for link in links:
-        sleep(5)
+        sleep(1)
         try:
             response = requests.get(link, timeout=30)
             if response.status_code == 200:
@@ -136,7 +154,7 @@ def update_channels_feed():
                         if os.path.exists(file_path):
                             if time_since_insertion < timedelta(days=recheck_size_days):
                                 file_size_yt = get_yt_file_size(link_element.get("href"))
-                                sleep(3)
+                                sleep(1)
                                 file_duration_yt = get_file_duration(link_element.get("href"))
                                 try:
                                     duration_secs = int(file_duration_yt)
@@ -155,7 +173,7 @@ def update_channels_feed():
                                     if file_size_yt != file_size:
                                         print(f"File for video {fn} has different size than expected, redownloading...")
                                         os.remove(file_path)
-                                        sleep(3)
+                                        sleep(1)
                                         if not download_video(link_element.get("href"), file_path):
                                             print(f"Failed to download video {fn}, skipping item.")
                                             continue
@@ -174,7 +192,7 @@ def update_channels_feed():
                                 continue
                             if source_id not in get_config()["sources_with_disabled_downloading"]:
                                 print(f"No existing file for video {fn}, downloading...")
-                                sleep(3)
+                                sleep(1)
                                 if not download_video(link_element.get("href"), file_path):
                                     print(f"Failed to download video {fn}, skipping item.")
                                     continue
@@ -214,18 +232,20 @@ def update_channels_feed():
                         with open(description_path, "w") as f:
                             item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
                             f.write(item_string)
-                        if auto_transcript_hours > 0 and os.path.exists(file_path) and not source_id in get_config()["sources_with_disabled_auto_transcription"]:
+                        if auto_transcript_hours > 0 and os.path.exists(file_path):
                             if time_since_insertion < timedelta(hours=auto_transcript_hours):
                                 print(f"Processing auto-transcription for video {fn}")
                                 transcription_path = "yt-video/" + fn + ".txt"
-                                if not os.path.exists(transcription_path):
-                                            video_list = load_source_list_from_file("transcription.txt")
-                                            if not fn in video_list:
-                                                print(f"Automatically scheduled video transcription {fn}")
-                                                video_list.append(fn)
-                                                save_source_list_to_file("transcription.txt", video_list)
-                                            else:
-                                                print(f"Video {fn} is already scheduled for transcription")
+                                if not os.path.exists(transcription_path) and not source_id in get_config()["sources_with_disabled_auto_transcription"]:
+                                    download_subtitles(link_element.get("href"), fn)
+                                    if not os.path.exists(transcription_path):
+                                        video_list = load_source_list_from_file("transcription.txt")
+                                        if not fn in video_list:
+                                            print(f"Automatically scheduled video transcription {fn}")
+                                            video_list.append(fn)
+                                            save_source_list_to_file("transcription.txt", video_list)
+                                        else:
+                                            print(f"Video {fn} is already scheduled for transcription")
                                 else:
                                     print(f"Video {fn} already has transcription")
                         modTime = mktime(insertion_date.timetuple())

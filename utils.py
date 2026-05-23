@@ -43,7 +43,7 @@ def get_channel_name(channel_id):
     channel_names_dict = get_config()["channel_names_dict"]
     if channel_id in channel_names_dict:
         return channel_names_dict[channel_id]
-    sleep(5)  # To avoid hitting YouTube's rate limits
+    sleep(1)  # To avoid hitting YouTube's rate limits
     try:
         response = requests.get("https://www.youtube.com/feeds/videos.xml?channel_id=" + channel_id, timeout=20)
         if response.status_code == 200:
@@ -61,7 +61,7 @@ def get_playlist_name(playlist_id):
     playlist_names_dict = get_config()["playlist_names_dict"]
     if playlist_id in playlist_names_dict:
         return playlist_names_dict[playlist_id]
-    sleep(5)  # To avoid hitting YouTube's rate limits
+    sleep(1)  # To avoid hitting YouTube's rate limits
     try:
         response = requests.get("https://www.youtube.com/feeds/videos.xml?playlist_id=" + playlist_id, timeout=20)
         if response.status_code == 200:
@@ -89,6 +89,19 @@ def save_source_list_to_file(filename, sources):
 
 def duration_string(duration_secs):
     return f"{duration_secs//3600}:{(duration_secs%3600)//60:02d}:{duration_secs%60:02d}" if duration_secs >= 3600 else f"{duration_secs//60}:{duration_secs%60:02d}"
+
+def detect_language(description_path):
+    if os.path.exists(description_path):
+        file=open(description_path, "r", encoding="utf-8")
+        text=file.read()
+        if bool(re.search('[а-яА-ЯЇЄїєҐґ]', text)):
+            return "uk"
+        elif bool(re.search('[ąęłżĄĘŁŻ]', text)):
+            return "pl"
+        else:
+            return ""
+    else:
+        return ""
 
 from lxml import etree
 def generate_atom_feed(url_link, is_public):
@@ -123,6 +136,7 @@ def generate_atom_feed(url_link, is_public):
         if os.path.exists(transcription_path):
             string_list = open(transcription_path, "r").read().split('\n')
             description_element.text += f"<p>[VIDEO TRANSCRIPTION]</p> <br/>"
+            description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"
             for line in string_list:
                 description_element.text += "<p>"+line+"</p> <br/>"
             description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"

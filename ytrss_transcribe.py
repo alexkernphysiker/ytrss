@@ -36,19 +36,6 @@ def split_mp3_file(mp3_file_path, chunk_length_s=1000):
             print(f"mp3 chunk file: {file}")
             yield(f"{file}")
 
-def detect_language(description_path):
-    if os.path.exists(description_path):
-        file=open(description_path, "r", encoding="utf-8")
-        text=file.read()
-        if bool(re.search('[а-яА-ЯЇЄїєҐґ]', text)):
-            return "uk"
-        elif bool(re.search('[ąęłżĄĘŁŻ]', text)):
-            return "pl"
-        else:
-            return ""
-    else:
-        return ""
-
 def get_video_link(description_path):
     if os.path.exists(description_path):
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
