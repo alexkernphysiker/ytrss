@@ -237,6 +237,7 @@ def update_channels_feed():
                                 print(f"Processing auto-transcription for video {fn}")
                                 transcription_path = "yt-video/" + fn + ".txt"
                                 if not os.path.exists(transcription_path) and not source_id in get_config()["sources_with_disabled_auto_transcription"]:
+                                    sleep(1)
                                     download_subtitles(link_element.get("href"), fn)
                                     if not os.path.exists(transcription_path):
                                         video_list = load_source_list_from_file("transcription.txt")
