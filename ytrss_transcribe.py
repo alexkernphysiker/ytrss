@@ -147,33 +147,6 @@ def run_gemini(filename, youtube_link, lang="en"):
     )
     return response.text
 
-def run_claude(filename, link, lang="en"):
-    #not working for now
-    import anthropic
-    client = anthropic.Anthropic()
-    if lang == "uk":
-        prompt = "Будь ласка, транскрибуй це відео."
-    elif lang == "pl":
-        prompt = "Proszę, przetranskrybuj to wideo."
-    else:
-        prompt = "Please transcribe this video."
-
-    response = client.beta.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=1024,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "text", "text": link},
-                ],
-            }
-        ],
-        betas=["files-api-2025-04-14"],
-    )
-    return response.content[0].text
-
 def transcribe_video(filename, engine):
     video_path = "yt-video/" + filename
     transcription_path = "yt-video/" + filename + ".txt"
@@ -188,8 +161,6 @@ def transcribe_video(filename, engine):
         print(f"Transcribing video {filename} with OpenAI...")
     elif engine == "gemini":
         print(f"Transcribing video {filename} with Gemini...")
-    elif engine == "claude":
-        print(f"Transcribing video {filename} with Claude...")
     else:
         print(f"Unknown transcript engine: {engine}, skipping transcription.")
 
@@ -203,8 +174,6 @@ def transcribe_video(filename, engine):
                 text = ""
         elif engine == "gemini":
             text = run_gemini(filename, get_video_link(description_path), detect_language(description_path))
-        elif engine == "claude":
-            text = run_claude(filename, get_video_link(description_path), detect_language(description_path))
         else:
             print(f"Unknown transcript engine: {engine}, skipping transcription.")
 
