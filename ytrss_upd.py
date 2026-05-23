@@ -43,12 +43,14 @@ def download_subtitles(link, filename):
     try:
         description_path = "yt-video/" + filename + ".desc"
         transcription_path = "yt-video/" + filename + ".txt"
-        proc = subprocess.run(f"yt-dlp --skip-download --write-auto-subs --write-subs --sub-lang {detect_language(description_path)} --convert-subs srt --sub-format txt --postprocessor-args \"-ss 00:00:00 -to 99:59:59 -f srt - | sed '/^[0-9]*:[0-9]*:[0-9]*,[0-9]* --> [0-9]*:[0-9]*:[0-9]*,[0-9]*$/d' | tr -s '\\n' ' ' > {filename} {link}", shell=True, capture_output=True)
+        proc = subprocess.run(f"yt-dlp --skip-download --write-auto-subs --write-subs --sub-lang {detect_language(description_path)} --convert-subs srt --sub-format txt --postprocessor-args \"-ss 00:00:00 -to 99:59:59 -f srt - | sed '/^[0-9]*:[0-9]*:[0-9]*,[0-9]* --> [0-9]*:[0-9]*:[0-9]*,[0-9]*$/d' | tr -s '\\n' ' ' > {transcription_path}\" {link}", shell=True, capture_output=True)
         for line in proc.stdout.decode().splitlines():
             if line.strip().startswith("[download] Destination: "):
                 srtname = line.strip().split("[download] Destination: ")[-1]
                 if os.path.exists(srtname):
                     os.rename(srtname, transcription_path)
+                    modtime = os.path.getmtime(description_path)
+                    os.utime(transcription_path, (modtime, modtime))
                     print(f"Successfully downloaded subtitles for video {filename}")
                     return True
         print(f"Failed to download subtitles for video {filename}. yt-dlp output: {proc.stderr.decode()}")
