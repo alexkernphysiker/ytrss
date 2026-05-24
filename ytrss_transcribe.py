@@ -10,23 +10,66 @@ from lxml import etree
 from utils import *
 import json
 
+def get_engine_map():
+    return {"srt":"srt","gemini": "Gemini(link)", "openai": "OpenAI(mp3)", "claude": "Claude(srt)"}
+
 def download_subtitles(link, filename):
-    try:
         description_path = "yt-video/" + filename + ".desc"
-        proc = subprocess.run(f"yt-dlp --skip-download --write-auto-subs --write-subs --sub-lang {detect_language(description_path)} {link}", shell=True, capture_output=True)
+        srt_path = "yt-video/" + filename + ".srt"
+        if os.path.exists(srt_path):
+            print(f"Subtitles for video {filename} already exist, skipping download.")
+            with open(srt_path, "r", encoding="utf-8") as f:
+                return f.read()
+        lang = detect_language(description_path) or "en"
+        proc = subprocess.run(f"yt-dlp --skip-download --write-auto-subs --write-subs --sub-lang {lang} {link}", shell=True, capture_output=True)
         for line in proc.stdout.decode().splitlines():
             if line.strip().startswith("[download] Destination: "):
                 srtname = line.strip().split("[download] Destination: ")[-1]
                 if os.path.exists(srtname):
                     with open(srtname, "r", encoding="utf-8") as f:
                         content = f.read()
-                    os.remove(srtname)
+                    os.rename(srtname, srt_path)
+                    modtime = os.path.getmtime(description_path)
+                    os.utime(srt_path, (modtime, modtime))
                     return content
-        print(f"Failed to download subtitles for video {filename}. yt-dlp output: {proc.stderr.decode()}")
+        print(f"Failed to download subtitles for video {filename} with language {lang}. yt-dlp output: {proc.stderr.decode()}")
+        if lang != "en":
+            print(f"Retrying to download English subtitles for video {filename}...")
+            proc = subprocess.run(f"yt-dlp --skip-download --write-auto-subs --write-subs --sub-lang en {link}", shell=True, capture_output=True)
+            for line in proc.stdout.decode().splitlines():
+                if line.strip().startswith("[download] Destination: "):
+                    srtname = line.strip().split("[download] Destination: ")[-1]
+                    if os.path.exists(srtname):
+                        with open(srtname, "r", encoding="utf-8") as f:
+                            content = f.read()
+                        os.rename(srtname, srt_path)
+                        modtime = os.path.getmtime(description_path)
+                        os.utime(srt_path, (modtime, modtime))
+                        return content
+            print(f"Failed to download English subtitles for video {filename} as well. yt-dlp output: {proc.stderr.decode()}")
         return ""
-    except Exception as e:
-        print(f"Error occurred while trying to download subtitles for video {link}: {str(e)}")
-        return ""
+
+def filter_subs(long_text, max_length = 30000):
+    output=""
+    prev_line=""
+    for line in long_text.splitlines():
+        if line.strip() == "":
+            continue
+        if "-->" in line and "align:" in line and "position:" in line:
+            continue
+        if "<c>" in line or "</c>" in line:
+            continue
+        if line.strip()==prev_line:
+            continue
+
+        prev_line = line.strip()
+        if max_length > 0:
+            if len(output) + len(line) + 1 > max_length:
+                yield output
+                output=""
+        output += line + "\n"
+    if output != "":
+        yield output
 
 def convert_video_to_audio(video_file_path):
     audio_file_path = video_file_path + ".mp3"
@@ -63,14 +106,25 @@ def get_video_link(description_path):
             return link_element.get("href")
     return None
 
-def run_openai(filename, mp3_list, lang=""):
+def run_srt(filename):
+    description_path = "yt-video/" + filename + ".desc"
+    youtube_link = get_video_link(description_path)
+    output = ""
+    for chunk in filter_subs(download_subtitles(youtube_link, filename), max_length=0):
+        return chunk
+
+def run_openai(filename):
         from openai import OpenAI
         client = OpenAI()
+        description_path = "yt-video/" + filename + ".desc"
         text = ""
+        video_path = "yt-video/" + filename
+        lang = detect_language(description_path) or "en"
         #Stage 1: Transcribe audio in chunks and concatenate text
-        for chunk in mp3_list:
+        for chunk in split_mp3_file(convert_video_to_audio(video_path)):
                 print(f"Transcribing chunk {chunk} for video {filename}...")
                 audio_file= open(chunk, "rb")
+                sleep(3) # to avoid rate limits
                 transcription = client.audio.transcriptions.create(
                     model="gpt-4o-transcribe-diarize",
                     file=audio_file,
@@ -86,7 +140,6 @@ def run_openai(filename, mp3_list, lang=""):
                     else:
                         text += " "+segment.text
                 text += "\n"
-        
         #Stage 2: Eliminate 'transcription noise' and correct text if language is Ukrainian
         if text is not None and text.strip() != "":
             if lang == "uk":
@@ -127,18 +180,19 @@ def run_openai(filename, mp3_list, lang=""):
                 )
                 text = response.output[0].content[0].text
         return text
-
-def run_gemini(filename, youtube_link, lang="en"):
+def run_gemini(filename):
+    youtube_link = get_video_link("yt-video/" + filename + ".desc")
     from google import genai
     from google.genai import types
     client = genai.Client()
+    
+    lang = detect_language("yt-video/" + filename + ".desc") or "en"
     if lang == "uk":
         prompt = "Будь ласка, транскрибуй це відео."
     elif lang == "pl":
         prompt = "Proszę, przetranskrybuj ten film."
     else:        
         prompt = "Please transcribe the video."
-
     response = client.models.generate_content(
         model='gemini-3-flash-preview',
         contents=types.Content(
@@ -152,7 +206,9 @@ def run_gemini(filename, youtube_link, lang="en"):
     )
     return response.text
 
-def run_claude(filename, youtube_link, lang="en"):
+def run_claude(filename):
+    youtube_link = get_video_link("yt-video/" + filename + ".desc")
+    lang = detect_language("yt-video/" + filename + ".desc") or "en"
     srt = download_subtitles(youtube_link, filename)
     if srt.strip() == "":
         print(f"No subtitles found for video {filename}, skipping Claude transcription.")
@@ -160,26 +216,33 @@ def run_claude(filename, youtube_link, lang="en"):
     import anthropic
     client = anthropic.Client()
     if lang == "uk":
-        prompt = "Будь ласка, зроби з цих субтитрів текстову транскрипцію відео з повною вичиткою тексту та розбивкою на розділи"
+        prompt = "Будь ласка, зроби з цих субтитрів текстову транскрипцію відео з повною вичиткою тексту"
     elif lang == "pl":
-        prompt = "Proszę, zrób z tych napisów tekstową transkrypcję filmu z pełną korektą tekstu i podziałem na rozdziały"
+        prompt = "Proszę, zrób z tych napisów tekstową transkrypcję filmu"
     else:        
-        prompt = "Please make from these subtitles a text transcription of the video with full proofreading of the text and division into chapters"
+        prompt = "Please make from these subtitles a text transcription of the video"
 
-    response = client.beta.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=1024,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "text", "text": srt},
-                ],
-            }
-        ],
-    )
-    return response.content[0].text
+    output=""
+    for chunk_srt in filter_subs(srt):
+        sleep(3) # to avoid rate limits
+        response = client.beta.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=1024,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "text", "text": chunk_srt},
+                    ],
+                }
+            ],
+        )
+        for item in response.content:
+            if item.type == "text":
+                output += item.text
+    
+    return output
 
 def transcribe_video(filename, engine):
     video_path = "yt-video/" + filename
@@ -197,21 +260,21 @@ def transcribe_video(filename, engine):
         print(f"Transcribing video {filename} with Gemini...")
     elif engine == "claude":
         print(f"Transcribing video {filename} with Claude...")
+    elif engine == "srt":
+        print(f"Preparing filtered subtitles")
     else:
         print(f"Unknown transcript engine: {engine}, skipping transcription.")
 
     text = ""
     try:
         if engine == "openai":
-            if os.path.exists(video_path):
-                text = run_openai(filename, list(split_mp3_file(convert_video_to_audio(video_path))), detect_language(description_path))
-            else:
-                print(f"Video file {video_path} does not exist, skipping transcription.")
-                text = ""
+            text = run_openai(filename)
         elif engine == "gemini":
-            text = run_gemini(filename, get_video_link(description_path), detect_language(description_path))
+            text = run_gemini(filename)
         elif engine == "claude":
-            text = run_claude(filename, get_video_link(description_path), detect_language(description_path))
+            text = run_claude(filename)
+        elif engine == "srt":
+            text = run_srt(filename)
         else:
             print(f"Unknown transcript engine: {engine}, skipping transcription.")
 
@@ -232,8 +295,6 @@ def transcribe_video(filename, engine):
     else:
         print(f"Transcription for video {filename} is empty, not creating transcription file.")
 
-def get_engine_map():
-    return {"gemini": "Gemini(link)", "openai": "OpenAI(mp3)", "claude": "Claude(srt)"}
 
 if __name__ == "__main__":
 
