@@ -209,6 +209,9 @@ def transcribe(engine, filename):
         log_path = f"yt-video/{filename}.log"
         if os.path.exists(log_path):
             os.remove(log_path)
+        transcription_path = f"yt-video/{filename}.txt"
+        if os.path.exists(transcription_path):
+            os.remove(transcription_path)
         return f"Scheduled transcribing video {filename} with {engine}."
     else:
         return f"Video {filename} is already scheduled for transcription with {engine}."
