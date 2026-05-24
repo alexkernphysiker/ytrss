@@ -12,10 +12,10 @@ import json
 
 def get_engine_map():
     return {
-            "srt":"filtered srt",
             "gemini": "Gemini(srt or link)", 
             "openai": "OpenAI(srt or mp3)", 
             "claude": "Claude(srt)",
+            "srt":"filtered srt",
             }
 
 def download_subtitles(link, filename):
@@ -54,7 +54,7 @@ def download_subtitles(link, filename):
             print(f"Failed to download English subtitles for video {filename} as well. yt-dlp output: {proc.stderr.decode()}")
         return ""
 
-def filter_subs(long_text, max_length = 30000):
+def filter_subs(long_text, max_length = 0):
     output=""
     prev_line=""
     for line in long_text.splitlines():
@@ -70,11 +70,33 @@ def filter_subs(long_text, max_length = 30000):
         prev_line = line.strip()
         if max_length > 0:
             if len(output) + len(line) + 1 > max_length:
-                yield output
-                output=""
-        output += line + "\n"
+                per_sentence = output.split(".\n")
+                if len(per_sentence) > 1:
+                    yield ".\n".join(per_sentence[:-1]) + ".\n"
+                    output = per_sentence[-1]
+                else:
+                    yield output
+                    output=""
+        output += line.replace(". ", ".\n") + " "
     if output != "":
         yield output
+
+def make_prompt(lang, is_first = True):
+        if is_first:
+            if lang == "uk":
+                return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци. Якщо в тексті є якісь слова чи фрази російською - скоріше за все - це помилки розпізнавання мови. Переклади їх українською та заміни. Якщо можливо, також виділи репліки різних мовців"
+            elif lang == "pl":
+                return "Proszę, zrób z tych napisów tekstową transkrypcję filmu z pełnym sprawdzeniem pisowni oraz rozbiciem na akapity. Jeśli to jest możliwe, poznacz interpunkcją słowa powiedzone przez róźnych mówców"
+            else:
+                return "Please make from these subtitles, a text transcription of the video with correction of language mistakes and splitting the text into paragraphs"
+        else:
+            if lang == "uk":
+                return "Це наступний фрагмент вхідного тексту. Будь ласка, продовжуй"
+            elif lang == "pl":
+                return "Oto następny fragment teksty wejściowego. Kontunuuj zadanie"
+            else:
+                return "This is the next chunk of the input text. Please continue"
+
 
 def convert_video_to_audio(video_file_path):
     audio_file_path = video_file_path + ".mp3"
@@ -121,22 +143,16 @@ def run_openai(filename):
         from openai import OpenAI
         client = OpenAI()
         description_path = "yt-video/" + filename + ".desc"
-        text = ""
         video_path = "yt-video/" + filename
         lang = detect_language(description_path) or "en"
         description_path = "yt-video/" + filename + ".desc"
         youtube_link = get_video_link(description_path)
+        text = download_subtitles(youtube_link, filename)
 
-        #Stage 1.a: get subtitles
-        for chunk in filter_subs(download_subtitles(youtube_link, filename), max_length=0):
-            text += chunk
-
-        #Stage 1.b: Transcribe audio in chunks and concatenate text
         if text=="":
             for chunk in split_mp3_file(convert_video_to_audio(video_path)):
                 print(f"Transcribing chunk {chunk} for video {filename}...")
                 audio_file= open(chunk, "rb")
-                sleep(3) # to avoid rate limits
                 transcription = client.audio.transcriptions.create(
                     model="gpt-4o-transcribe-diarize",
                     file=audio_file,
@@ -151,54 +167,12 @@ def run_openai(filename):
                         prev_speaker = segment.speaker
                     else:
                         text += " "+segment.text
-                text += "\n"
+                text += ".\n"
 
-        #Stage 2: Eliminate 'transcription noise' and correct text if language is Ukrainian
-        if text is not None and text.strip() != "":
-            if lang == "uk":
-                    # Unfortunately, gpt-4o-transcribe-diarize model makes a lot of mistakes for Ukrainian language, so we will try to correct them
-                    print(f"Correcting text in Ukrainian for video {filename}...")
-                    response = client.responses.create(
-                        model="gpt-5.2",
-                        input="Прибери 'шум' транскрипції. Зроби **повну вичитку всього тексту**. Якщо в тексті є якісь слова чи фрази російською, переклади їх українською та заміни. Ось текст:\n\n"+text
-                    )
-                    text = ""
-                    for output_item in response.output:
-                        for content_item in output_item.content:
-                            text += content_item.text
-            elif lang == "pl":
-                    # For Polish language, we will also try to correct text, but with a different prompt
-                    print(f"Correcting text in Polish for video {filename}...")
-                    response = client.responses.create(
-                        model="gpt-5.2",
-                        input="Proszę usunąć 'szum' transkrypcji. Wykonaj **pełne sprawdzenie pisowni całego tekstu**. Oto tekst:\n\n"+text
-                    )
-                    text = ""
-                    for output_item in response.output:
-                        for content_item in output_item.content:
-                            text += content_item.text
-            else:
-                    print(f"Eliminating 'transcription noise' for video {filename}...")
-                    response = client.responses.create(
-                        model="gpt-5.2",
-                        input="Please eliminate 'transcription noise' from the text below:\n\n"+text
-                    )
-                    text = ""
-                    for output_item in response.output:
-                        for content_item in output_item.content:
-                            text += content_item.text
-
-        #Stage 3: Split text into chapters and add titles to them
-        if text is not None and text.strip() != "":
-                input="Split the text into the chapters and add titles to them. Preserve the text literally. "
-                #annotation_length = len(text.strip()) // 20
-                #if annotation_length >= 256:
-                #    input += f"Add short annotation for the whole text at the beginning (up to {annotation_length} characters). "
-                input += "The text is:\n\n" + text
-                print(f"Splitting text into chapters for video {filename}...")
+        for chunk in filter_subs(text, max_length=20000):
                 response = client.responses.create(
                     model="gpt-5.2",
-                    input=input
+                    input= make_prompt(lang) + ":\n\n" + text
                 )
                 text = ""
                 for output_item in response.output:
@@ -214,23 +188,19 @@ def run_gemini(filename):
     srt = download_subtitles(youtube_link, filename)
     if srt.strip != "":
         text = ""
+        counter = 0
         for chunk in filter_subs(srt):
-            if lang == "uk":
-                prompt = "Будь ласка, конвертуй субтитри в текстову транскріпцію зручну для читання."
-            elif lang == "pl":
-                prompt = "Proszę, zamień te napisy na transkrypcje nadającą się do czytania"
-            else:        
-                prompt = "Please convert these subtitles into a text transcription easy to read"
             response = client.models.generate_content(
                 model='gemini-3-flash-preview',
                 contents=types.Content(
                     parts=[
                         types.Part(text=chunk),
-                        types.Part(text=prompt)
+                        types.Part(text=make_prompt(lang, counter == 0))
                     ]
                 )
             )
             text += response.text
+            counter += 1
             
         if text != "":
             return text
@@ -258,25 +228,21 @@ def run_claude(filename):
     youtube_link = get_video_link("yt-video/" + filename + ".desc")
     lang = detect_language("yt-video/" + filename + ".desc") or "en"
     import anthropic
+    from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
+    from anthropic.types.messages.batch_create_params import Request
     client = anthropic.Client()
-    if lang == "uk":
-        prompt = "Будь ласка, зроби з цих субтитрів текстову транскрипцію відео з повною вичиткою тексту"
-    elif lang == "pl":
-        prompt = "Proszę, zrób z tych napisów tekstową transkrypcję filmu"
-    else:        
-        prompt = "Please make from these subtitles a text transcription of the video"
 
     output=""
-    for chunk_srt in filter_subs(download_subtitles(youtube_link, filename)):
-        sleep(3) # to avoid rate limits
+    counter = 0
+    for chunk_srt in filter_subs(download_subtitles(youtube_link, filename), max_length=3600):
         response = client.beta.messages.create(
-            model="claude-opus-4-6",
+            model="claude-opus-4-7",
             max_tokens=1024,
             messages=[
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": prompt},
+                        {"type": "text", "text": make_prompt(lang, counter==0)},
                         {"type": "text", "text": chunk_srt},
                     ],
                 }
@@ -285,6 +251,8 @@ def run_claude(filename):
         for item in response.content:
             if item.type == "text":
                 output += item.text
+        output += "\n"
+        counter += 1
     
     return output
 
@@ -292,7 +260,6 @@ def transcribe_video(filename, engine):
     video_path = "yt-video/" + filename
     transcription_path = "yt-video/" + filename + ".txt"
     log_path = "yt-video/" + filename + ".log"
-    description_path = "yt-video/" + filename + ".desc"
 
     if os.path.exists(transcription_path):
         print(f"Transcription for video {filename} already exists, skipping transcription.")
