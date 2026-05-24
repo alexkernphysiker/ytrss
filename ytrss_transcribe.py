@@ -265,17 +265,6 @@ def transcribe_video(filename, engine):
         print(f"Transcription for video {filename} already exists, skipping transcription.")
         return
     
-    if engine == "openai":
-        print(f"Transcribing video {filename} with OpenAI...")
-    elif engine == "gemini":
-        print(f"Transcribing video {filename} with Gemini...")
-    elif engine == "claude":
-        print(f"Transcribing video {filename} with Claude...")
-    elif engine == "srt":
-        print(f"Preparing filtered subtitles")
-    else:
-        print(f"Unknown transcript engine: {engine}, skipping transcription.")
-
     text = ""
     try:
         if engine == "openai":
