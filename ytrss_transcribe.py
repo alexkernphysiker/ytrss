@@ -16,7 +16,8 @@ def get_engine_map():
             "openai_s": "Summarize with OpenAI", 
             "claude_s": "Summarize with Claude",
             "gemini_t": "Transcript with Gemini", 
-            "openai_t": "Transcript with OpenAI", 
+            "openai_t": "Transcript with OpenAI",
+            #"claude_t": "Transcript with Claude",
             "srt":"filtered srt",
             }
 
@@ -99,6 +100,14 @@ def make_prompt(lang, summarize = False):
                     return "Proszę, zrób z tych napisów tekstową transkrypcję filmu z pełnym sprawdzeniem pisowni oraz rozbiciem na akapity. Jeśli to jest możliwe, poznacz interpunkcją słowa powiedzone przez róźnych mówców"
                 else:
                     return "Please make from these subtitles, a text transcription of the video with correction of language mistakes and splitting the text into paragraphs"
+
+def make_continue_prompt(lang):
+    if lang == "uk":
+        return "продовжуй попереднє завдання, яке не було завершене через обмеження на кількість токенів"
+    elif lang == "pl":
+        return "kontynuuj poprzednie zadanie, które nie zostało zakończone z powodu limitu tokenów"
+    else:
+        return "continue the previous task which was not completed due to token limit"
 
 
 def convert_video_to_audio(video_file_path):
@@ -226,32 +235,37 @@ def run_gemini(filename, summarize):
     )
     return response.text 
 
-def run_claude(filename):
+def run_claude(filename, summarize=False):
     youtube_link = get_video_link("yt-video/" + filename + ".desc")
     lang = detect_language("yt-video/" + filename + ".desc") or "en"
     import anthropic
     from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
     from anthropic.types.messages.batch_create_params import Request
     client = anthropic.Client()
+    max_tokens = 15000
 
     output=""
-    for chunk_srt in filter_subs(download_subtitles(youtube_link, filename), max_length=20000):
-        response = client.beta.messages.create(
-            model="claude-opus-4-7",
-            max_tokens=1024,
-            messages=[
+    for chunk_srt in filter_subs(download_subtitles(youtube_link, filename), max_length=30000):
+        messages=[
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": make_prompt(lang, summarize=True)},
+                        {"type": "text", "text": make_prompt(lang, summarize=summarize)},
                         {"type": "text", "text": chunk_srt},
                     ],
                 }
-            ],
+        ]
+
+        response = client.beta.messages.create(
+            model="claude-opus-4-7",
+            max_tokens=max_tokens,
+            messages=messages
         )
         for item in response.content:
             if item.type == "text":
                 output += item.text
+        if response.stop_reason == "max_tokens":
+            output += "\nmax_tokens\n"
         output += "\n"
     return output
 
@@ -270,12 +284,14 @@ def transcribe_video(filename, engine):
             text = run_openai(filename, summarize=False)
         elif engine == "gemini_t":
             text = run_gemini(filename, summarize=False)
+        elif engine == "claude_t":
+            text = run_claude(filename, summarize=False)
         if engine == "openai_s":
             text = run_openai(filename, summarize=True)
         elif engine == "gemini_s":
             text = run_gemini(filename, summarize=True)
         elif engine == "claude_s":
-            text = run_claude(filename)
+            text = run_claude(filename, summarize=True)
         elif engine == "srt":
             text = run_srt(filename)
         else:
