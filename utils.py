@@ -92,11 +92,12 @@ def duration_string(duration_secs):
 
 def detect_language(description_path):
     if os.path.exists(description_path):
-        file=open(description_path, "r", encoding="utf-8")
-        text=file.read()
+        parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+        entry = etree.parse(description_path, parser1)
+        text = entry.find("title").text
         if bool(re.search('[а-яА-ЯЇЄїєҐґ]', text)):
             return "uk"
-        elif bool(re.search('[ąęłżĄĘŁŻ]', text)):
+        elif bool(re.search('[ąęłżĄĘŁŻńŃ]', text)) or "rz" in text.lower() or "cz" in text.lower() or "sz" in text.lower() or "uj" in text.lower():
             return "pl"
         else:
             return "en"

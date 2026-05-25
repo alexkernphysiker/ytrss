@@ -12,9 +12,11 @@ import json
 
 def get_engine_map():
     return {
-            "gemini": "Gemini(srt or link)", 
-            "openai": "OpenAI(srt or mp3)", 
-            "claude": "Claude(srt)",
+            "gemini_s": "Summarize with Gemini", 
+            "openai_s": "Summarize with OpenAI", 
+            "claude_s": "Summarize with Claude",
+            "gemini_t": "Transcript with Gemini", 
+            "openai_t": "Transcript with OpenAI", 
             "srt":"filtered srt",
             }
 
@@ -42,8 +44,9 @@ def download_subtitles(link, filename):
             print(f"Retrying to download English subtitles for video {filename}...")
             proc = subprocess.run(f"yt-dlp --skip-download --write-auto-subs --write-subs --sub-lang en {link}", shell=True, capture_output=True)
             for line in proc.stdout.decode().splitlines():
-                if line.strip().startswith("[download] Destination: "):
-                    srtname = line.strip().split("[download] Destination: ")[-1]
+                mask = "[download] Destination: "
+                if line.strip().startswith(mask):
+                    srtname = line.strip().split(mask)[-1]
                     if os.path.exists(srtname):
                         with open(srtname, "r", encoding="utf-8") as f:
                             content = f.read()
@@ -72,7 +75,7 @@ def filter_subs(long_text, max_length = 0):
             if len(output) + len(line) + 1 > max_length:
                 per_sentence = output.split(".\n")
                 if len(per_sentence) > 1:
-                    yield ".\n".join(per_sentence[:-1]) + ".\n"
+                    yield (".\n".join(per_sentence[:-1]) + ".\n").replace("? ", "?\n").replace("! ", "!\n").replace(">> ", "\n>> ")
                     output = per_sentence[-1]
                 else:
                     yield output
@@ -81,21 +84,21 @@ def filter_subs(long_text, max_length = 0):
     if output != "":
         yield output
 
-def make_prompt(lang, is_first = True):
-        if is_first:
-            if lang == "uk":
-                return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци. Якщо в тексті є якісь слова чи фрази російською - скоріше за все - це помилки розпізнавання мови. Переклади їх українською та заміни. Якщо можливо, також виділи репліки різних мовців"
-            elif lang == "pl":
-                return "Proszę, zrób z tych napisów tekstową transkrypcję filmu z pełnym sprawdzeniem pisowni oraz rozbiciem na akapity. Jeśli to jest możliwe, poznacz interpunkcją słowa powiedzone przez róźnych mówców"
+def make_prompt(lang, summarize = False):
+            if summarize:
+                if lang == "uk":
+                    return "Це транскрипція відео. Будь ласка напиши перелік основних тез цієї розмови, уточнюючи, хто їх сказав та на що послався)"
+                elif lang == "pl":
+                    return "To jest transkrypcja filmu. Zrób proszę streszczenie owej rozmowy podając jej tezy, kto je powiedział i na co się odwołał"
+                else:
+                    return "This is a video transcription. Please summarize it pointing who told the given statements and what sources they mentioned"
             else:
-                return "Please make from these subtitles, a text transcription of the video with correction of language mistakes and splitting the text into paragraphs"
-        else:
-            if lang == "uk":
-                return "Це наступний фрагмент вхідного тексту. Будь ласка, продовжуй"
-            elif lang == "pl":
-                return "Oto następny fragment teksty wejściowego. Kontunuuj zadanie"
-            else:
-                return "This is the next chunk of the input text. Please continue"
+                if lang == "uk":
+                    return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци. Якщо в тексті є якісь слова чи фрази російською - скоріше за все - це помилки розпізнавання мови. Переклади їх українською та заміни. Якщо можливо, також виділи репліки різних мовців"
+                elif lang == "pl":
+                    return "Proszę, zrób z tych napisów tekstową transkrypcję filmu z pełnym sprawdzeniem pisowni oraz rozbiciem na akapity. Jeśli to jest możliwe, poznacz interpunkcją słowa powiedzone przez róźnych mówców"
+                else:
+                    return "Please make from these subtitles, a text transcription of the video with correction of language mistakes and splitting the text into paragraphs"
 
 
 def convert_video_to_audio(video_file_path):
@@ -139,7 +142,7 @@ def run_srt(filename):
     for chunk in filter_subs(download_subtitles(youtube_link, filename), max_length=0):
         return chunk
 
-def run_openai(filename):
+def run_openai(filename, summarize):
         from openai import OpenAI
         client = OpenAI()
         description_path = "yt-video/" + filename + ".desc"
@@ -172,14 +175,14 @@ def run_openai(filename):
         for chunk in filter_subs(text, max_length=20000):
                 response = client.responses.create(
                     model="gpt-5.2",
-                    input= make_prompt(lang) + ":\n\n" + text
+                    input= make_prompt(lang, summarize) + ":\n\n" + text
                 )
                 text = ""
                 for output_item in response.output:
                     for content_item in output_item.content:
                         text += content_item.text
         return text
-def run_gemini(filename):
+def run_gemini(filename, summarize):
     youtube_link = get_video_link("yt-video/" + filename + ".desc")
     from google import genai
     from google.genai import types
@@ -188,22 +191,21 @@ def run_gemini(filename):
     srt = download_subtitles(youtube_link, filename)
     if srt.strip != "":
         text = ""
-        counter = 0
         for chunk in filter_subs(srt):
             response = client.models.generate_content(
                 model='gemini-3-flash-preview',
                 contents=types.Content(
                     parts=[
                         types.Part(text=chunk),
-                        types.Part(text=make_prompt(lang, counter == 0))
+                        types.Part(text=make_prompt(lang, summarize))
                     ]
                 )
             )
             text += response.text
-            counter += 1
-            
         if text != "":
             return text
+    if summarize:
+        return "summazizing without subtitles is not implemented"
     
     if lang == "uk":
         prompt = "Будь ласка, транскрибуй це відео."
@@ -222,7 +224,7 @@ def run_gemini(filename):
             ]
         )
     )
-    return response.text
+    return response.text 
 
 def run_claude(filename):
     youtube_link = get_video_link("yt-video/" + filename + ".desc")
@@ -233,8 +235,7 @@ def run_claude(filename):
     client = anthropic.Client()
 
     output=""
-    counter = 0
-    for chunk_srt in filter_subs(download_subtitles(youtube_link, filename), max_length=3600):
+    for chunk_srt in filter_subs(download_subtitles(youtube_link, filename), max_length=20000):
         response = client.beta.messages.create(
             model="claude-opus-4-7",
             max_tokens=1024,
@@ -242,7 +243,7 @@ def run_claude(filename):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": make_prompt(lang, counter==0)},
+                        {"type": "text", "text": make_prompt(lang, summarize=True)},
                         {"type": "text", "text": chunk_srt},
                     ],
                 }
@@ -252,8 +253,6 @@ def run_claude(filename):
             if item.type == "text":
                 output += item.text
         output += "\n"
-        counter += 1
-    
     return output
 
 def transcribe_video(filename, engine):
@@ -267,11 +266,15 @@ def transcribe_video(filename, engine):
     
     text = ""
     try:
-        if engine == "openai":
-            text = run_openai(filename)
-        elif engine == "gemini":
-            text = run_gemini(filename)
-        elif engine == "claude":
+        if engine == "openai_t":
+            text = run_openai(filename, summarize=False)
+        elif engine == "gemini_t":
+            text = run_gemini(filename, summarize=False)
+        if engine == "openai_s":
+            text = run_openai(filename, summarize=True)
+        elif engine == "gemini_s":
+            text = run_gemini(filename, summarize=True)
+        elif engine == "claude_s":
             text = run_claude(filename)
         elif engine == "srt":
             text = run_srt(filename)

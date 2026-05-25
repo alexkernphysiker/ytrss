@@ -8,6 +8,7 @@ from flask import request
 from flask import redirect
 from utils import *
 from lxml import etree
+from ytrss_transcribe import get_engine_map
 
  
 host=get_local_ip()
@@ -202,6 +203,8 @@ def enable_auto_transcription(source_id):
 ### video transcription
 @app.route("/transcribe/<engine>/<filename>")
 def transcribe(engine, filename):
+    if engine not in get_engine_map().keys():
+        return f"Unknown transcription engine {engine}"
     video_list = load_source_list_from_file(f"{engine}.txt")
     if filename not in video_list:
         video_list.append(filename)
@@ -212,9 +215,9 @@ def transcribe(engine, filename):
         transcription_path = f"yt-video/{filename}.txt"
         if os.path.exists(transcription_path):
             os.remove(transcription_path)
-        return f"Scheduled transcribing video {filename} with {engine}."
+        return f"Scheduled {get_engine_map()[engine]} for video {filename}."
     else:
-        return f"Video {filename} is already scheduled for transcription with {engine}."
+        return f"{get_engine_map()[engine]} for video {filename} was already scheduled."
 
 
 @app.route("/remove_transcription/<filename>")
