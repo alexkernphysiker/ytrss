@@ -97,7 +97,7 @@ def detect_language(description_path):
         text = entry.find("title").text
         if bool(re.search('[а-яА-ЯЇЄїєҐґ]', text)):
             return "uk"
-        elif bool(re.search('[ąęłżĄĘŁŻńŃ]', text)) or "rz" in text.lower() or "cz" in text.lower() or "sz" in text.lower() or "uj" in text.lower():
+        elif bool(re.search('[ąęłżĄĘŁŻńŃóÓćĆ]', text)) or "rz" in text.lower() or "cz" in text.lower() or "sz" in text.lower():
             return "pl"
         else:
             return "en"

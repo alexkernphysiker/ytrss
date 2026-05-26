@@ -17,7 +17,7 @@ def get_engine_map():
             "claude_s": "Summarize with Claude",
             "gemini_t": "Transcript with Gemini", 
             "openai_t": "Transcript with OpenAI",
-            #"claude_t": "Transcript with Claude",
+            "claude_t": "Transcript with Claude",
             "srt":"filtered srt",
             }
 
@@ -84,30 +84,37 @@ def filter_subs(long_text, max_length = 0):
         output += line.replace(". ", ".\n") + " "
     if output != "":
         yield output
+def get_video_title_and_description(filename):
+    description_path = "yt-video/" + filename + ".desc"
+    if os.path.exists(description_path):
+        parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+        entry = etree.parse(description_path, parser1)
+        title = entry.find("title").text
+        description_element = entry.find("summary")
+        descr = description_element.text if description_element.text is not None else ""
+        return title,descr
 
-def make_prompt(lang, summarize = False):
+def make_prompt(lang, summarize = False, title = ""):
             if summarize:
                 if lang == "uk":
-                    return "Це транскрипція відео. Будь ласка напиши перелік основних тез цієї розмови, уточнюючи, хто їх сказав та на що послався)"
+                    return "Це транскрипція відео. Будь ласка напиши перелік основних тез цієї розмови, уточнюючи, хто їх сказав та на що послався)." + \
+                           f"Назва відео: \"{title}\". "
                 elif lang == "pl":
-                    return "To jest transkrypcja filmu. Zrób proszę streszczenie owej rozmowy podając jej tezy, kto je powiedział i na co się odwołał"
+                    return "To jest transkrypcja filmu. Zrób proszę streszczenie owej rozmowy podając jej tezy, kto je powiedział i na co się odwołał" + \
+                           f"Nazwa filmu: \"{title}\". "
                 else:
-                    return "This is a video transcription. Please summarize it pointing who told the given statements and what sources they mentioned"
+                    return "This is a video transcription. Please summarize it pointing who told the given statements and what sources they mentioned" + \
+                           f"Video title: \"{title}\". "
             else:
                 if lang == "uk":
-                    return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци. Якщо в тексті є якісь слова чи фрази російською - скоріше за все - це помилки розпізнавання мови. Переклади їх українською та заміни. Якщо можливо, також виділи репліки різних мовців"
+                    return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци та розділи. Якщо в тексті є якісь слова чи фрази російською - скоріше за все - це помилки розпізнавання мови. Переклади їх українською та заміни. Якщо можливо, також виділи репліки різних мовців. " + \
+                            f"Назва відео: \"{title}\". "
                 elif lang == "pl":
-                    return "Proszę, zrób z tych napisów tekstową transkrypcję filmu z pełnym sprawdzeniem pisowni oraz rozbiciem na akapity. Jeśli to jest możliwe, poznacz interpunkcją słowa powiedzone przez róźnych mówców"
+                    return "Proszę, zrób z tych napisów tekstową transkrypcję filmu z pełnym sprawdzeniem pisowni oraz rozbiciem na akapity oraz rozdziały. Jeśli to jest możliwe, poznacz interpunkcją słowa powiedzone przez róźnych mówców. " + \
+                            f"Nazwa filmu: \"{title}\". "
                 else:
-                    return "Please make from these subtitles, a text transcription of the video with correction of language mistakes and splitting the text into paragraphs"
-
-def make_continue_prompt(lang):
-    if lang == "uk":
-        return "продовжуй попереднє завдання, яке не було завершене через обмеження на кількість токенів"
-    elif lang == "pl":
-        return "kontynuuj poprzednie zadanie, które nie zostało zakończone z powodu limitu tokenów"
-    else:
-        return "continue the previous task which was not completed due to token limit"
+                    return "Please make from these subtitles, a text transcription of the video with correction of language mistakes and splitting the text into paragraphs and chapters. " + \
+                            f"Video title: \"{title}\". "
 
 
 def convert_video_to_audio(video_file_path):
@@ -180,11 +187,11 @@ def run_openai(filename, summarize):
                     else:
                         text += " "+segment.text
                 text += ".\n"
-
+        title, _ = get_video_title_and_description(filename)
         for chunk in filter_subs(text, max_length=20000):
                 response = client.responses.create(
                     model="gpt-5.2",
-                    input= make_prompt(lang, summarize) + ":\n\n" + text
+                    input= make_prompt(lang, summarize, title=title) + ":\n\n" + text
                 )
                 text = ""
                 for output_item in response.output:
@@ -198,6 +205,7 @@ def run_gemini(filename, summarize):
     client = genai.Client()
     lang = detect_language("yt-video/" + filename + ".desc") or "en"
     srt = download_subtitles(youtube_link, filename)
+    title, description = get_video_title_and_description(filename)
     if srt.strip != "":
         text = ""
         for chunk in filter_subs(srt):
@@ -205,8 +213,9 @@ def run_gemini(filename, summarize):
                 model='gemini-3-flash-preview',
                 contents=types.Content(
                     parts=[
-                        types.Part(text=chunk),
-                        types.Part(text=make_prompt(lang, summarize))
+                        types.Part(text=make_prompt(lang, summarize = summarize, title = title)),
+                        types.Part(text="Description:\n"+description),
+                        types.Part(text="Subtitles:\n"+chunk),
                     ]
                 )
             )
@@ -214,7 +223,7 @@ def run_gemini(filename, summarize):
         if text != "":
             return text
     if summarize:
-        return "summazizing without subtitles is not implemented"
+        return "summazizing without available subtitles is not implemented"
     
     if lang == "uk":
         prompt = "Будь ласка, транскрибуй це відео."
@@ -242,31 +251,28 @@ def run_claude(filename, summarize=False):
     from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
     from anthropic.types.messages.batch_create_params import Request
     client = anthropic.Client()
-    max_tokens = 15000
-
+    max_tokens = 100000
+    title, description = get_video_title_and_description(filename)
     output=""
     for chunk_srt in filter_subs(download_subtitles(youtube_link, filename), max_length=30000):
         messages=[
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": make_prompt(lang, summarize=summarize)},
-                        {"type": "text", "text": chunk_srt},
+                        {"type": "text", "text": make_prompt(lang, summarize=summarize, title = title)},
+                        {"type": "text", "text": "Video description:\n"+description},
+                        {"type": "text", "text": "Subtitles:\n"+chunk_srt},
                     ],
                 }
         ]
 
-        response = client.beta.messages.create(
+        with client.messages.stream(
             model="claude-opus-4-7",
             max_tokens=max_tokens,
             messages=messages
-        )
-        for item in response.content:
-            if item.type == "text":
-                output += item.text
-        if response.stop_reason == "max_tokens":
-            output += "\nmax_tokens\n"
-        output += "\n"
+        ) as stream:
+            for text in stream.text_stream:
+                output += text
     return output
 
 def transcribe_video(filename, engine):
