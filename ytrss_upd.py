@@ -82,7 +82,7 @@ def update_channels_feed():
     for link in links:
         sleep(1)
         try:
-            response = requests.get(link, timeout=30)
+            response = requests.get(link, timeout=60)
             if response.status_code == 200:
                 count_all=0
                 count_used=0
