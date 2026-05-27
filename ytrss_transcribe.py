@@ -21,7 +21,9 @@ def get_engine_map():
             "srt":"filtered srt",
             }
 
-def download_subtitles(link, filename):
+def download_subtitles(filename):
+        description_path = "yt-video/" + filename + ".desc"
+        link = get_video_link(description_path)
         description_path = "yt-video/" + filename + ".desc"
         srt_path = "yt-video/" + filename + ".srt"
         if os.path.exists(srt_path):
@@ -57,6 +59,11 @@ def download_subtitles(link, filename):
                         return content
             print(f"Failed to download English subtitles for video {filename} as well. yt-dlp output: {proc.stderr.decode()}")
         return ""
+
+def save_subtitles(filename, text):
+    srt_path = "yt-video/" + filename + ".srt"
+    with open(srt_path, "+w") as file:
+        file.write(text)
 
 def filter_subs(long_text, max_length = 0):
     output=""
@@ -155,7 +162,7 @@ def get_video_link(description_path):
 def run_srt(filename):
     description_path = "yt-video/" + filename + ".desc"
     youtube_link = get_video_link(description_path)
-    for chunk in filter_subs(download_subtitles(youtube_link, filename), max_length=0):
+    for chunk in filter_subs(download_subtitles(filename), max_length=0):
         return chunk
 
 def run_openai(filename, summarize):
@@ -166,7 +173,7 @@ def run_openai(filename, summarize):
         lang = detect_language(description_path) or "en"
         description_path = "yt-video/" + filename + ".desc"
         youtube_link = get_video_link(description_path)
-        text = download_subtitles(youtube_link, filename)
+        text = download_subtitles(filename)
 
         if text=="":
             for chunk in split_mp3_file(convert_video_to_audio(video_path)):
@@ -187,6 +194,7 @@ def run_openai(filename, summarize):
                     else:
                         text += " "+segment.text
                 text += ".\n"
+            save_subtitles(filename=filename, text= "Transcribed from mp3 by OpenAI:\n "+ response.text)
         title, _ = get_video_title_and_description(filename)
         for chunk in filter_subs(text, max_length=20000):
                 response = client.responses.create(
@@ -204,7 +212,7 @@ def run_gemini(filename, summarize):
     from google.genai import types
     client = genai.Client()
     lang = detect_language("yt-video/" + filename + ".desc") or "en"
-    srt = download_subtitles(youtube_link, filename)
+    srt = download_subtitles(filename)
     title, description = get_video_title_and_description(filename)
     if srt.strip != "":
         text = ""
@@ -242,6 +250,7 @@ def run_gemini(filename, summarize):
             ]
         )
     )
+    save_subtitles(filename=filename, text= "Transcribed from video link by Gemini:\n "+ response.text)
     return response.text 
 
 def run_claude(filename, summarize=False):
@@ -254,7 +263,7 @@ def run_claude(filename, summarize=False):
     max_tokens = 100000
     title, description = get_video_title_and_description(filename)
     output=""
-    for chunk_srt in filter_subs(download_subtitles(youtube_link, filename), max_length=30000):
+    for chunk_srt in filter_subs(download_subtitles(filename), max_length=30000):
         messages=[
                 {
                     "role": "user",
