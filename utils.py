@@ -138,7 +138,7 @@ def generate_atom_feed(url_link, is_public):
             if age < timedelta(days=get_config()["manual_transcript_days"]):
                 string_list = open(transcription_path, "r").read().split('\n')
                 description_element.text += f"<p>[VIDEO TRANSCRIPTION]</p> <br/>"
-                transcribe_link = f"<br/> <a>Re-transcript with</a> <a>|</a> "
+                transcribe_link = f"<br/> <a>Get new text version</a> <a>|</a> "
                 for engine, engine_name in get_engine_map().items():
                     transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine_name}</a> <a>|</a> "
                 description_element.text += f"<br/> {transcribe_link}<br/>"

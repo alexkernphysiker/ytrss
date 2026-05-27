@@ -15,16 +15,15 @@ def get_engine_map():
             "gemini_s": "Summarize with Gemini", 
             "openai_s": "Summarize with OpenAI", 
             "claude_s": "Summarize with Claude",
-            "gemini_t": "Transcript with Gemini", 
-            "openai_t": "Transcript with OpenAI",
-            "claude_t": "Transcript with Claude",
+            "gemini_t": "Transcript with Gemini (yt link)", 
+            "openai_t": "Transcript with OpenAI (mp3)",
+            "claude_t": "Improve subtitles with Claude",
             "srt":"filtered srt",
             }
 
 def download_subtitles(filename):
         description_path = "yt-video/" + filename + ".desc"
         link = get_video_link(description_path)
-        description_path = "yt-video/" + filename + ".desc"
         srt_path = "yt-video/" + filename + ".srt"
         if os.path.exists(srt_path):
             print(f"Subtitles for video {filename} already exist, skipping download.")
@@ -42,28 +41,15 @@ def download_subtitles(filename):
                     modtime = os.path.getmtime(description_path)
                     os.utime(srt_path, (modtime, modtime))
                     return content
-        print(f"Failed to download subtitles for video {filename} with language {lang}. yt-dlp output: {proc.stderr.decode()}")
-        if lang != "en":
-            print(f"Retrying to download English subtitles for video {filename}...")
-            proc = subprocess.run(f"yt-dlp --skip-download --write-auto-subs --write-subs --sub-lang en {link}", shell=True, capture_output=True)
-            for line in proc.stdout.decode().splitlines():
-                mask = "[download] Destination: "
-                if line.strip().startswith(mask):
-                    srtname = line.strip().split(mask)[-1]
-                    if os.path.exists(srtname):
-                        with open(srtname, "r", encoding="utf-8") as f:
-                            content = f.read()
-                        os.rename(srtname, srt_path)
-                        modtime = os.path.getmtime(description_path)
-                        os.utime(srt_path, (modtime, modtime))
-                        return content
-            print(f"Failed to download English subtitles for video {filename} as well. yt-dlp output: {proc.stderr.decode()}")
         return ""
 
 def save_subtitles(filename, text):
+    description_path = "yt-video/" + filename + ".desc"
     srt_path = "yt-video/" + filename + ".srt"
     with open(srt_path, "+w") as file:
         file.write(text)
+    modtime = os.path.getmtime(description_path)
+    os.utime(srt_path, (modtime, modtime))
 
 def filter_subs(long_text, max_length = 0):
     output=""
@@ -101,27 +87,33 @@ def get_video_title_and_description(filename):
         descr = description_element.text if description_element.text is not None else ""
         return title,descr
 
-def make_prompt(lang, summarize = False, title = ""):
+def make_prompt(lang, summarize = False, title = "", description = ""):
             if summarize:
                 if lang == "uk":
                     return "Це транскрипція відео. Будь ласка напиши перелік основних тез цієї розмови, уточнюючи, хто їх сказав та на що послався)." + \
-                           f"Назва відео: \"{title}\". "
+                           (f"Назва відео: \"{title}\". " if title!="" else "") + \
+                           (f"Опис відео: \"{description}\". " if description!="" else "")
                 elif lang == "pl":
                     return "To jest transkrypcja filmu. Zrób proszę streszczenie owej rozmowy podając jej tezy, kto je powiedział i na co się odwołał" + \
-                           f"Nazwa filmu: \"{title}\". "
+                           (f"Nazwa filmu: \"{title}\". " if title!="" else "") + \
+                           (f"Opis filmu: \"{description}\". " if description!="" else "")
                 else:
                     return "This is a video transcription. Please summarize it pointing who told the given statements and what sources they mentioned" + \
-                           f"Video title: \"{title}\". "
+                           (f"Video title: \"{title}\". " if title!="" else "") + \
+                           (f"Video descriptions: \"{description}\". " if description!="" else "")
             else:
                 if lang == "uk":
                     return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци та розділи. Якщо в тексті є якісь слова чи фрази російською - скоріше за все - це помилки розпізнавання мови. Переклади їх українською та заміни. Якщо можливо, також виділи репліки різних мовців. " + \
-                            f"Назва відео: \"{title}\". "
+                            (f"Назва відео: \"{title}\". " if title!="" else "") + \
+                            (f"Опис відео: \"{description}\". " if description!="" else "")
                 elif lang == "pl":
                     return "Proszę, zrób z tych napisów tekstową transkrypcję filmu z pełnym sprawdzeniem pisowni oraz rozbiciem na akapity oraz rozdziały. Jeśli to jest możliwe, poznacz interpunkcją słowa powiedzone przez róźnych mówców. " + \
-                            f"Nazwa filmu: \"{title}\". "
+                            (f"Nazwa filmu: \"{title}\". " if title!="" else "") + \
+                            (f"Opis filmu: \"{description}\". " if description!="" else "")
                 else:
                     return "Please make from these subtitles, a text transcription of the video with correction of language mistakes and splitting the text into paragraphs and chapters. " + \
-                            f"Video title: \"{title}\". "
+                            (f"Video title: \"{title}\". " if title!="" else "") + \
+                            (f"Video descriptions: \"{description}\". " if description!="" else "")
 
 
 def convert_video_to_audio(video_file_path):
@@ -207,51 +199,51 @@ def run_openai(filename, summarize):
                         text += content_item.text
         return text
 def run_gemini(filename, summarize):
-    youtube_link = get_video_link("yt-video/" + filename + ".desc")
     from google import genai
     from google.genai import types
     client = genai.Client()
     lang = detect_language("yt-video/" + filename + ".desc") or "en"
     srt = download_subtitles(filename)
     title, description = get_video_title_and_description(filename)
-    if srt.strip != "":
+    if srt == "":
+        youtube_link = get_video_link("yt-video/" + filename + ".desc")
+        if lang == "uk":
+            prompt = "Будь ласка, транскрибуй це відео."
+        elif lang == "pl":
+            prompt = "Proszę, przetranskrybuj ten film."
+        else:        
+            prompt = "Please transcribe the video."
+        response = client.models.generate_content(
+            model='gemini-3-flash-preview',
+            contents=types.Content(
+                parts=[
+                    types.Part(file_data=types.FileData(file_uri=youtube_link)),
+                    types.Part(text=prompt)
+                ]
+            )
+        )
+        srt = response.text 
+        save_subtitles(filename=filename, text= "Transcribed from video link by Gemini:\n "+ srt)
+
+    if summarize:
         text = ""
         for chunk in filter_subs(srt):
             response = client.models.generate_content(
                 model='gemini-3-flash-preview',
                 contents=types.Content(
                     parts=[
-                        types.Part(text=make_prompt(lang, summarize = summarize, title = title)),
-                        types.Part(text="Description:\n"+description),
-                        types.Part(text="Subtitles:\n"+chunk),
+                        types.Part(text=make_prompt(lang, summarize = summarize)),
+                        types.Part(text="Title:\n" + title),
+                        types.Part(text="Description:\n" + description),
+                        types.Part(text="Subtitles:\n" + chunk),
                     ]
                 )
             )
             text += response.text
-        if text != "":
-            return text
-    if summarize:
-        return "summazizing without available subtitles is not implemented"
-    
-    if lang == "uk":
-        prompt = "Будь ласка, транскрибуй це відео."
-    elif lang == "pl":
-        prompt = "Proszę, przetranskrybuj ten film."
-    else:        
-        prompt = "Please transcribe the video."
-    response = client.models.generate_content(
-        model='gemini-3-flash-preview',
-        contents=types.Content(
-            parts=[
-                types.Part(
-                    file_data=types.FileData(file_uri=youtube_link)
-                ),
-                types.Part(text=prompt)
-            ]
-        )
-    )
-    save_subtitles(filename=filename, text= "Transcribed from video link by Gemini:\n "+ response.text)
-    return response.text 
+        return text
+    else:
+        return srt
+
 
 def run_claude(filename, summarize=False):
     youtube_link = get_video_link("yt-video/" + filename + ".desc")
@@ -268,7 +260,8 @@ def run_claude(filename, summarize=False):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": make_prompt(lang, summarize=summarize, title = title)},
+                        {"type": "text", "text": make_prompt(lang, summarize=summarize)},
+                        {"type": "text", "text": "Video title:\n"+title},
                         {"type": "text", "text": "Video description:\n"+description},
                         {"type": "text", "text": "Subtitles:\n"+chunk_srt},
                     ],
@@ -301,7 +294,7 @@ def transcribe_video(filename, engine):
             text = run_gemini(filename, summarize=False)
         elif engine == "claude_t":
             text = run_claude(filename, summarize=False)
-        if engine == "openai_s":
+        elif engine == "openai_s":
             text = run_openai(filename, summarize=True)
         elif engine == "gemini_s":
             text = run_gemini(filename, summarize=True)
@@ -322,6 +315,7 @@ def transcribe_video(filename, engine):
 
     if text is not None and text.strip() != "":
         with open(transcription_path, "w") as f:
+            f.write(get_engine_map()[engine]+"\n")
             f.write(text)
         modTime = os.path.getmtime(video_path)
         os.utime(transcription_path, (modTime, modTime))
