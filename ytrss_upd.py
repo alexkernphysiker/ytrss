@@ -14,16 +14,13 @@ from random import shuffle
 from utils import *
 from config import *
 
-max_days = get_config()["max_days"]
-recheck_size_days = get_config()["recheck_size_days"]
-auto_transcript_hours = get_config()["auto_transcript_hours"]
 
 def cleanup():
     now = arrow.now()
     for file in Path("yt-video").glob("*"):
         if file.is_file():
             file_time = arrow.get(file.stat().st_mtime)
-            if now - file_time > timedelta(days=max_days):
+            if now - file_time > timedelta(days=get_config()["max_days"]):
                 print(f"Removing old video file: {file}")
                 file.unlink()
 
@@ -72,6 +69,68 @@ def download_video(link, filename):
         return False
 
 def update_channels_feed():
+    print("Fetching RSS subscriptions")
+    for link in get_config()["rss_subscriptions"]:
+        response = requests.get(link, timeout=60)
+        if response.status_code == 200:
+            rss = ElementTree.fromstring(response.text)
+            channel = rss.find("channel")
+            source_name = channel.find("title").text
+            print(f"{link}: {source_name}")
+            for entry in channel.findall("item"):
+                    title = entry.find("title")
+                    if title is None or not title.text:
+                        print(f"Skipping entry with no title in source {source_name}")
+                        continue
+                    link_element = entry.find("link")
+                    if link_element is None:
+                        print(f"Skipping entry with no link in source {source_name}")
+                        continue
+                    published = entry.find("pubDate")
+                    if published is None or not published.text:
+                        print(f"Skipping entry with no published date in source {source_name}")
+                        continue
+                    insertion_date = dateutil.parser.parse(published.text)
+                    time_since_insertion = datetime.now(timezone.utc) - insertion_date
+                    media_description = entry.find("itunes:summary")
+                    media_thumbnail = entry.find("itunes:image")
+                    if time_since_insertion < timedelta(days=get_config()["max_days"]):
+                        entry_element = ElementTree.Element("entry")
+                        title_element = ElementTree.SubElement(entry_element, "title")
+                        title_element.text = "[" + source_name + "] " + title.text
+                        print(f"Title: {title_element.text}")
+                        link_element_dest = ElementTree.SubElement(entry_element, "link", href=link_element.text)
+                        updated_element = ElementTree.SubElement(entry_element, "updated")
+                        updated_element.text = insertion_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+                        published_element = ElementTree.SubElement(entry_element, "published")
+                        published_element.text = insertion_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+                        print(f"Published: {published_element.text}")
+                        if media_thumbnail is not None:
+                            thumbnail_element = ElementTree.SubElement(entry_element, "itunes:image", href=media_thumbnail.get("href"))
+                        chars = re.escape(string.punctuation)
+                        fn = re.sub('['+chars+']', '',link_element.text)
+                        description_element = ElementTree.SubElement(entry_element, "summary")
+                        description_element.text = ""
+                        if media_description is not None and media_description.text is not None:
+                            string_list = media_description.text.split('\n')
+                            for line in string_list:
+                                description_element.text += "<p>"+line+"</p> <br/>"
+                        id_element = ElementTree.SubElement(entry_element, "id")
+                        id_element.text = link_element.text
+                        source_enclosure = entry.find("enclosure")
+                        if source_enclosure == None:
+                            print(f"Item {title} does not contain enclosure")
+                        else:
+                            enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url=source_enclosure.get("url"), type=source_enclosure.get("type"), length = source_enclosure.get("length"))
+
+                        description_path = "yt-video/" + fn + ".desc"
+                        with open(description_path, "w") as f:
+                            item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
+                            f.write(item_string)
+                        modTime = mktime(insertion_date.timetuple())
+                        os.utime(description_path, (modTime, modTime))
+
+
     print(f"Fetching channels")
     links=[]
     for channel_id in get_config()["channel_subscriptions"]:
@@ -116,7 +175,7 @@ def update_channels_feed():
                         media_thumbnail = media_group.find("{http://search.yahoo.com/mrss/}thumbnail")
                     else:
                         media_description = entry.find("{http://www.w3.org/2005/Atom}summary")
-                    if "shorts" not in link_element.get("href") and time_since_insertion < timedelta(days=max_days):
+                    if "shorts" not in link_element.get("href") and time_since_insertion < timedelta(days=get_config()["max_days"]):
                         file_duration_yt=""
                         entry_element = ElementTree.Element("entry")
                         title_element = ElementTree.SubElement(entry_element, "title")
@@ -135,7 +194,7 @@ def update_channels_feed():
                         file_path = "yt-video/" + fn
                         description_path = "yt-video/" + fn + ".desc"
                         if os.path.exists(file_path):
-                            if time_since_insertion < timedelta(days=recheck_size_days):
+                            if time_since_insertion < timedelta(days=get_config()["recheck_size_days"]):
                                 file_size_yt = get_yt_file_size(link_element.get("href"))
                                 sleep(1)
                                 file_duration_yt = get_file_duration(link_element.get("href"))
@@ -215,8 +274,8 @@ def update_channels_feed():
                         with open(description_path, "w") as f:
                             item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
                             f.write(item_string)
-                        if auto_transcript_hours > 0 and os.path.exists(file_path):
-                            if time_since_insertion < timedelta(hours=auto_transcript_hours):
+                        if get_config()["auto_transcript_hours"] > 0 and os.path.exists(file_path):
+                            if time_since_insertion < timedelta(hours=get_config()["auto_transcript_hours"]):
                                 print(f"Processing auto-transcription for video {fn}")
                                 transcription_path = "yt-video/" + fn + ".txt"
                                 if not os.path.exists(transcription_path) and not source_id in get_config()["sources_with_disabled_auto_transcription"]:
@@ -238,6 +297,7 @@ def update_channels_feed():
                 print(f"Failed to fetch {link}: HTTP {response.status_code}")
         except requests.RequestException as e:
             print(f"Error fetching {link}: {e}")
+            
 
 if __name__ == "__main__":
     cleanup()

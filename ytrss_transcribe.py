@@ -15,8 +15,8 @@ def get_engine_map():
             "gemini_s": "Summarize with Gemini", 
             "openai_s": "Summarize with OpenAI", 
             "claude_s": "Summarize with Claude",
-            "gemini_t": "Transcript with Gemini (yt link)", 
-            "openai_t": "Transcript with OpenAI (mp3)",
+            "gemini_t": "Transcript with Gemini", 
+            "openai_t": "Transcript with OpenAI",
             "claude_t": "Improve subtitles with Claude",
             "srt":"filtered srt",
             }
@@ -130,6 +130,19 @@ def convert_video_to_audio(video_file_path):
     else:
         return None
 
+def get_enclosure(filename):
+    description_path = "yt-video/" + filename + ".desc"
+    if os.path.exists(description_path):
+        parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+        entry = etree.parse(description_path, parser1)
+        enclosure_element = entry.find("enclosure")
+        if enclosure_element is not None:
+            enclosure =  enclosure_element.get("url")
+            if enclosure is not None:
+                return enclosure
+    return None
+
+
 def split_mp3_file(mp3_file_path, chunk_length_s=1000):
     for file in sorted(Path("yt-video").glob("chunk.*.mp3")):
         if file.is_file():
@@ -148,12 +161,12 @@ def get_video_link(description_path):
         entry = etree.parse(description_path, parser1)
         link_element = entry.find("link")
         if link_element is not None:
-            return link_element.get("href")
+            link = link_element.get("href")
+            if "youtube.com" in link:
+                return link
     return None
 
 def run_srt(filename):
-    description_path = "yt-video/" + filename + ".desc"
-    youtube_link = get_video_link(description_path)
     for chunk in filter_subs(download_subtitles(filename), max_length=0):
         return chunk
 
@@ -164,11 +177,14 @@ def run_openai(filename, summarize):
         video_path = "yt-video/" + filename
         lang = detect_language(description_path) or "en"
         description_path = "yt-video/" + filename + ".desc"
-        youtube_link = get_video_link(description_path)
         text = download_subtitles(filename)
 
         if text=="":
-            for chunk in split_mp3_file(convert_video_to_audio(video_path)):
+            if os.path.exists(video_path):
+                mp3_path = convert_video_to_audio(video_path)
+            else:
+                mp3_path = get_enclosure(filename)
+            for chunk in split_mp3_file(mp3_path):
                 print(f"Transcribing chunk {chunk} for video {filename}...")
                 audio_file= open(chunk, "rb")
                 transcription = client.audio.transcriptions.create(
@@ -186,18 +202,19 @@ def run_openai(filename, summarize):
                     else:
                         text += " "+segment.text
                 text += ".\n"
-            save_subtitles(filename=filename, text= "Transcribed from mp3 by OpenAI:\n "+ response.text)
-        title, _ = get_video_title_and_description(filename)
-        for chunk in filter_subs(text, max_length=20000):
+            save_subtitles(filename=filename, text= "Transcribed from mp3 by OpenAI:\n "+ text)
+        title, descr = get_video_title_and_description(filename)
+        for chunk in filter_subs(text):
                 response = client.responses.create(
                     model="gpt-5.2",
-                    input= make_prompt(lang, summarize, title=title) + ":\n\n" + text
+                    input= make_prompt(lang, summarize, title=title, description=descr) + ":\n\n" + text
                 )
                 text = ""
                 for output_item in response.output:
                     for content_item in output_item.content:
                         text += content_item.text
         return text
+
 def run_gemini(filename, summarize):
     from google import genai
     from google.genai import types
@@ -206,23 +223,26 @@ def run_gemini(filename, summarize):
     srt = download_subtitles(filename)
     title, description = get_video_title_and_description(filename)
     if srt == "":
-        youtube_link = get_video_link("yt-video/" + filename + ".desc")
         if lang == "uk":
             prompt = "Будь ласка, транскрибуй це відео."
         elif lang == "pl":
             prompt = "Proszę, przetranskrybuj ten film."
         else:        
             prompt = "Please transcribe the video."
-        response = client.models.generate_content(
-            model='gemini-3-flash-preview',
-            contents=types.Content(
-                parts=[
-                    types.Part(file_data=types.FileData(file_uri=youtube_link)),
-                    types.Part(text=prompt)
-                ]
+        youtube_link = get_video_link("yt-video/" + filename + ".desc")
+        if youtube_link is None:
+            return "transcription of downloaded audio is not implemented for Gemini"
+        else:
+            response = client.models.generate_content(
+                model='gemini-3-flash-preview',
+                contents=types.Content(
+                    parts=[
+                        types.Part(file_data=types.FileData(file_uri=youtube_link)),
+                        types.Part(text=prompt)
+                    ]
+                )
             )
-        )
-        srt = response.text 
+            srt = response.text 
         save_subtitles(filename=filename, text= "Transcribed from video link by Gemini:\n "+ srt)
 
     if summarize:
@@ -246,7 +266,6 @@ def run_gemini(filename, summarize):
 
 
 def run_claude(filename, summarize=False):
-    youtube_link = get_video_link("yt-video/" + filename + ".desc")
     lang = detect_language("yt-video/" + filename + ".desc") or "en"
     import anthropic
     from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
@@ -275,10 +294,11 @@ def run_claude(filename, summarize=False):
         ) as stream:
             for text in stream.text_stream:
                 output += text
-    return output
+    return output if output!="" else "Claude is able to work only with subtitles"
 
 def transcribe_video(filename, engine):
     video_path = "yt-video/" + filename
+    description_path = "yt-video/" + filename + ".desc"
     transcription_path = "yt-video/" + filename + ".txt"
     log_path = "yt-video/" + filename + ".log"
 
@@ -309,7 +329,7 @@ def transcribe_video(filename, engine):
         print(f"An error occurred during transcription of video {filename}: {str(e)}")
         with open(log_path, "w") as f:
             f.write(f"Transcription error: {str(e)}")
-        modTime = os.path.getmtime(video_path)
+        modTime = os.path.getmtime(description_path)
         os.utime(log_path, (modTime, modTime))
         return
 
@@ -317,7 +337,7 @@ def transcribe_video(filename, engine):
         with open(transcription_path, "w") as f:
             f.write(get_engine_map()[engine]+"\n")
             f.write(text)
-        modTime = os.path.getmtime(video_path)
+        modTime = os.path.getmtime(description_path)
         os.utime(transcription_path, (modTime, modTime))
         print(f"Transcription for video {filename} completed")
     else:
@@ -342,10 +362,8 @@ if __name__ == "__main__":
 
     for engine, video_list in video_list_map.items():
         for fn in video_list:
-            file_path = "yt-video/" + fn
-            description_path = "yt-video/" + fn + ".desc"
             transcription_path = "yt-video/" + fn + ".txt"
-            if not os.path.exists(transcription_path) and os.path.exists(file_path):
+            if not os.path.exists(transcription_path):
                 transcribe_video(fn, engine=engine)
 
     for mp3 in Path("yt-video").glob("*.mp3"):
