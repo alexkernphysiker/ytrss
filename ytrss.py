@@ -23,7 +23,8 @@ def subscribtion():
     return "<form action='/show_channel_list' method='get'><input type='submit' value='Show subscribed channels'></form>" + \
            "<form action='/show_playlist_list' method='get'><input type='submit' value='Show subscribed playlists'></form>" + \
            "<form action='/auto-transcription/show' method='get'><input type='submit' value='Auto-transcription'></form>" + \
-           "<form action='/downloading/show' method='get'><input type='submit' value='Auto-downloading'></form>"
+           "<form action='/downloading/show' method='get'><input type='submit' value='Auto-downloading'></form>" + \
+           "<form action='/show_rss_list' method='get'><input type='submit' value='Show subscribed RSS podcasts'></form>"
 
 
 
@@ -230,6 +231,39 @@ def remove_transcription(filename):
         os.remove(log_path)
     return f"Transcription for video {filename} has been removed."
 
+
+
+##### rss subscriptions
+@app.route("/show_rss_list")
+def show_rss_list():
+    list_str ="<a>Input podcast RSS link</a> <br/>" + \
+              "<form action='/subscribe/rss' method='post'><input type='text' name='rss_link' class='form-control' id='rss_link'><input type='submit' value='Subscribe'></form>"
+    list_str += "<a> Subscribed RSS podcasts </a><br/>"
+    for link in get_config()["rss_subscriptions"]:
+        list_str += f"<li> <form action='/unsubscribe/rss' method='post'>[{get_rss_name(link)}]<input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Unsubscribe'></form></li>"
+    list_str += "<br/><a> Other known channels </a><br/>"
+    for link in get_config()["rss_names_dict"].keys():
+        if  not link in get_config()["rss_subscriptions"]:
+                list_str += f"<li> <form action='/subscribe/rss' method='post'>[{get_rss_name(link)}]<input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Subscribe'></form></li>"
+    return subscribtion() + f"<ul>{list_str}</ul><br />" + subscribtion()
+
+@app.route("/subscribe/rss", methods=['POST'])
+def subscribe_rss():
+    link = request.form['rss_link']
+    sources_list = get_config()["rss_subscriptions"]
+    if link not in sources_list:
+        sources_list.append(link)
+        save_config()
+    return redirect(url_for('show_rss_list'))
+
+@app.route("/unsubscribe/rss", methods=['POST'])
+def unsubscribe_rss():
+    link = request.form['rss_link']
+    sources_list = get_config()["rss_subscriptions"]
+    if link in sources_list:
+        sources_list.remove(link)
+        save_config()
+    return redirect(url_for('show_rss_list'))
 
 
 ### atom feed generation

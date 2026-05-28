@@ -183,6 +183,8 @@ def generate_transcriptions_page():
     for description_path in Path("yt-video").glob("*.desc"):
         transcription_path = str(description_path).replace(".desc", ".txt")
         fn = os.path.basename(description_path).replace(".desc", "")
+        if "patreon" in fn:
+            continue
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
         entry = etree.parse(description_path, parser1)
         title_element = entry.find("title")
