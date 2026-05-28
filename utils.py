@@ -53,9 +53,9 @@ def get_channel_name(channel_id):
             save_config()
             return channel_name
         else:
-            return "<Error fetching channel name>"
+            return "<Error when fetching channel name>"
     except Exception as e:
-        return "<Exception fetching channel name>"
+        return "<Exception when fetching channel name>"
 
 def get_playlist_name(playlist_id):
     playlist_names_dict = get_config()["playlist_names_dict"]
@@ -71,9 +71,27 @@ def get_playlist_name(playlist_id):
             save_config()
             return playlist_name
         else:
-            return "<Error fetching playlist name>"
+            return "<Error when fetching playlist name>"
     except Exception as e:
-        return "<Exception fetching playlist name>"
+        return "<Exception when fetching playlist name>"
+
+def get_rss_name(link):
+    rss_names_dict = get_config()["rss_names_dict"]
+    if link in rss_names_dict:
+        return rss_names_dict[link]
+    try:
+        response = requests.get(link, timeout=20)
+        if response.status_code == 200:
+            rss = ElementTree.fromstring(response.text)
+            channel = rss.find("channel")
+            source_name = channel.find("title").text
+            rss_names_dict[link] = source_name
+            save_config()
+            return source_name
+        else:
+            return "<Error when fetching rss name>"
+    except Exception as e:
+        return "<Exception when fetching rss name>"
 
 def load_source_list_from_file(filename):
     try:
@@ -111,6 +129,8 @@ def generate_atom_feed(url_link, is_public):
         transcription_path = str(description_path).replace(".desc", ".txt")
         log_path = str(description_path).replace(".desc", ".log")
         fn = os.path.basename(description_path).replace(".desc", "")
+        if is_public and "patreon" in fn:
+            continue
         
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
         entry = etree.parse(description_path, parser1)

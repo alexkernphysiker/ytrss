@@ -231,7 +231,8 @@ def remove_transcription(filename):
     return f"Transcription for video {filename} has been removed."
 
 
-### rss feed generation
+
+### atom feed generation
 @app.route("/feed")
 def yt_feed():
     global url_link
