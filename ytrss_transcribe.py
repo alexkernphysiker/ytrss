@@ -245,9 +245,8 @@ def run_gemini(filename, summarize):
             srt = response.text 
         save_subtitles(filename=filename, text= "Transcribed from video link by Gemini:\n "+ srt)
 
-    if summarize:
-        text = ""
-        for chunk in filter_subs(srt):
+    text = ""
+    for chunk in filter_subs(srt):
             response = client.models.generate_content(
                 model='gemini-3-flash-preview',
                 contents=types.Content(
@@ -260,9 +259,7 @@ def run_gemini(filename, summarize):
                 )
             )
             text += response.text
-        return text
-    else:
-        return srt
+    return text
 
 
 def run_claude(filename, summarize=False):
