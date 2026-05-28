@@ -24,6 +24,8 @@ def get_engine_map():
 def download_subtitles(filename):
         description_path = "yt-video/" + filename + ".desc"
         link = get_video_link(description_path)
+        if "youtube.com" not in link:
+            return ""
         srt_path = "yt-video/" + filename + ".srt"
         if os.path.exists(srt_path):
             print(f"Subtitles for video {filename} already exist, skipping download.")
@@ -90,7 +92,7 @@ def get_video_title_and_description(filename):
 def make_prompt(lang, summarize = False, title = "", description = ""):
             if summarize:
                 if lang == "uk":
-                    return "Це транскрипція відео. Будь ласка напиши перелік основних тез цієї розмови, уточнюючи, хто їх сказав та на що послався). Перевір правильність написання згаданих у розмові прізвищ та інших власних назв. " + \
+                    return "Це транскрипція відео. Будь ласка напиши перелік основних тез цієї розмови, уточнюючи, хто їх сказав та на що послався). Якщо виявиш неправильне написання прізвищ та інших власних назв, виправ їх. " + \
                            (f"Назва відео: \"{title}\". " if title!="" else "") + \
                            (f"Опис відео: \"{description}\". " if description!="" else "")
                 elif lang == "pl":
@@ -103,7 +105,7 @@ def make_prompt(lang, summarize = False, title = "", description = ""):
                            (f"Video descriptions: \"{description}\". " if description!="" else "")
             else:
                 if lang == "uk":
-                    return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци та розділи. Якщо в тексті є якісь слова чи фрази російською - скоріше за все - це помилки розпізнавання мови. Переклади їх українською та заміни. Якщо можливо, також виділи репліки різних мовців. Перевір правильність написання згаданих у розмові прізвищ та інших власних назв. " + \
+                    return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци та розділи. Якщо в тексті є якісь слова чи фрази російською - скоріше за все - це помилки розпізнавання мови. Переклади їх українською та заміни. Якщо можливо, також виділи репліки різних мовців. Якщо виявиш неправильне написання прізвищ та інших власних назв, виправ їх. " + \
                             (f"Назва відео: \"{title}\". " if title!="" else "") + \
                             (f"Опис відео: \"{description}\". " if description!="" else "")
                 elif lang == "pl":

@@ -92,7 +92,7 @@ def update_channels_feed():
                         continue
                     insertion_date = dateutil.parser.parse(published.text)
                     time_since_insertion = datetime.now(timezone.utc) - insertion_date
-                    media_description = entry.find("itunes:summary")
+                    media_description = entry.find("description")
                     media_thumbnail = entry.find("itunes:image")
                     if time_since_insertion < timedelta(days=get_config()["max_days"]):
                         entry_element = ElementTree.Element("entry")
