@@ -24,7 +24,7 @@ def get_engine_map():
 def download_subtitles(filename):
         description_path = "yt-video/" + filename + ".desc"
         link = get_video_link(description_path)
-        if "youtube.com" not in link:
+        if link is None:
             return ""
         srt_path = "yt-video/" + filename + ".srt"
         if os.path.exists(srt_path):
