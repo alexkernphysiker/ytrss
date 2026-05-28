@@ -24,13 +24,13 @@ def get_engine_map():
 def download_subtitles(filename):
         description_path = "yt-video/" + filename + ".desc"
         link = get_video_link(description_path)
-        if link is None:
-            return ""
         srt_path = "yt-video/" + filename + ".srt"
         if os.path.exists(srt_path):
             print(f"Subtitles for video {filename} already exist, skipping download.")
             with open(srt_path, "r", encoding="utf-8") as f:
                 return f.read()
+        if link is None:
+            return ""
         lang = detect_language(description_path) or "en"
         proc = subprocess.run(f"yt-dlp --skip-download --write-auto-subs --write-subs --sub-lang {lang} {link}", shell=True, capture_output=True)
         for line in proc.stdout.decode().splitlines():
