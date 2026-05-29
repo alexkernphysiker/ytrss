@@ -92,7 +92,7 @@ def get_video_title_and_description(filename):
 def make_prompt(lang, summarize = False, title = "", description = ""):
             if summarize:
                 if lang == "uk":
-                    return "Це транскрипція відео. Будь ласка напиши перелік основних тез цієї розмови, уточнюючи, хто їх сказав та на що послався). Якщо виявиш неправильне написання прізвищ та інших власних назв, виправ їх. " + \
+                    return "Це транскрипція відео. Будь ласка напиши перелік основних тез цієї розмови, уточнюючи, хто їх сказав та на що послався). Якщо виявиш неправильне написання прізвищ та інших власних назв, виправ їх у тексті. " + \
                            (f"Назва відео: \"{title}\". " if title!="" else "") + \
                            (f"Опис відео: \"{description}\". " if description!="" else "")
                 elif lang == "pl":
@@ -105,7 +105,7 @@ def make_prompt(lang, summarize = False, title = "", description = ""):
                            (f"Video descriptions: \"{description}\". " if description!="" else "")
             else:
                 if lang == "uk":
-                    return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци та розділи. Якщо в тексті є якісь слова чи фрази російською - скоріше за все - це помилки розпізнавання мови. Переклади їх українською та заміни. Якщо можливо, також виділи репліки різних мовців. Якщо виявиш неправильне написання прізвищ та інших власних назв, виправ їх. " + \
+                    return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци та розділи. Якщо в тексті є якісь слова чи фрази російською - скоріше за все - це помилки розпізнавання мови. Переклади їх українською та заміни. Якщо можливо, також виділи репліки різних мовців. Якщо виявиш неправильне написання прізвищ та інших власних назв, виправ їх у тексті. " + \
                             (f"Назва відео: \"{title}\". " if title!="" else "") + \
                             (f"Опис відео: \"{description}\". " if description!="" else "")
                 elif lang == "pl":
@@ -132,7 +132,7 @@ def convert_video_to_audio(video_file_path):
     else:
         return None
 
-def get_enclosure(filename):
+def get_enclosure_link(filename):
     description_path = "yt-video/" + filename + ".desc"
     if os.path.exists(description_path):
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
@@ -185,7 +185,7 @@ def run_openai(filename, summarize):
             if os.path.exists(video_path):
                 mp3_path = convert_video_to_audio(video_path)
             else:
-                mp3_path = get_enclosure(filename)
+                mp3_path = get_enclosure_link(filename)
             for chunk in split_mp3_file(mp3_path):
                 print(f"Transcribing chunk {chunk} for video {filename}...")
                 audio_file= open(chunk, "rb")
@@ -204,7 +204,7 @@ def run_openai(filename, summarize):
                     else:
                         text += " "+segment.text
                 text += ".\n"
-            save_subtitles(filename=filename, text= "Transcribed from mp3 by OpenAI:\n "+ text)
+            save_subtitles(filename=filename, text= "Transcribed from mp3 by OpenAI:\n"+ text)
         title, descr = get_video_title_and_description(filename)
         for chunk in filter_subs(text):
                 response = client.responses.create(
@@ -245,7 +245,7 @@ def run_gemini(filename, summarize):
                 )
             )
             srt = response.text 
-        save_subtitles(filename=filename, text= "Transcribed from video link by Gemini:\n "+ srt)
+        save_subtitles(filename=filename, text= "Transcribed from video link by Gemini:\n"+ srt)
 
     text = ""
     for chunk in filter_subs(srt):
