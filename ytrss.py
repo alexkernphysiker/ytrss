@@ -18,32 +18,37 @@ url_link=f"http://{host}:{port}"
 app = Flask(__name__)
 
 
-@app.route("/subscription")
-def subscribtion():
-    return "<form action='/show_channel_list' method='get'><input type='submit' value='Show subscribed channels'></form>" + \
-           "<form action='/show_playlist_list' method='get'><input type='submit' value='Show subscribed playlists'></form>" + \
-           "<form action='/show_rss_list' method='get'><input type='submit' value='Show subscribed RSS podcasts'></form>" + \
-           "<form action='/auto-transcription/show' method='get'><input type='submit' value='Auto-transcription'></form>" + \
-           "<form action='/downloading/show' method='get'><input type='submit' value='Auto-downloading'></form>"
+def buttons_on_top():
+    return "<form action='/subscription' method='post'>" + \
+           "<input type='submit' name='show_channel_list' value='YT channels'>" + \
+           "<input type='submit' name='show_playlist_list' value='YT playlists'>" + \
+           "<input type='submit' name='show_rss_list' value='RSS'>" + \
+           "<input type='submit' name='auto_transcription' value='Auto-transcription'>" + \
+           "<input type='submit' name='auto_download' value='Auto-downloading'>" + \
+            "</form>"
 
+@app.route("/subscription", methods=['GET','POST'])
+def subscription():
+    if request.method == 'POST':
+        for action in request.form.keys():
+            return redirect(url_for(action))
+    else:
+        return buttons_on_top()
 
 ##### channel subscriptions
 
-@app.route("/input_channel_id")
-def input_channel_id():
-    return    "<a>Channel subscription by ID</a> <br/>" + \
-              "<form action='/get_chan_info' method='post'><input type='text' name='channel_id'><input type='submit' value='View channel info'></form>"
-
 @app.route("/show_channel_list")
 def show_channel_list():
-    chanlist_str = input_channel_id() + "<a> Subscribed channels </a><br/>"
+    chanlist_str = "<a> Subscribed channels </a><br/>"
     for channel_id in get_config()["channel_subscriptions"]:
-        chanlist_str += f"<li> <form action='/unsubscribe/channel/{channel_id}' method='post'>[{get_channel_name(channel_id)}] <input type='submit' value='Unsubscribe'></form></li>"
+        chanlist_str += f"<li> <form action='/unsubscribe/channel' method='post'>[{get_channel_name(channel_id)}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{channel_id}'><input type='submit' value='Unsubscribe'></form></li>"
+    chanlist_str += "<a>Channel buttons_on_top by ID</a> <br/>" + \
+              "<form action='/subscribe/channel' method='post'><input type='text' name='source_id'><input type='submit' value='Subscribe'></form>"
     chanlist_str += "<br/><a> Other known channels </a><br/>"
     for channel_id in get_config()["channel_names_dict"].keys():
         if  not channel_id in get_config()["channel_subscriptions"]:
-                chanlist_str += f"<li> <form action='/subscribe/channel/{channel_id}' method='post'>[{get_channel_name(channel_id)}] <input type='submit' value='Subscribe'></form></li>"
-    return subscribtion() + f"<ul>{chanlist_str}</ul><br />"
+                chanlist_str += f"<li> <form action='/subscribe/channel' method='post'>[{get_channel_name(channel_id)}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{channel_id}'><input type='submit' value='Subscribe'></form></li>"
+    return buttons_on_top() + f"<ul>{chanlist_str}</ul>"
 
 @app.route("/get_chan_info", methods=['POST'])
 def get_chan_info():
@@ -63,113 +68,102 @@ def get_chan_info():
     else:
         return "No channel ID provided."
 
-@app.route("/subscribe/channel/<channel_id>", methods=['POST'])
-def subscribe_channel(channel_id):
+@app.route("/subscribe/channel", methods=['POST'])
+def subscribe_channel():
+    source_id = request.form['source_id']
+    if get_channel_name(source_id)=="":
+        return buttons_on_top() + f"cannot obtain the channel {source_id}"
     sources_list = get_config()["channel_subscriptions"]
-    if channel_id not in sources_list:
-        sources_list.append(channel_id)
+    if source_id not in sources_list:
+        sources_list.append(source_id)
         save_config()
     return redirect(url_for('show_channel_list'))
 
-@app.route("/unsubscribe/channel/<channel_id>", methods=['POST'])
-def unsubscribe_channel(channel_id):
+@app.route("/unsubscribe/channel", methods=['POST'])
+def unsubscribe_channel():
+    source_id = request.form['source_id']
     sources_list = get_config()["channel_subscriptions"]
-    if channel_id in sources_list:
-        sources_list.remove(channel_id)
+    if source_id in sources_list:
+        sources_list.remove(source_id)
         save_config()
     return redirect(url_for('show_channel_list'))
 
 
 
 #### playlist subscriptions
-
-@app.route("/input_playlist_id")
-def input_playlist_id():
-    return    "<a>Playlist subscription by ID</a> <br/>" + \
-              "<form action='/get_playlist_info' method='post'><input type='text' name='playlist_id'><input type='submit' value='View playlist info'></form>"
-
 @app.route("/show_playlist_list")
 def show_playlist_list():
-    playlistlist_str = input_playlist_id() + "<a> Subscribed playlists </a><br/>"
+    playlistlist_str = "<a> Subscribed playlists </a><br/>"
     for playlist_id in get_config()["playlist_subscriptions"]:
-        playlistlist_str += f"<li><form action='/unsubscribe/playlist/{playlist_id}' method='post'>[{get_playlist_name(playlist_id)}] <input type='submit' value='Unsubscribe'></form></li>"
+        playlistlist_str += f"<li><form action='/unsubscribe/playlist' method='post'>[{get_playlist_name(playlist_id)}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{playlist_id}'><input type='submit' value='Unsubscribe'></form></li>"
+    playlistlist_str += "<a>Subscribe playlist by ID</a> <br/>" + \
+              "<form action='/subscribe/playlist' method='post'><input type='text' name='source_id'><input type='submit' value='Subscribe'></form>"
+
     playlistlist_str += "<br/><a> Other known playlists </a><br/>"
     for playlist_id in get_config()["playlist_names_dict"].keys():
         if playlist_id in get_config()["playlist_subscriptions"]:
                 continue
-        playlistlist_str += f"<li><form action='/subscribe/playlist/{playlist_id}' method='post'>[{get_playlist_name(playlist_id)}] <input type='submit' value='Subscribe'></form></li>"
-    return subscribtion() + f"<ul>{playlistlist_str}</ul><br />"
+        playlistlist_str += f"<li><form action='/subscribe/playlist' method='post'>[{get_playlist_name(playlist_id)}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{playlist_id}'><input type='submit' value='Subscribe'></form></li>"
+    return buttons_on_top() + f"<ul>{playlistlist_str}</ul><br />"
 
-@app.route("/get_playlist_info", methods=['POST'])
-def get_playlist_info():
-    playlist_id = request.form['playlist_id']
-    if playlist_id:
-        playlists_list = get_config()["playlist_subscriptions"]
-        subscribed = playlist_id in playlists_list
-        playlist_name = get_playlist_name(playlist_id)
-        if not subscribed:
-            return f"Playlist '{playlist_name}' is not subscribed."+ \
-                    "<form action='/subscribe/playlist/"+playlist_id+"' method='post'><input type='submit' value='Subscribe'></form>" + \
-                    "<form action='/show_playlist_list' method='get'><input type='submit' value='Back'></form>"
-        else:
-            return f"Playlist '{playlist_name}' is subscribed."+ \
-                    "<form action='/unsubscribe/playlist/"+playlist_id+"' method='post'><input type='submit' value='Unsubscribe'></form>" + \
-                    "<form action='/show_playlist_list' method='get'><input type='submit' value='Back'></form>"
-    else:
-        return "No playlist ID provided."
-
-@app.route("/subscribe/playlist/<playlist_id>", methods=['POST'])
-def subscribe_playlist(playlist_id):
+@app.route("/subscribe/playlist", methods=['POST'])
+def subscribe_playlist():
+    source_id = request.form['source_id']
+    if get_playlist_name(source_id)=="":
+        return buttons_on_top() + f"cannot obtain the playlist {source_id}"
     playlists_list = get_config()["playlist_subscriptions"]
-    if playlist_id not in playlists_list:
-        playlists_list.append(playlist_id)
+    if source_id not in playlists_list:
+        playlists_list.append(source_id)
         save_config()
     return redirect(url_for('show_playlist_list'))
 
-@app.route("/unsubscribe/playlist/<playlist_id>", methods=['POST'])
-def unsubscribe_playlist(playlist_id):
+@app.route("/unsubscribe/playlist", methods=['POST'])
+def unsubscribe_playlist():
+    source_id = request.form['source_id']
     playlists_list = get_config()["playlist_subscriptions"]
-    if playlist_id in playlists_list:
-        playlists_list.remove(playlist_id)
+    if source_id in playlists_list:
+        playlists_list.remove(source_id)
         save_config()
     return redirect(url_for('show_playlist_list'))
 
 
 #auto-downloading management for channels and playlists
-@app.route("/downloading/show")
-def show_downloading_status():
+@app.route("/auto_download")
+def auto_download():
     downloading_str = "<a> Subscribed channels and playlists with enabled auto-downloading </a><br/>"
     for source_id in get_config()["channel_subscriptions"] + get_config()["playlist_subscriptions"]:
         source_name = get_channel_name(source_id) if source_id in get_config()["channel_subscriptions"] else get_playlist_name(source_id)
         if source_id not in get_config()["sources_with_disabled_downloading"]:
-            downloading_str+=f"<li><form action='/downloading/disable/{source_id}' method='post'>[{source_name}] <input type='submit' value='Disable'></form></li>"
+            downloading_str+=f"<li><form action='/downloading/disable' method='post'>[{source_name}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{source_id}'><input type='submit' value='Disable'></form></li>"
     downloading_str += "<br/><a> Subscribed channels and playlists with disabled auto-downloading </a><br/>"
     for source_id in get_config()["channel_subscriptions"] + get_config()["playlist_subscriptions"]:
         source_name = get_channel_name(source_id) if source_id in get_config()["channel_subscriptions"] else get_playlist_name(source_id)
         if source_id in get_config()["sources_with_disabled_downloading"]:
-             downloading_str+=f"<li><form action='/downloading/enable/{source_id}' method='post'>[{source_name}] <input type='submit' value='Enable'></form></li>"
-    return subscribtion() + f"<ul>{downloading_str}</ul><br />"
+             downloading_str+=f"<li><form action='/downloading/enable' method='post'>[{source_name}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{source_id}'><input type='submit' value='Enable'></form></li>"
+    return buttons_on_top() + f"<ul>{downloading_str}</ul><br />"
 
-@app.route("/downloading/disable/<source_id>", methods=['POST'])
-def disable_downloading(source_id):
+@app.route("/downloading/disable", methods=['POST'])
+def disable_downloading():
+    source_id = request.form['source_id']
     sources_list = get_config()["sources_with_disabled_downloading"]
     if source_id not in sources_list:
         sources_list.append(source_id)
         save_config()
-    return redirect(url_for('show_downloading_status'))
+    return redirect(url_for('auto_download'))
 
-@app.route("/downloading/enable/<source_id>", methods=['POST'])
-def enable_downloading(source_id):
+@app.route("/downloading/enable", methods=['POST'])
+def enable_downloading():
+    source_id = request.form['source_id']
     sources_list = get_config()["sources_with_disabled_downloading"]
     if source_id in sources_list:
         sources_list.remove(source_id)
         save_config()
-    return redirect(url_for('show_downloading_status'))
+    return redirect(url_for('auto_download'))
 
 
 #auto-transcription management for channels and playlists
-@app.route("/auto-transcription/show")
-def show_auto_transcription_status():
+@app.route("/auto_transcription")
+def auto_transcription():
     auto_transcription_str = "<a> Subscribed sources with enabled auto-transcription </a><br/>"
     for source_id in get_config()["channel_subscriptions"] + get_config()["playlist_subscriptions"] + get_config()["rss_subscriptions"]:
         source_name = get_channel_name(source_id) if source_id in get_config()["channel_subscriptions"] else get_playlist_name(source_id) if source_id in get_config()["playlist_subscriptions"] else get_rss_name(source_id)
@@ -184,7 +178,7 @@ def show_auto_transcription_status():
     for engine,engine_text in get_engine_map().items():
         engines_str += f"<option value='{engine}' {"selected" if engine==get_config()["auto_transcript_engine"] else ""}>{engine_text}</option>"
 
-    return subscribtion() + "<ul><form action='/auto-transcription-engine' method='post'><label for='default_engine'>default transcription engine:</label>" + \
+    return buttons_on_top() + "<ul><form action='/auto-transcription-engine' method='post'><label for='default_engine'>default transcription engine:</label>" + \
            f"<select id='default_engine' name='default_engine'>{engines_str}</select><input type='submit' value='Set'></form>" + \
            f"{auto_transcription_str}</ul><br />"
 
@@ -195,7 +189,7 @@ def disable_auto_transcription():
     if source_id not in sources_list:
         sources_list.append(source_id)
         save_config()
-    return redirect(url_for('show_auto_transcription_status'))
+    return redirect(url_for('auto_transcription'))
 
 @app.route("/auto-transcription/enable", methods=['POST'])
 def enable_auto_transcription():
@@ -204,14 +198,15 @@ def enable_auto_transcription():
     if source_id in sources_list:
         sources_list.remove(source_id)
         save_config()
-    return redirect(url_for('show_auto_transcription_status'))
+    return redirect(url_for('auto_transcription'))
 
 @app.route("/auto-transcription-engine", methods=['POST'])
 def auto_transcription_engine():
     engine = request.form['default_engine']
     get_config()["auto_transcript_engine"] = engine
     save_config()
-    return redirect(url_for('show_auto_transcription_status'))
+    return redirect(url_for('auto_transcription'))
+
 
 ### video transcription
 @app.route("/transcribe/<engine>/<filename>")
@@ -248,20 +243,22 @@ def remove_transcription(filename):
 ##### rss subscriptions
 @app.route("/show_rss_list")
 def show_rss_list():
-    list_str ="<a>Input podcast RSS link</a> <br/>" + \
-              "<form action='/subscribe/rss' method='post'><input type='text' name='rss_link' class='form-control' id='rss_link'><input type='submit' value='Subscribe'></form>"
-    list_str += "<a> Subscribed RSS podcasts </a><br/>"
+    list_str = "<a> Subscribed RSS podcasts </a><br/>"
     for link in get_config()["rss_subscriptions"]:
         list_str += f"<li> <form action='/unsubscribe/rss' method='post'>[{get_rss_name(link)}]<input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Unsubscribe'></form></li>"
+    list_str +="<a>Input podcast RSS link</a> <br/>" + \
+              "<form action='/subscribe/rss' method='post'><input type='text' name='rss_link' class='form-control' id='rss_link'><input type='submit' value='Subscribe'></form>"
     list_str += "<br/><a> Other known channels </a><br/>"
     for link in get_config()["rss_names_dict"].keys():
         if  not link in get_config()["rss_subscriptions"]:
                 list_str += f"<li> <form action='/subscribe/rss' method='post'>[{get_rss_name(link)}]<input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Subscribe'></form></li>"
-    return subscribtion() + f"<ul>{list_str}</ul><br />"
+    return buttons_on_top() + f"<ul>{list_str}</ul><br />"
 
 @app.route("/subscribe/rss", methods=['POST'])
 def subscribe_rss():
     link = request.form['rss_link']
+    if get_rss_name(link)=="":
+        return buttons_on_top() + f"cannot parse the rss {link}"
     sources_list = get_config()["rss_subscriptions"]
     if link not in sources_list:
         sources_list.append(link)

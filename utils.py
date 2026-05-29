@@ -53,9 +53,9 @@ def get_channel_name(channel_id):
             save_config()
             return channel_name
         else:
-            return "<Error when fetching channel name>"
+            return ""
     except Exception as e:
-        return "<Exception when fetching channel name>"
+        return ""
 
 def get_playlist_name(playlist_id):
     playlist_names_dict = get_config()["playlist_names_dict"]
@@ -71,9 +71,9 @@ def get_playlist_name(playlist_id):
             save_config()
             return playlist_name
         else:
-            return "<Error when fetching playlist name>"
+            return ""
     except Exception as e:
-        return "<Exception when fetching playlist name>"
+        return ""
 
 def get_rss_name(link):
     rss_names_dict = get_config()["rss_names_dict"]
@@ -89,9 +89,9 @@ def get_rss_name(link):
             save_config()
             return source_name
         else:
-            return "<Error when fetching rss name>"
+            return ""
     except Exception as e:
-        return "<Exception when fetching rss name>"
+        return ""
 
 def load_source_list_from_file(filename):
     try:
