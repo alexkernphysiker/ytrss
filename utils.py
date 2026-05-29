@@ -190,7 +190,7 @@ def generate_transcriptions_page():
         title_element = entry.find("title")
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
-        if age > timedelta(days=get_config()["max_days_read_page"]):
+        if age > timedelta(days=get_config()["manual_transcript_days"]):
             continue
         if os.path.exists(transcription_path):
             output = ""

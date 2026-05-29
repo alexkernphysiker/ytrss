@@ -140,7 +140,12 @@ def auto_download():
         source_name = get_channel_name(source_id) if source_id in get_config()["channel_subscriptions"] else get_playlist_name(source_id)
         if source_id in get_config()["sources_with_disabled_downloading"]:
              downloading_str+=f"<li><form action='/downloading/enable' method='post'>[{source_name}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{source_id}'><input type='submit' value='Enable'></form></li>"
-    return buttons_on_top() + f"<ul>{downloading_str}</ul><br />"
+    return buttons_on_top() + f"<ul>" + \
+           "<form action='/download-cfg' method='post'>" + \
+           f"<label for='max_days'>Keep downloaded items (days):</label><input type='number' id='max_days' name='max_days' min='7' max='90' value='{get_config()["max_days"]}' /><br />" + \
+           f"<label for='recheck_size_days'>Check for video size change (days):</label><input type='number' id='recheck_size_days' name='recheck_size_days' min='1' max='7' value='{get_config()["recheck_size_days"]}' /><br />" + \
+            "<input type='submit' value='Save config'></form>" + \
+           f"{downloading_str}</ul><br />"
 
 @app.route("/downloading/disable", methods=['POST'])
 def disable_downloading():
@@ -158,6 +163,13 @@ def enable_downloading():
     if source_id in sources_list:
         sources_list.remove(source_id)
         save_config()
+    return redirect(url_for('auto_download'))
+@app.route("/download-cfg", methods=['POST'])
+def download_cfg():
+    cfg=get_config()
+    cfg["max_days"] = int(request.form['max_days'])
+    cfg["recheck_size_days"] = int(request.form['recheck_size_days'])
+    save_config()
     return redirect(url_for('auto_download'))
 
 
@@ -178,8 +190,12 @@ def auto_transcription():
     for engine,engine_text in get_engine_map().items():
         engines_str += f"<option value='{engine}' {"selected" if engine==get_config()["auto_transcript_engine"] else ""}>{engine_text}</option>"
 
-    return buttons_on_top() + "<ul><form action='/auto-transcription-engine' method='post'><label for='default_engine'>default transcription engine:</label>" + \
-           f"<select id='default_engine' name='default_engine'>{engines_str}</select><input type='submit' value='Set'></form>" + \
+    return buttons_on_top() + "<ul>" + \
+           "<form action='/auto-transcription-cfg' method='post'>" + \
+           f"<label for='default_engine'>default transcription engine:</label><select id='default_engine' name='default_engine'>{engines_str}</select><br />" + \
+           f"<label for='auto_transcript_hours'>auto-transcript items not older than (Hr):</label><input type='number' id='auto_transcript_hours' name='auto_transcript_hours' min='1' max='24' value='{get_config()["auto_transcript_hours"]}' /><br />" + \
+           f"<label for='manual_transcript_days'>show transcriptions not older than (days):</label><input type='number' id='manual_transcript_days' name='manual_transcript_days' min='1' max='{get_config()["max_days"]}' value='{get_config()["manual_transcript_days"]}' /><br />" + \
+            "<input type='submit' value='Save config'></form>" + \
            f"{auto_transcription_str}</ul><br />"
 
 @app.route("/auto-transcription/disable", methods=['POST'])
@@ -200,10 +216,12 @@ def enable_auto_transcription():
         save_config()
     return redirect(url_for('auto_transcription'))
 
-@app.route("/auto-transcription-engine", methods=['POST'])
-def auto_transcription_engine():
-    engine = request.form['default_engine']
-    get_config()["auto_transcript_engine"] = engine
+@app.route("/auto-transcription-cfg", methods=['POST'])
+def auto_transcription_cfg():
+    cfg=get_config()
+    cfg["auto_transcript_engine"] = request.form['default_engine']
+    cfg["auto_transcript_hours"] = int(request.form['auto_transcript_hours'])
+    cfg["manual_transcript_days"] = int(request.form['manual_transcript_days'])
     save_config()
     return redirect(url_for('auto_transcription'))
 

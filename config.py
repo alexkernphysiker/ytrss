@@ -7,7 +7,6 @@ def default_config():
         "port_public" : 2000,
         "host_public" : "",
         "max_days" : 30,
-        "max_days_read_page" : 3,
         "recheck_size_days" : 7,
         "auto_transcript_engine" : "srt",
         "auto_transcript_hours" : 12,
