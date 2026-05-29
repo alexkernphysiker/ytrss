@@ -12,7 +12,7 @@ from ytrss_transcribe import get_engine_map
 
  
 host=get_local_ip()
-port=get_config()["port"]
+port=5000
 url_link=f"http://{host}:{port}"
 
 app = Flask(__name__)
@@ -302,6 +302,10 @@ def yt_feed():
 @app.route("/file/<path:filename>.mp4")
 def download(filename):
     return return_file(filename)
+
+@app.route("/read")
+def read_transcriptions():
+    return generate_transcriptions_page()
 
 if __name__ == "__main__":
     app.run(host=host, port=port)

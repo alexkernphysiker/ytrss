@@ -197,7 +197,7 @@ def generate_transcriptions_page():
             string_list = open(transcription_path, "r").read().split('\n')
             for line in string_list:
                 if line.strip() != "":
-                    output += f"<p>{line}</p> <br/>"
+                    output += f"<p>{line}</p>"
                 else:
                     output += f"<a href='#{fn}-title'>[back]</a>"
             pubs[age] = (fn, title_element.text, output, modified_time)

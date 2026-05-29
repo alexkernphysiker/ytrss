@@ -3,9 +3,6 @@ import os
 
 def default_config():
     return {
-        "port" : 5000,
-        "port_public" : 2000,
-        "host_public" : "",
         "max_days" : 30,
         "recheck_size_days" : 7,
         "auto_transcript_engine" : "srt",
