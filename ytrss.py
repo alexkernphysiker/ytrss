@@ -172,28 +172,30 @@ def enable_downloading(source_id):
 #auto-transcription management for channels and playlists
 @app.route("/auto-transcription/show")
 def show_auto_transcription_status():
-    auto_transcription_str = subscribtion() + "<a> Subscribed channels and playlists with enabled auto-transcription </a><br/>"
-    for source_id in get_config()["channel_subscriptions"] + get_config()["playlist_subscriptions"]:
-        source_name = get_channel_name(source_id) if source_id in get_config()["channel_subscriptions"] else get_playlist_name(source_id)
+    auto_transcription_str = subscribtion() + "<a> Subscribed sources with enabled auto-transcription </a><br/>"
+    for source_id in get_config()["channel_subscriptions"] + get_config()["playlist_subscriptions"] + get_config()["rss_subscriptions"]:
+        source_name = get_channel_name(source_id) if source_id in get_config()["channel_subscriptions"] else get_playlist_name(source_id) if source_id in get_config()["playlist_subscriptions"] else get_rss_name(source_id)
         if source_id not in get_config()["sources_with_disabled_auto_transcription"]:
-            auto_transcription_str+=f"<li><form action='/auto-transcription/disable/{source_id}' method='post'>[{source_name}] <input type='submit' value='Disable'></form></li>"
-    auto_transcription_str += "<br/><a> Subscribed channels and playlists with disabled auto-transcription </a><br/>"
-    for source_id in get_config()["channel_subscriptions"] + get_config()["playlist_subscriptions"]:
-        source_name = get_channel_name(source_id) if source_id in get_config()["channel_subscriptions"] else get_playlist_name(source_id)
+            auto_transcription_str+=f"<li><form action='/auto-transcription/disable' method='post'>[{source_name}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{source_id}'> <input type='submit' value='Disable'></form></li>"
+    auto_transcription_str += "<br/><a> Subscribed sources with disabled auto-transcription </a><br/>"
+    for source_id in get_config()["channel_subscriptions"] + get_config()["playlist_subscriptions"] + get_config()["rss_subscriptions"]:
+        source_name = get_channel_name(source_id) if source_id in get_config()["channel_subscriptions"] else get_playlist_name(source_id) if source_id in get_config()["playlist_subscriptions"] else get_rss_name(source_id)
         if source_id in get_config()["sources_with_disabled_auto_transcription"]:
-             auto_transcription_str+=f"<li><form action='/auto-transcription/enable/{source_id}' method='post'>[{source_name}] <input type='submit' value='Enable'></form></li>"
+             auto_transcription_str+=f"<li><form action='/auto-transcription/enable' method='post'>[{source_name}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{source_id}'> <input type='submit' value='Enable'></form></li>"
     return f"<ul>{auto_transcription_str}</ul><br />" + subscribtion()
 
-@app.route("/auto-transcription/disable/<source_id>", methods=['POST'])
-def disable_auto_transcription(source_id):
+@app.route("/auto-transcription/disable", methods=['POST'])
+def disable_auto_transcription():
+    source_id = request.form['source_id']
     sources_list = get_config()["sources_with_disabled_auto_transcription"]
     if source_id not in sources_list:
         sources_list.append(source_id)
         save_config()
     return redirect(url_for('show_auto_transcription_status'))
 
-@app.route("/auto-transcription/enable/<source_id>", methods=['POST'])
-def enable_auto_transcription(source_id):
+@app.route("/auto-transcription/enable", methods=['POST'])
+def enable_auto_transcription():
+    source_id = request.form['source_id']
     sources_list = get_config()["sources_with_disabled_auto_transcription"]
     if source_id in sources_list:
         sources_list.remove(source_id)

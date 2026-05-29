@@ -69,8 +69,9 @@ def download_video(link, filename):
         return False
 
 def update_channels_feed():
-    print("Fetching RSS subscriptions")
+    print("Fetching podcasts RSS subscriptions")
     for link in get_config()["rss_subscriptions"]:
+        sleep(1)
         response = requests.get(link, timeout=60)
         if response.status_code == 200:
             rss = ElementTree.fromstring(response.text)
@@ -129,9 +130,22 @@ def update_channels_feed():
                             f.write(item_string)
                         modTime = mktime(insertion_date.timetuple())
                         os.utime(description_path, (modTime, modTime))
+                        if get_config()["auto_transcript_hours"] > 0:
+                            if time_since_insertion < timedelta(hours=get_config()["auto_transcript_hours"]):
+                                print(f"Processing auto-transcription for video {fn}")
+                                transcription_path = "yt-video/" + fn + ".txt"
+                                if not os.path.exists(transcription_path) and not link in get_config()["sources_with_disabled_auto_transcription"]:
+                                    video_list = load_source_list_from_file("transcription.txt")
+                                    if not fn in video_list:
+                                        print(f"Automatically scheduled video transcription {fn}")
+                                        video_list.append(fn)
+                                        save_source_list_to_file("transcription.txt", video_list)
+                                    else:
+                                        print(f"Video {fn} is already scheduled for transcription")
+                                else:
+                                    print(f"Video {fn} already has transcription")
 
-
-    print(f"Fetching channels")
+    print(f"Fetching youtube channels and playlists")
     links=[]
     for channel_id in get_config()["channel_subscriptions"]:
         links.append(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
@@ -274,21 +288,20 @@ def update_channels_feed():
                         with open(description_path, "w") as f:
                             item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
                             f.write(item_string)
-                        if get_config()["auto_transcript_hours"] > 0 and os.path.exists(file_path):
+                        if get_config()["auto_transcript_hours"] > 0:
                             if time_since_insertion < timedelta(hours=get_config()["auto_transcript_hours"]):
                                 print(f"Processing auto-transcription for video {fn}")
                                 transcription_path = "yt-video/" + fn + ".txt"
                                 if not os.path.exists(transcription_path) and not source_id in get_config()["sources_with_disabled_auto_transcription"]:
-                                    if not os.path.exists(transcription_path):
-                                        video_list = load_source_list_from_file("transcription.txt")
-                                        if not fn in video_list:
-                                            print(f"Automatically scheduled video transcription {fn}")
-                                            video_list.append(fn)
-                                            save_source_list_to_file("transcription.txt", video_list)
-                                        else:
-                                            print(f"Video {fn} is already scheduled for transcription")
-                                else:
-                                    print(f"Video {fn} already has transcription")
+                                    video_list = load_source_list_from_file("transcription.txt")
+                                    if not fn in video_list:
+                                        print(f"Automatically scheduled video transcription {fn}")
+                                        video_list.append(fn)
+                                        save_source_list_to_file("transcription.txt", video_list)
+                                    else:
+                                        print(f"Video {fn} is already scheduled for transcription")
+                            else:
+                                print(f"Video {fn} already has transcription")
                         modTime = mktime(insertion_date.timetuple())
                         os.utime(description_path, (modTime, modTime))
                         count_used += 1
