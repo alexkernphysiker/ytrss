@@ -92,11 +92,11 @@ def get_video_title_and_description(filename):
 def make_prompt(lang, summarize = False, title = "", description = ""):
             if summarize:
                 if lang == "uk":
-                    return "Це транскрипція відео. Будь ласка напиши перелік основних тез цієї розмови, уточнюючи, хто їх сказав та на що послався). Якщо виявиш неправильне написання прізвищ та інших власних назв, виправ їх у тексті. " + \
+                    return "Це транскрипція відео. Напиши стислий переказ цієї розмови уточнюючи хто озвучив наведені твердження та на що послався. Уникай мовних помилок, росіянізмів та неправильного написання власних назв. " + \
                            (f"Назва відео: \"{title}\". " if title!="" else "") + \
                            (f"Опис відео: \"{description}\". " if description!="" else "")
                 elif lang == "pl":
-                    return "To jest transkrypcja filmu. Zrób proszę streszczenie owej rozmowy podając jej tezy, kto je powiedział i na co się odwołał. " + \
+                    return "To jest transkrypcja filmu. Zrób proszę streszczenie owej rozmowy wyjaśniając skąd się bierzą podawane twierdzenia (kto mówi, na co się odwołuje). " + \
                            (f"Nazwa filmu: \"{title}\". " if title!="" else "") + \
                            (f"Opis filmu: \"{description}\". " if description!="" else "")
                 else:
@@ -105,7 +105,7 @@ def make_prompt(lang, summarize = False, title = "", description = ""):
                            (f"Video descriptions: \"{description}\". " if description!="" else "")
             else:
                 if lang == "uk":
-                    return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци та розділи. Якщо в тексті є якісь слова чи фрази російською - скоріше за все - це помилки розпізнавання мови. Переклади їх українською та заміни. Якщо можливо, також виділи репліки різних мовців. Якщо виявиш неправильне написання прізвищ та інших власних назв, виправ їх у тексті. " + \
+                    return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци та розділи. Якщо можливо, також виділи репліки різних мовців. Уникай мовних помилок, росіянізмів та неправильного написання власних назв. " + \
                             (f"Назва відео: \"{title}\". " if title!="" else "") + \
                             (f"Опис відео: \"{description}\". " if description!="" else "")
                 elif lang == "pl":
