@@ -193,7 +193,7 @@ def auto_transcription():
     return buttons_on_top() + "<ul>" + \
            "<form action='/auto-transcription-cfg' method='post'>" + \
            f"<label for='default_engine'>default transcription engine:</label><select id='default_engine' name='default_engine'>{engines_str}</select><br />" + \
-           f"<label for='auto_transcript_hours'>auto-transcript items not older than (Hr):</label><input type='number' id='auto_transcript_hours' name='auto_transcript_hours' min='1' max='24' value='{get_config()["auto_transcript_hours"]}' /><br />" + \
+           f"<label for='auto_transcript_hours'>auto-transcript items not older than (Hr):</label><input type='number' id='auto_transcript_hours' name='auto_transcript_hours' min='3' max='24' value='{get_config()["auto_transcript_hours"]}' /><br />" + \
            f"<label for='manual_transcript_days'>show transcriptions not older than (days):</label><input type='number' id='manual_transcript_days' name='manual_transcript_days' min='1' max='{get_config()["max_days"]}' value='{get_config()["manual_transcript_days"]}' /><br />" + \
             "<input type='submit' value='Save config'></form>" + \
            f"{auto_transcription_str}</ul><br />"
@@ -266,7 +266,7 @@ def show_rss_list():
         list_str += f"<li> <form action='/unsubscribe/rss' method='post'>[{get_rss_name(link)}]<input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Unsubscribe'></form></li>"
     list_str +="<a>Input podcast RSS link</a> <br/>" + \
               "<form action='/subscribe/rss' method='post'><input type='text' name='rss_link' class='form-control' id='rss_link'><input type='submit' value='Subscribe'></form>"
-    list_str += "<br/><a> Other known channels </a><br/>"
+    list_str += "<br/><a> Other known podcasts </a><br/>"
     for link in get_config()["rss_names_dict"].keys():
         if  not link in get_config()["rss_subscriptions"]:
                 list_str += f"<li> <form action='/subscribe/rss' method='post'>[{get_rss_name(link)}]<input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Subscribe'></form></li>"

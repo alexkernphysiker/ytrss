@@ -18,7 +18,7 @@ def get_engine_map():
             "gemini_t": "Transcribe with Gemini", 
             "openai_t": "Transcribe with OpenAI",
             "claude_t": "Transcribe with Claude",
-            "srt":"filtered srt",
+            "srt":"Just download subtitles from YT",
             }
 
 def download_subtitles(filename):
@@ -178,10 +178,13 @@ def run_openai(filename, summarize):
         description_path = "yt-video/" + filename + ".desc"
         video_path = "yt-video/" + filename
         lang = detect_language(description_path) or "en"
-        description_path = "yt-video/" + filename + ".desc"
         text = download_subtitles(filename)
+        modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
+        age = datetime.now() - modified_time
 
         if text=="":
+            if age < timedelta(hours=3):
+                return ""
             if os.path.exists(video_path):
                 mp3_path = convert_video_to_audio(video_path)
             else:
@@ -221,17 +224,22 @@ def run_gemini(filename, summarize):
     from google import genai
     from google.genai import types
     client = genai.Client()
-    lang = detect_language("yt-video/" + filename + ".desc") or "en"
+    description_path = "yt-video/" + filename + ".desc"
+    lang = detect_language(description_path) or "en"
     srt = download_subtitles(filename)
+    modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
+    age = datetime.now() - modified_time
     title, description = get_video_title_and_description(filename)
     if srt == "":
+        if age < timedelta(hours=3):
+            return ""
         if lang == "uk":
             prompt = "Будь ласка, транскрибуй це відео."
         elif lang == "pl":
             prompt = "Proszę, przetranskrybuj ten film."
         else:        
             prompt = "Please transcribe the video."
-        youtube_link = get_video_link("yt-video/" + filename + ".desc")
+        youtube_link = get_video_link(description_path)
         if youtube_link is None:
             return "transcription of downloaded audio is not implemented for Gemini"
         else:
@@ -271,6 +279,9 @@ def run_claude(filename, summarize=False):
     from anthropic.types.messages.batch_create_params import Request
     client = anthropic.Client()
     max_tokens = 100000
+    description_path = "yt-video/" + filename + ".desc"
+    modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
+    age = datetime.now() - modified_time
     title, description = get_video_title_and_description(filename)
     output=""
     srt = download_subtitles(filename)
