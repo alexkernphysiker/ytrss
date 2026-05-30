@@ -15,9 +15,9 @@ def get_engine_map():
             "gemini_s": "Summarize with Gemini", 
             "openai_s": "Summarize with OpenAI", 
             "claude_s": "Summarize with Claude",
-            "gemini_t": "Transcript with Gemini", 
-            "openai_t": "Transcript with OpenAI",
-            "claude_t": "Improve subtitles with Claude",
+            "gemini_t": "Transcribe with Gemini", 
+            "openai_t": "Transcribe with OpenAI",
+            "claude_t": "Transcribe with Claude",
             "srt":"filtered srt",
             }
 
