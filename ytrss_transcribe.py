@@ -276,7 +276,7 @@ def run_claude(filename, summarize=False):
     srt = download_subtitles(filename)
     if srt == "":
         return "Claude engine requires subtitles"
-    for chunk_srt in filter_subs(srt, max_length=30000):
+    for chunk_srt in filter_subs(srt):
         messages=[
                 {
                     "role": "user",
