@@ -20,7 +20,7 @@ def get_engine_map():
             "claude_t": "Transcribe with Claude",
             "srt":"Just download subtitles from YT",
             }
-wait_for_subtitles_hours = 3
+
 def download_subtitles(filename):
         description_path = "yt-video/" + filename + ".desc"
         link = get_video_link(description_path)
@@ -183,7 +183,7 @@ def run_openai(filename, summarize):
         age = datetime.now() - modified_time
 
         if text=="":
-            if age < timedelta(hours=wait_for_subtitles_hours) and get_video_link(description_path)!="":
+            if age < timedelta(hours=get_config()["wait_for_subtitles_hours"]) and get_video_link(description_path)!="":
                 return ""
             if os.path.exists(video_path):
                 mp3_path = convert_video_to_audio(video_path)
@@ -231,7 +231,7 @@ def run_gemini(filename, summarize):
     age = datetime.now() - modified_time
     title, description = get_video_title_and_description(filename)
     if srt == "":
-        if age < timedelta(hours=wait_for_subtitles_hours) and get_video_link(description_path)!="":
+        if age < timedelta(hours=get_config()["wait_for_subtitles_hours"]) and get_video_link(description_path)!="":
             return ""
         if lang == "uk":
             prompt = "Будь ласка, транскрибуй це відео."

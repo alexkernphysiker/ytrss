@@ -7,6 +7,7 @@ def default_config():
         "recheck_size_days" : 7,
         "auto_transcript_engine" : "srt",
         "auto_transcript_hours" : 12,
+        "wait_for_subtitles_hours" : 3,
         "manual_transcript_days" : 7,
         "channel_subscriptions" : [],
         "playlist_subscriptions" : [],
