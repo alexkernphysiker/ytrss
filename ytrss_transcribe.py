@@ -244,7 +244,7 @@ def run_gemini(filename, summarize):
             return "transcription of downloaded audio is not implemented for Gemini"
         else:
             response = client.models.generate_content(
-                model='gemini-3-flash-preview',
+                model='gemini-3.5-flash',
                 contents=types.Content(
                     parts=[
                         types.Part(file_data=types.FileData(file_uri=youtube_link)),
@@ -258,7 +258,7 @@ def run_gemini(filename, summarize):
     text = ""
     for chunk in filter_subs(srt):
             response = client.models.generate_content(
-                model='gemini-3-flash-preview',
+                model='gemini-3.5-flash',
                 contents=types.Content(
                     parts=[
                         types.Part(text=make_prompt(lang, summarize = summarize)),
