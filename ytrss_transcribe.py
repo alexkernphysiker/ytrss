@@ -1,4 +1,5 @@
 from email.mime import text
+from time import sleep
 from http import client
 from http import client
 import os
@@ -211,7 +212,7 @@ def run_openai(filename, summarize):
         title, descr = get_video_title_and_description(filename)
         for chunk in filter_subs(text):
                 response = client.responses.create(
-                    model="gpt-5.2",
+                    model="gpt-5.6",
                     input= make_prompt(lang, summarize, title=title, description=descr) + ":\n\n" + text
                 )
                 text = ""
@@ -243,8 +244,9 @@ def run_gemini(filename, summarize):
         if youtube_link is None:
             return "transcription of downloaded audio is not implemented for Gemini"
         else:
+            sleep(60)
             response = client.models.generate_content(
-                model='gemini-3.5-flash',
+                model='gemini-3.6-flash',
                 contents=types.Content(
                     parts=[
                         types.Part(file_data=types.FileData(file_uri=youtube_link)),
@@ -257,8 +259,9 @@ def run_gemini(filename, summarize):
 
     text = ""
     for chunk in filter_subs(srt):
+            sleep(60)
             response = client.models.generate_content(
-                model='gemini-3.5-flash',
+                model='gemini-3.6-flash',
                 contents=types.Content(
                     parts=[
                         types.Part(text=make_prompt(lang, summarize = summarize)),
@@ -301,7 +304,7 @@ def run_claude(filename, summarize=False):
         ]
 
         with client.messages.stream(
-            model="claude-opus-4-7",
+            model="claude-opus-5",
             max_tokens=max_tokens,
             messages=messages
         ) as stream:
