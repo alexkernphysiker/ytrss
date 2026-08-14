@@ -14,10 +14,10 @@ import json
 def get_engine_map():
     return {
             "gemini_s": "Summarize with Gemini", 
-            "openai_s": "Summarize with OpenAI", 
+            #"openai_s": "Summarize with OpenAI", 
             "claude_s": "Summarize with Claude",
             "gemini_t": "Transcribe with Gemini", 
-            "openai_t": "Transcribe with OpenAI",
+            #"openai_t": "Transcribe with OpenAI",
             "claude_t": "Transcribe with Claude",
             "srt":"Just download subtitles from YT",
             }
