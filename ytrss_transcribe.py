@@ -1,5 +1,4 @@
 from email.mime import text
-from time import sleep
 from http import client
 from http import client
 import os
@@ -244,7 +243,6 @@ def run_gemini(filename, summarize):
         if youtube_link is None:
             return "transcription of downloaded audio is not implemented for Gemini"
         else:
-            sleep(60)
             response = client.models.generate_content(
                 model='gemini-3.6-flash',
                 contents=types.Content(
@@ -259,7 +257,6 @@ def run_gemini(filename, summarize):
 
     text = ""
     for chunk in filter_subs(srt):
-            sleep(60)
             response = client.models.generate_content(
                 model='gemini-3.6-flash',
                 contents=types.Content(
