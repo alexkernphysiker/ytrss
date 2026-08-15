@@ -220,7 +220,22 @@ def run_openai(filename, summarize):
                         text += content_item.text
         return text
 
+def download_audio_file(url, filename):
+    audio_file_path = "yt-video/" + filename + ".mp3"
+    if os.path.exists(audio_file_path):
+        print(f"Audio file {audio_file_path} already exists, skipping download.")
+        return audio_file_path
+    command = f"yt-dlp -x --audio-format mp3 -o '{audio_file_path}' {url.split('?')[0]}"
+    subprocess.call(command, shell=True)
+    if os.path.exists(audio_file_path):
+        modTime = os.path.getmtime("yt-video/" + filename + ".desc")
+        os.utime(audio_file_path, (modTime, modTime))
+        return audio_file_path
+    else:
+        return None
+
 def run_gemini(filename, summarize):
+    gemini_model = "gemini-3.6-flash"
     from google import genai
     from google.genai import types
     client = genai.Client()
@@ -231,8 +246,6 @@ def run_gemini(filename, summarize):
     age = datetime.now() - modified_time
     title, description = get_video_title_and_description(filename)
     if srt == "":
-        if age < timedelta(hours=get_config()["wait_for_subtitles_hours"]) and get_video_link(description_path)!="":
-            return ""
         if lang == "uk":
             prompt = "Будь ласка, транскрибуй це відео."
         elif lang == "pl":
@@ -241,10 +254,28 @@ def run_gemini(filename, summarize):
             prompt = "Please transcribe the video."
         youtube_link = get_video_link(description_path)
         if youtube_link is None:
-            return "transcription of downloaded audio is not implemented for Gemini"
+            audio_file_path = download_audio_file(get_enclosure_link(filename), filename)
+            if audio_file_path is None or not os.path.exists(audio_file_path):
+                return f"Audio file not found {audio_file_path}"    
+            audio_file = client.files.upload(file=audio_file_path)
+            try:
+                response = client.models.generate_content(
+                    model=gemini_model,
+                    contents=[
+                        audio_file, 
+                        prompt
+                    ]
+                )
+                srt = response.text
+            except Exception as e:
+                return f"Transcription error: {e}"
+            finally:
+                client.files.delete(name=audio_file.name)
         else:
+            if age < timedelta(hours=get_config()["wait_for_subtitles_hours"]) and get_video_link(description_path)!="":
+                return ""
             response = client.models.generate_content(
-                model='gemini-3.6-flash',
+                model=gemini_model,
                 contents=types.Content(
                     parts=[
                         types.Part(file_data=types.FileData(file_uri=youtube_link)),
@@ -258,7 +289,7 @@ def run_gemini(filename, summarize):
     text = ""
     for chunk in filter_subs(srt):
             response = client.models.generate_content(
-                model='gemini-3.6-flash',
+                model=gemini_model,
                 contents=types.Content(
                     parts=[
                         types.Part(text=make_prompt(lang, summarize = summarize)),
