@@ -178,7 +178,7 @@ def generate_atom_feed(url_link, is_public):
     output += "</feed>\n"
     return output
 
-def generate_transcriptions_page():
+def generate_transcriptions_page(url_link):
     pubs = {}
     for description_path in Path("yt-video").glob("*.desc"):
         transcription_path = str(description_path).replace(".desc", ".txt")
@@ -192,15 +192,18 @@ def generate_transcriptions_page():
         age = datetime.now() - modified_time
         if age > timedelta(days=get_config()["manual_transcript_days"]):
             continue
+        listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
+        output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
+        output += f"<a href='#{fn}-title'>[back]</a>"
         if os.path.exists(transcription_path):
-            output = ""
             string_list = open(transcription_path, "r").read().split('\n')
             for line in string_list:
                 if line.strip() != "":
                     output += f"<p>{line}</p>"
-                else:
-                    output += f"<a href='#{fn}-title'>[back]</a>"
-            pubs[age] = (fn, title_element.text, output, modified_time)
+        else:
+            output += "<p>[No transcription available]</p>"
+            output += (entry.find("summary").text if entry.find("summary") is not None else "")   
+        pubs[age] = (fn, title_element.text, output, modified_time)
     asc = {k: v for k, v in sorted(pubs.items(), key=lambda item: item[0])}
     titles = ""
     output = ""

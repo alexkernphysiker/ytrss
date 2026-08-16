@@ -195,6 +195,7 @@ def auto_transcription():
            f"<label for='default_engine'>default transcription engine:</label><select id='default_engine' name='default_engine'>{engines_str}</select><br />" + \
            f"<label for='auto_transcript_hours'>auto-transcript items not older than (Hr):</label><input type='number' id='auto_transcript_hours' name='auto_transcript_hours' min='3' max='24' value='{get_config()["auto_transcript_hours"]}' /><br />" + \
            f"<label for='manual_transcript_days'>show transcriptions not older than (days):</label><input type='number' id='manual_transcript_days' name='manual_transcript_days' min='1' max='{get_config()["max_days"]}' value='{get_config()["manual_transcript_days"]}' /><br />" + \
+           f"<label for='wait_for_subtitles_hours'>wait for subtitles (Hr):</label><input type='number' id='wait_for_subtitles_hours' name='wait_for_subtitles_hours' min='0' max='6' value='{get_config()["wait_for_subtitles_hours"]}' /><br />" + \
             "<input type='submit' value='Save config'></form>" + \
            f"{auto_transcription_str}</ul><br />"
 
@@ -222,6 +223,7 @@ def auto_transcription_cfg():
     cfg["auto_transcript_engine"] = request.form['default_engine']
     cfg["auto_transcript_hours"] = int(request.form['auto_transcript_hours'])
     cfg["manual_transcript_days"] = int(request.form['manual_transcript_days'])
+    cfg["wait_for_subtitles_hours"] = int(request.form['wait_for_subtitles_hours'])
     save_config()
     return redirect(url_for('auto_transcription'))
 
@@ -305,7 +307,8 @@ def download(filename):
 
 @app.route("/read")
 def read_transcriptions():
-    return generate_transcriptions_page()
+    global url_link
+    return generate_transcriptions_page(url_link)
 
 if __name__ == "__main__":
     app.run(host=host, port=port)
