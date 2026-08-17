@@ -183,15 +183,11 @@ def generate_transcriptions_page(url_link):
     for description_path in Path("yt-video").glob("*.desc"):
         transcription_path = str(description_path).replace(".desc", ".txt")
         fn = os.path.basename(description_path).replace(".desc", "")
-        if "patreon" in fn:
-            continue
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
         entry = etree.parse(description_path, parser1)
         title_element = entry.find("title")
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
-        if age > timedelta(days=get_config()["manual_transcript_days"]):
-            continue
         listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
         output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
         output += f"<a href='#{fn}-title'>[back]</a>"
