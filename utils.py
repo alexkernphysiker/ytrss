@@ -190,7 +190,7 @@ def generate_transcriptions_page(url_link):
         age = datetime.now() - modified_time
         listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
         output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
-        output += f"<a href='#{fn}-title'>[back]</a>"
+        output += f"<br/><a href='#{fn}-end'>[next]</a>"
         if os.path.exists(transcription_path):
             string_list = open(transcription_path, "r").read().split('\n')
             for line in string_list:
@@ -201,13 +201,10 @@ def generate_transcriptions_page(url_link):
             output += (entry.find("summary").text if entry.find("summary") is not None else "")   
         pubs[age] = (fn, title_element.text, output, modified_time)
     asc = {k: v for k, v in sorted(pubs.items(), key=lambda item: item[0])}
-    titles = ""
     output = ""
     for age, (fn, title, content, modified_time) in asc.items():
-        titles += f"<li><div id='{fn}-title'><a href='#{fn}'>[{modified_time.strftime('%Y-%m-%d %H:%M')}]{title}</a><br/></div></li>"
-        content = content
-        output += f"<div id='{fn}'> <h2><li>{title}</li></h2><br/>{content}<br/> <a href='#{fn}-title'>Back to top</a></div>"
-    return f"<html><body><h1>List of transcribed videos</h1><ul>{titles}</ul> <h1>Transcriptions</h1><ul>{output}</ul></body></html>"
+        output += f"<div id='{fn}'> <h2><li>{title}</li></h2><br/>{content}<br/></div><br/><div id='{fn}-end'><a href='#{fn}'>[back]</a></div><br/>"
+    return f"<html><body><h1>Youtube videos and podcasts</h1><ul>{output}</ul></body></html>"
 
 def return_file(filename):
     return send_file("yt-video/"+filename)
