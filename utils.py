@@ -203,7 +203,7 @@ def generate_transcriptions_page(url_link):
     asc = {k: v for k, v in sorted(pubs.items(), key=lambda item: item[0])}
     output = ""
     for age, (fn, title, content, modified_time) in asc.items():
-        output += f"<div id='{fn}'> <h2><li>{title}</li></h2><br/>{content}<br/></div><br/><div id='{fn}-end'><a href='#{fn}'>[back]</a></div><br/>"
+        output += f"<div id='{fn}'> <h2><li>{title} ({modified_time})</li></h2><br/>{content}<br/></div><br/><div id='{fn}-end'><a href='#{fn}'>[back]</a></div><br/>"
     return f"<html><body><h1>Youtube videos and podcasts</h1><ul>{output}</ul></body></html>"
 
 def return_file(filename):

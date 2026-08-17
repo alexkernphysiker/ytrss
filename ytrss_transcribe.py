@@ -221,6 +221,8 @@ def run_openai(filename, summarize):
         return text
 
 def download_audio_file(url, filename):
+    if filename is None:
+        return None
     audio_file_path = "yt-video/" + filename + ".mp3"
     if os.path.exists(audio_file_path):
         print(f"Audio file {audio_file_path} already exists, skipping download.")
@@ -256,7 +258,7 @@ def run_gemini(filename, summarize):
         if youtube_link is None:
             audio_file_path = download_audio_file(get_enclosure_link(filename), filename)
             if audio_file_path is None or not os.path.exists(audio_file_path):
-                return f"Audio file not found {audio_file_path}"    
+                return ""
             audio_file = client.files.upload(file=audio_file_path)
             try:
                 response = client.models.generate_content(
@@ -283,7 +285,9 @@ def run_gemini(filename, summarize):
                     ]
                 )
             )
-            srt = response.text 
+            srt = response.text
+        if srt is None:
+            return ""
         save_subtitles(filename=filename, text= "Transcribed from video link by Gemini:\n"+ srt)
 
     text = ""
