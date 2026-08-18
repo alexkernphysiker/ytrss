@@ -36,7 +36,7 @@ def download_video(link, filename):
     print(f"Trying to download video {filename}...")
     proc = subprocess.run(f"yt-dlp -o {filename}.dl {link}", shell=True, capture_output=True)
     for file in Path(".").glob(filename + ".dl*"):
-        subprocess.run(f"ffmpeg -i {file} -vf 'scale=640x360' -r 5 -c:v libx264 -b:v 600k -b:a 44100 -ac 2 -ar 22050 -tune fastdecode -preset ultrafast {filename}.mp4", shell=True, capture_output=True)
+        subprocess.run(f"ffmpeg -i {file} -vf 'scale=600x310' -c:v libx264 {filename}.mp4", shell=True, capture_output=True)
         if os.path.exists(filename + ".mp4"):
             os.rename(filename + ".mp4", filename)
             file.unlink()
