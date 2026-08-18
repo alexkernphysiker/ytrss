@@ -190,6 +190,8 @@ def generate_transcriptions_page(url_link):
         age = datetime.now() - modified_time
         listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
         output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
+        enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""
+        output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
         output += f"<br/><a href='#{fn}-end'>[next]</a>"
         if os.path.exists(transcription_path):
             string_list = open(transcription_path, "r").read().split('\n')

@@ -14,7 +14,6 @@ from random import shuffle
 from utils import *
 from config import *
 
-
 def cleanup():
     now = arrow.now()
     for file in Path("yt-video").glob("*"):
@@ -23,9 +22,6 @@ def cleanup():
             if now - file_time > timedelta(days=get_config()["max_days"]):
                 print(f"Removing old video file: {file}")
                 file.unlink()
-
-
-format = "18/93/139/140/249/251"
 
 def is_live(link):
     try:
@@ -36,30 +32,24 @@ def is_live(link):
         print(f"Error occurred while trying to check if video {link} is live: {str(e)}")
         return False
 
-
-def get_yt_file_size(link):
-    try:
-        proc = subprocess.run("yt-dlp  -f " + format + " --print \"%(filesize,filesize_approx)s\" "+link, shell=True, capture_output=True)
-        return int(proc.stdout.decode().strip())
-    except Exception as e:
-        print(f"Error occurred while trying to get file size for video {link}: {str(e)}")
-        return 0
-
-def get_file_duration(link):
-    try:
-        proc = subprocess.run("yt-dlp  -f " + format + " --print \"%(duration)s\" "+link, shell=True, capture_output=True)
-        return proc.stdout.decode().strip()
-    except Exception as e:
-        print(f"Error occurred while trying to get duration for video {link}: {str(e)}")
-        return ""
 def download_video(link, filename):
-    print(f"Trying to download video {filename} with format {format}...")
-    proc = subprocess.run("yt-dlp -f " + format + " -o " + filename + " "+link, shell=True, capture_output=True)
+    print(f"Trying to download video {filename}...")
+    proc = subprocess.run(f"yt-dlp -o {filename}.dl {link}", shell=True, capture_output=True)
+    for file in Path(".").glob(filename + ".dl*"):
+        subprocess.run(f"ffmpeg -i {file} -vf 'scale=640x360' -r 5 -c:v libx264 -b:v 600k -b:a 44100 -ac 2 -ar 22050 -tune fastdecode -preset ultrafast {filename}.mp4", shell=True, capture_output=True)
+        if os.path.exists(filename + ".mp4"):
+            os.rename(filename + ".mp4", filename)
+            file.unlink()
+            break
+        else:
+            print(f"Failed to convert {file} to {filename}.mp4")
+            return False
+
     if os.path.exists(filename):
-        print(f"Successfully downloaded video {filename } with format {format}")   
+        print(f"Successfully downloaded video {filename }")   
         return True
     else:
-        print(f"Failed to download video {filename} with format {format}. yt-dlp output: {proc.stderr.decode()}")
+        print(f"Failed to download video {filename}. yt-dlp output: {proc.stderr.decode()}")
         if re.search('premiere', proc.stderr.decode(), re.IGNORECASE):
             print(f"Video {filename} is a future premiere, skipping item.")
             return False
@@ -151,7 +141,7 @@ def update_channels_feed():
         links.append(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
     for playlist_id in get_config()["playlist_subscriptions"]:
         links.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}")
-    shuffle(links)
+    #shuffle(links)
     for link in links:
         sleep(1)
         try:
@@ -208,39 +198,7 @@ def update_channels_feed():
                         file_path = "yt-video/" + fn
                         description_path = "yt-video/" + fn + ".desc"
                         if os.path.exists(file_path):
-                            if time_since_insertion < timedelta(days=get_config()["recheck_size_days"]):
-                                file_size_yt = get_yt_file_size(link_element.get("href"))
-                                sleep(1)
-                                file_duration_yt = get_file_duration(link_element.get("href"))
-                                try:
-                                    duration_secs = int(file_duration_yt)
-                                    duration_string_element = ElementTree.SubElement(entry_element, "duration")
-                                    duration_string_element.text = duration_string(duration_secs)
-                                    duration_string_element2 = ElementTree.SubElement(entry_element, "itunes:duration")
-                                    duration_string_element2.text = duration_string(duration_secs)
-                                except:
-                                    print(f"Could not parse duration for video {fn}, skipping duration string")
-                                if file_size_yt > 0:
-                                    try:
-                                        file_size = os.path.getsize(file_path)
-                                    except OSError:
-                                        print(f"Error occurred while trying to get size of existing file for video {fn}")
-                                        file_size = 0
-                                    if file_size_yt != file_size:
-                                        print(f"File for video {fn} has different size than expected, redownloading...")
-                                        os.remove(file_path)
-                                        sleep(1)
-                                        if not download_video(link_element.get("href"), file_path):
-                                            print(f"Failed to download video {fn}, skipping item.")
-                                            continue
-                                    else:
-                                        print(f"Existing file for video {fn} is of expected size, using existing file")
-                                else:
-                                    print(f"Could not get expected file size for video {fn}, skip updating")
-                                    continue
-                            else:
-                                print(f"Video {fn} is old enough, skip updating")
-                                continue
+                            print(f"Existing file for video {fn} found")
                         else:
                             sleep(1)
                             if is_live(link_element.get("href")):

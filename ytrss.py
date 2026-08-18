@@ -143,7 +143,6 @@ def auto_download():
     return buttons_on_top() + f"<ul>" + \
            "<form action='/download-cfg' method='post'>" + \
            f"<label for='max_days'>Keep downloaded items (days):</label><input type='number' id='max_days' name='max_days' min='7' max='90' value='{get_config()["max_days"]}' /><br />" + \
-           f"<label for='recheck_size_days'>Check for video size change (days):</label><input type='number' id='recheck_size_days' name='recheck_size_days' min='1' max='7' value='{get_config()["recheck_size_days"]}' /><br />" + \
             "<input type='submit' value='Save config'></form>" + \
            f"{downloading_str}</ul><br />"
 
@@ -168,7 +167,6 @@ def enable_downloading():
 def download_cfg():
     cfg=get_config()
     cfg["max_days"] = int(request.form['max_days'])
-    cfg["recheck_size_days"] = int(request.form['recheck_size_days'])
     save_config()
     return redirect(url_for('auto_download'))
 
