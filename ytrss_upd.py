@@ -36,27 +36,16 @@ def download_video(link, filename):
     print(f"Trying to download video {filename}...")
     proc = subprocess.run(f"yt-dlp -o {filename}.dl {link}", shell=True, capture_output=True)
     for file in Path(".").glob(filename + ".dl*"):
-        subprocess.run(f"ffmpeg -i {file} -vf 'scale=600x310' -c:v libx264 {filename}.mp4", shell=True, capture_output=True)
+        subprocess.run(f"ffmpeg -i {file}  -preset veryfast -vf scale=-2:320,format=yuv420p,fps=30  {filename}.mp4", shell=True, capture_output=True)
         if os.path.exists(filename + ".mp4"):
             os.rename(filename + ".mp4", filename)
             file.unlink()
-            break
+            return True
         else:
             print(f"Failed to convert {file} to {filename}.mp4")
             return False
-
-    if os.path.exists(filename):
-        print(f"Successfully downloaded video {filename }")   
-        return True
-    else:
-        print(f"Failed to download video {filename}. yt-dlp output: {proc.stderr.decode()}")
-        if re.search('premiere', proc.stderr.decode(), re.IGNORECASE):
-            print(f"Video {filename} is a future premiere, skipping item.")
-            return False
-        if re.search('live', proc.stderr.decode(), re.IGNORECASE):
-            print(f"Video {filename} is a future live, skipping item.")
-            return False
-        return False
+    print(f"Failed to download video {filename}. yt-dlp output: {proc.stderr.decode()}")
+    return False
 
 def update_channels_feed():
     print("Fetching podcasts RSS subscriptions")
