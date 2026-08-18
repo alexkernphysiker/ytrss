@@ -141,7 +141,7 @@ def update_channels_feed():
         links.append(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
     for playlist_id in get_config()["playlist_subscriptions"]:
         links.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}")
-    #shuffle(links)
+    shuffle(links)
     for link in links:
         sleep(1)
         try:
