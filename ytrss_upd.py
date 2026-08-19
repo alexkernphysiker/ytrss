@@ -36,7 +36,7 @@ def download_video(link, filename):
     print(f"Trying to download video {filename}...")
     proc = subprocess.run(f"yt-dlp -o {filename}.dl {link}", shell=True, capture_output=True)
     for file in Path(".").glob(filename + ".dl*"):
-        subprocess.run(f"ffmpeg -i {file}  -preset veryfast -vf scale=-2:200,format=yuv420p,fps=30  {filename}.mp4", shell=True, capture_output=True)
+        subprocess.run(f"HandBrakeCLI -i {file}  -T -w 480 -l 270 -r 25  -o {filename}.mp4", shell=True, capture_output=True)
         if os.path.exists(filename + ".mp4"):
             os.rename(filename + ".mp4", filename)
             file.unlink()
@@ -189,13 +189,11 @@ def update_channels_feed():
                         if os.path.exists(file_path):
                             print(f"Existing file for video {fn} found")
                         else:
-                            sleep(1)
                             if is_live(link_element.get("href")):
                                 print(f"Video {fn} is currently live, skipping item.")
                                 continue
                             if source_id not in get_config()["sources_with_disabled_downloading"]:
                                 print(f"No existing file for video {fn}, downloading...")
-                                sleep(1)
                                 if not download_video(link_element.get("href"), file_path):
                                     print(f"Failed to download video {fn}, skipping item.")
                                     continue
