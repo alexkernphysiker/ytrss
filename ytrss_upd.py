@@ -33,14 +33,14 @@ def is_live(link):
         return False
 
 def download_video(link, filename):
-    for res in ["360", "240", "144", "480", "720"]:
-        print(f"Trying to download video {filename} with resolution {res}p...")
-        proc = subprocess.run(f"yt-dlp -S res:{res} -o {filename}.dl {link}", shell=True, capture_output=True)
+    for params in ["-S res:360", "-S res:240", "-S res:144", "-S res:480", "-S res:720", "-x"]:
+        print(f"Trying to download video {filename} with parameters {params}p...")
+        proc = subprocess.run(f"yt-dlp {params} -o {filename}.dl {link}", shell=True, capture_output=True)
         for file in Path(".").glob(filename + ".dl*"):
             os.rename(file, filename)
-            print(f"Successfully downloaded video {filename} with resolution {res}p.")
+            print(f"Successfully downloaded video {filename} with parameters {params}p.")
             return True
-        print(f"Failed to download video {filename} with resolution {res}. yt-dlp output: {proc.stderr.decode()}")
+        print(f"Failed to download video {filename} with parameters {params}. yt-dlp output: {proc.stderr.decode()}")
     print(f"Failed to download video {filename} with all attempted resolutions.")
     return False
 
