@@ -38,6 +38,7 @@ def download_video(link, filename):
         proc = subprocess.run(f"yt-dlp -S res:{res} -o {filename}.dl {link}", shell=True, capture_output=True)
         for file in Path(".").glob(filename + ".dl*"):
             os.rename(file, filename)
+            print(f"Successfully downloaded video {filename} with resolution {res}p.")
             return True
         print(f"Failed to download video {filename} with resolution {res}. yt-dlp output: {proc.stderr.decode()}")
     print(f"Failed to download video {filename} with all attempted resolutions.")
