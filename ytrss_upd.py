@@ -192,7 +192,8 @@ def update_channels_feed():
                             if source_id not in get_config()["sources_with_disabled_downloading"]:
                                 print(f"No existing file for video {fn}, downloading...")
                                 if not download_video(link_element.get("href"), file_path):
-                                    print(f"Failed to download video {fn}")
+                                    print(f"Failed to download video {fn}, skipping item.")
+                                    continue
                             else:
                                 print(f"Downloading is disabled for source {source_id}")
                         if os.path.exists(file_path):
