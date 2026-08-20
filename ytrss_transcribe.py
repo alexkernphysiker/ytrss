@@ -172,6 +172,13 @@ def run_srt(filename):
     for chunk in filter_subs(download_subtitles(filename), max_length=0):
         return chunk
 
+def write_log(filename, message):
+    log_path = "yt-video/" + filename + ".log"
+    with open(log_path, "w") as f:
+        f.write(message)
+    modTime = os.path.getmtime("yt-video/" + filename + ".desc")
+    os.utime(log_path, (modTime, modTime))
+
 def run_openai(filename, summarize):
         from openai import OpenAI
         client = OpenAI()
@@ -209,12 +216,11 @@ def run_openai(filename, summarize):
                 text += ".\n"
             save_subtitles(filename=filename, text= "Transcribed from mp3 by OpenAI:\n"+ text)
         title, descr = get_video_title_and_description(filename)
+        text = ""
         for chunk in filter_subs(text):
                 response = client.responses.create(
                     model="gpt-5.6",
                     input= make_prompt(lang, summarize, title=title, description=descr) + ":\n\n" + text
-                )
-                text = ""
                 for output_item in response.output:
                     for content_item in output_item.content:
                         text += content_item.text
@@ -270,7 +276,8 @@ def run_gemini(filename, summarize):
                 )
                 srt = response.text
             except Exception as e:
-                return f"Transcription error: {e}"
+                write_log(filename, f"Transcription error: {str(e)}")
+                return ""
             finally:
                 client.files.delete(name=audio_file.name)
         else:
@@ -287,6 +294,7 @@ def run_gemini(filename, summarize):
             )
             srt = response.text
         if srt is None:
+            write_log(filename, "Transcription error: Failed to generate transcription.")
             return ""
         save_subtitles(filename=filename, text= "Transcribed from video link by Gemini:\n"+ srt)
 
@@ -321,7 +329,8 @@ def run_claude(filename, summarize=False):
     output=""
     srt = download_subtitles(filename)
     if srt == "":
-        return "Claude engine requires subtitles"
+        write_log(filename, "Transcription error: Claude requires subtitles.")
+        return ""
     for chunk_srt in filter_subs(srt):
         messages=[
                 {
@@ -342,13 +351,16 @@ def run_claude(filename, summarize=False):
         ) as stream:
             for text in stream.text_stream:
                 output += text
-    return output if output!="" else "Claude is able to work only with subtitles"
+    if output is not None and output.strip() != "":
+        return output
+    else:
+        write_log(filename, "Transcription error: Claude returned empty output.")
+        return ""
 
 def transcribe_video(filename, engine):
     video_path = "yt-video/" + filename
     description_path = "yt-video/" + filename + ".desc"
     transcription_path = "yt-video/" + filename + ".txt"
-    log_path = "yt-video/" + filename + ".log"
 
     if os.path.exists(transcription_path):
         print(f"Transcription for video {filename} already exists, skipping transcription.")
@@ -375,10 +387,7 @@ def transcribe_video(filename, engine):
 
     except Exception as e:
         print(f"An error occurred during transcription of video {filename}: {str(e)}")
-        with open(log_path, "w") as f:
-            f.write(f"Transcription error: {str(e)}")
-        modTime = os.path.getmtime(description_path)
-        os.utime(log_path, (modTime, modTime))
+        write_log(filename, f"Transcription error: {str(e)}")
         return
 
     if text is not None and text.strip() != "":
