@@ -221,6 +221,7 @@ def run_openai(filename, summarize):
                 response = client.responses.create(
                     model="gpt-5.6",
                     input= make_prompt(lang, summarize, title=title, description=descr) + ":\n\n" + text
+                )
                 for output_item in response.output:
                     for content_item in output_item.content:
                         text += content_item.text

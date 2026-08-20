@@ -194,13 +194,16 @@ def generate_transcriptions_page(url_link):
         output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
         output += f"<br/><a href='#{fn}-end'>[next]</a>"
         if os.path.exists(transcription_path):
+            output += "<p>[transcription]</p>"
             string_list = open(transcription_path, "r").read().split('\n')
             for line in string_list:
                 if line.strip() != "":
                     output += f"<p>{line}</p>"
-        else:
-            output += "<p>[No transcription available]</p>"
-            output += (entry.find("summary").text if entry.find("summary") is not None else "")   
+        if entry.find("summary") is not None and entry.find("summary").text is not None:
+            output += "<p>[description]</p>"
+            for line in entry.find("summary").text.split('\n'):
+                if line.strip() != "":
+                    output += f"<p>{line}</p>"
         pubs[age] = (fn, title_element.text, output, modified_time)
     asc = {k: v for k, v in sorted(pubs.items(), key=lambda item: item[0])}
     output = ""

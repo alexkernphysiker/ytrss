@@ -10,6 +10,6 @@ while [ 1 ]; do
 	# export ANTHROPIC_API_KEY="..."
 	# export GOOGLE_API_KEY="..."
 	# . start.sh
-	python3 ytrss_transcribe.py
+	python3 ytrss_transcribe.py > ytrss_transcribe.log 2>&1
 	sleep 1m
 done &
