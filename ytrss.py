@@ -6,6 +6,7 @@ from flask import Flask, url_for
 from flask import send_file
 from flask import request
 from flask import redirect
+from flask import Response
 from utils import *
 from lxml import etree
 from ytrss_transcribe import get_engine_map
@@ -297,7 +298,7 @@ def unsubscribe_rss():
 @app.route("/feed")
 def yt_feed():
     global url_link
-    return generate_atom_feed(url_link, False)
+    return Response(generate_atom_feed(url_link, False), mimetype='application/rss+xml')
 
 @app.route("/file/<path:filename>.mp4")
 def download(filename):

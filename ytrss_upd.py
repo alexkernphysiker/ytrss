@@ -44,7 +44,25 @@ def download_video(link, filename):
     print(f"Failed to download video {filename} with all attempted resolutions.")
     return False
 
+def get_duration(file_path):
+    command = [
+        'ffprobe',
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        file_path
+    ]
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        return int(float(result.stdout.strip()))
+    except (subprocess.CalledProcessError, ValueError):
+        return None
+
 def update_channels_feed():
+    ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
+    MEDIA_NS = "http://search.yahoo.com/mrss/"
+    etree.register_namespace("itunes", ITUNES_NS)
+    etree.register_namespace("media", MEDIA_NS)
     print("Fetching podcasts RSS subscriptions")
     for link in get_config()["rss_subscriptions"]:
         sleep(1)
@@ -70,7 +88,7 @@ def update_channels_feed():
                     insertion_date = dateutil.parser.parse(published.text)
                     time_since_insertion = datetime.now(timezone.utc) - insertion_date
                     media_description = entry.find("description")
-                    media_thumbnail = entry.find("itunes:image")
+                    media_thumbnail = entry.find(f"{{{ITUNES_NS}}}image")
                     if time_since_insertion < timedelta(days=get_config()["max_days"]):
                         entry_element = ElementTree.Element("entry")
                         title_element = ElementTree.SubElement(entry_element, "title")
@@ -83,7 +101,7 @@ def update_channels_feed():
                         published_element.text = insertion_date.strftime("%Y-%m-%dT%H:%M:%SZ")
                         print(f"Published: {published_element.text}")
                         if media_thumbnail is not None:
-                            thumbnail_element = ElementTree.SubElement(entry_element, "itunes:image", href=media_thumbnail.get("href"))
+                            thumbnail_element = ElementTree.SubElement(entry_element, "image", href=media_thumbnail.get("href"))
                         chars = re.escape(string.punctuation)
                         fn = re.sub('['+chars+']', '',link_element.text)
                         description_element = ElementTree.SubElement(entry_element, "summary")
@@ -100,6 +118,10 @@ def update_channels_feed():
                         else:
                             enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url=source_enclosure.get("url"), type=source_enclosure.get("type"), length = source_enclosure.get("length"))
 
+                        duration = get_duration(source_enclosure.get("url")) if source_enclosure is not None else None
+                        if duration is not None:
+                            duration_element = ElementTree.SubElement(entry_element, "duration")
+                            duration_element.text = str(duration)
                         description_path = "yt-video/" + fn + ".desc"
                         with open(description_path, "w") as f:
                             item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
@@ -178,7 +200,7 @@ def update_channels_feed():
                         published_element.text = insertion_date.strftime("%Y-%m-%dT%H:%M:%SZ")
                         print(f"Published: {published_element.text}")
                         if media_thumbnail is not None:
-                            thumbnail_element = ElementTree.SubElement(entry_element, "itunes:image", href=media_thumbnail.get("url"))
+                            thumbnail_element = ElementTree.SubElement(entry_element, "image", href=media_thumbnail.get("url"))
                         chars = re.escape(string.punctuation)
                         fn = re.sub('['+chars+']', '',link_element.get("href"))
                         file_path = "yt-video/" + fn
@@ -200,7 +222,11 @@ def update_channels_feed():
                             length = os.path.getsize(file_path)
                             modTime = mktime(insertion_date.timetuple())
                             os.utime(file_path, (modTime, modTime))
-                            enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url="__URL_LINK__/file/"+fn+".mp4", type="video/mpeg", length=str(length))
+                            enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url="__URL_LINK__/file/"+fn+".mp4", type="video/webm", length=str(length))
+                            duration = get_duration(file_path)
+                            if duration is not None:
+                                duration_element = ElementTree.SubElement(entry_element, "duration")
+                                duration_element.text = str(duration)
                         else:
                             print(f"The entry {fn} does not have a file after download attempt, skipping enclosure element.")
                         
