@@ -71,8 +71,8 @@ def get_chan_info():
 @app.route("/subscribe/channel", methods=['POST'])
 def subscribe_channel():
     source_id = request.form['source_id']
-    if get_channel_name(source_id)=="":
-        return buttons_on_top() + f"cannot obtain the channel {source_id}"
+    #if get_channel_name(source_id)=="":
+    #    return buttons_on_top() + f"cannot obtain the channel {source_id}"
     sources_list = get_config()["channel_subscriptions"]
     if source_id not in sources_list:
         sources_list.append(source_id)
@@ -109,8 +109,8 @@ def show_playlist_list():
 @app.route("/subscribe/playlist", methods=['POST'])
 def subscribe_playlist():
     source_id = request.form['source_id']
-    if get_playlist_name(source_id)=="":
-        return buttons_on_top() + f"cannot obtain the playlist {source_id}"
+    #if get_playlist_name(source_id)=="":
+    #    return buttons_on_top() + f"cannot obtain the playlist {source_id}"
     playlists_list = get_config()["playlist_subscriptions"]
     if source_id not in playlists_list:
         playlists_list.append(source_id)

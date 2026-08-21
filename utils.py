@@ -124,7 +124,11 @@ def detect_language(description_path):
 
 from lxml import etree
 def generate_atom_feed(url_link, is_public):
-    output="<feed xmlns=\"http://www.w3.org/2005/Atom\">  <title>Моя стрічка Youtube та подкастів</title><link href=\"http://youtube.com/\" />\n"
+    output="""<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="[http://www.w3.org/2005/Atom](http://www.w3.org/2005/Atom)" xmlns:media="[http://search.yahoo.com/mrss/](http://search.yahoo.com/mrss/)">
+    <title>Моя стрічка Youtube та подкастів</title>
+    """
+
     for description_path in Path("yt-video").glob("*.desc"):
         transcription_path = str(description_path).replace(".desc", ".txt")
         log_path = str(description_path).replace(".desc", ".log")
@@ -175,7 +179,10 @@ def generate_atom_feed(url_link, is_public):
             description_element.text += f"[Video description] <br/> " + descr
 
         output += etree.tostring(entry, encoding="unicode") + "\n"
-    output += "</feed>\n"
+
+    output += """
+    </feed>
+    """
     return output
 
 def generate_transcriptions_page(url_link):
