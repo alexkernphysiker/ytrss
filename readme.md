@@ -6,6 +6,10 @@ Additionally, ytrss supports video transcription, allowing users to obtain text 
 
 This utility uses yt-dlp to download videos from youtube and then uses them as enclosures for rss entries.
 
+On Android, the generated RSS feed was tested with the application 'RSS reader offline | Podcasts' https://play.google.com/store/apps/details?id=com.vanniktech.rssreader. That is the best RSS application for Android I've ever seen.
+
+On desktop Linux, it was tested with  QuiteRSS and on firefox extension FeebBro
+
 
 # How to start the web server
 
