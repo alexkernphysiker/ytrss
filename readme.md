@@ -10,7 +10,10 @@ This utility uses yt-dlp to download videos from youtube and then uses them as e
 # How to start the web server
 
 export OPENAI_API_KEY="..."
+
 export ANTHROPIC_API_KEY="..."
+
 export GOOGLE_API_KEY="..."
+
 . start.sh
 
