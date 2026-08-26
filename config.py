@@ -15,7 +15,10 @@ def default_config():
         "sources_with_disabled_downloading" : [],
         "channel_names_dict": {},
         "playlist_names_dict": {},
-        "rss_names_dict": {}
+        "rss_names_dict": {},
+        "enable_gemini": True,
+        "enable_openai": True,
+        "enable_claude": True
     }
 config=default_config()
 

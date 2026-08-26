@@ -11,15 +11,18 @@ from utils import *
 import json
 
 def get_engine_map():
-    return {
-            "gemini_s": "Summarize with Gemini", 
-            #"openai_s": "Summarize with OpenAI", 
-            "claude_s": "Summarize with Claude",
-            "gemini_t": "Transcribe with Gemini", 
-            #"openai_t": "Transcribe with OpenAI",
-            "claude_t": "Transcribe with Claude",
-            "srt":"Just download subtitles from YT",
-            }
+    res = dict()
+    if get_config()["enable_gemini"]:
+        res["gemini_s"] = "Summarize with Gemini"
+        res["gemini_t"] = "Transcribe with Gemini"
+    if get_config()["enable_openai"]:
+        res["openai_s"] = "Summarize with OpenAI"
+        res["openai_t"] = "Transcribe with OpenAI"
+    if get_config()["enable_claude"]:
+        res["claude_s"] = "Summarize with Claude"
+        res["claude_t"] = "Transcribe with Claude"
+    res["srt"] = "Just download subtitles from YT"
+    return res
 
 def download_subtitles(filename):
         description_path = "yt-video/" + filename + ".desc"
