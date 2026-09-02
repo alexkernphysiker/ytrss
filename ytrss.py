@@ -10,6 +10,7 @@ from flask import Response
 from utils import *
 from lxml import etree
 from ytrss_transcribe import get_engine_map
+from podcast_search import *
 
  
 host=get_local_ip()
@@ -43,8 +44,13 @@ def show_channel_list():
     chanlist_str = "<a> Subscribed channels </a><br/>"
     for channel_id in get_config()["channel_subscriptions"]:
         chanlist_str += f"<li> <form action='/unsubscribe/channel' method='post'>[{get_channel_name(channel_id)}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{channel_id}'><input type='submit' value='Unsubscribe'></form></li>"
-    chanlist_str += "<a>Channel buttons_on_top by ID</a> <br/>" + \
+    chanlist_str += "<a>Add channel by ID</a> <br/>" + \
               "<form action='/subscribe/channel' method='post'><input type='text' name='source_id'><input type='submit' value='Subscribe'></form>"
+
+    google_api_key = get_config().get("google_search_api_key")
+    if google_api_key != "":
+        chanlist_str += "<a>Search channels</a> <br/>" + \
+                  "<form action='/search/channel' method='post'><input type='text' name='channel_search_query'><input type='submit' value='Search'></form>"
     chanlist_str += "<br/><a> Other known channels </a><br/>"
     for channel_id in get_config()["channel_names_dict"].keys():
         if  not channel_id in get_config()["channel_subscriptions"]:
@@ -89,6 +95,18 @@ def unsubscribe_channel():
         save_config()
     return redirect(url_for('show_channel_list'))
 
+@app.route("/search/channel", methods=['POST'])
+def search_channel():
+    query = request.form['channel_search_query']
+    list_str = "<a> Search results </a><br/>"
+    google_api_key = get_config().get("google_search_api_key")
+    for title, channel_id in search_youtube_channel_api(query, google_api_key):
+        if channel_id not in get_config()["channel_subscriptions"]:
+            list_str += f"<li> <form action='/subscribe/channel' method='post'>[{title}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{channel_id}'><input type='submit' value='Subscribe'></form></li>"
+        else:
+            list_str += f"<li> <form action='/subscribe/channel' method='post'>[{title}] (is subscribed)</li>"
+    
+    return buttons_on_top() + f"<ul>{list_str}</ul><br /> <form action='/show_channel_list' method='get'><input type='submit' value='Back'></form>" 
 
 
 #### playlist subscriptions
@@ -99,6 +117,11 @@ def show_playlist_list():
         playlistlist_str += f"<li><form action='/unsubscribe/playlist' method='post'>[{get_playlist_name(playlist_id)}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{playlist_id}'><input type='submit' value='Unsubscribe'></form></li>"
     playlistlist_str += "<a>Subscribe playlist by ID</a> <br/>" + \
               "<form action='/subscribe/playlist' method='post'><input type='text' name='source_id'><input type='submit' value='Subscribe'></form>"
+
+    google_api_key = get_config().get("google_search_api_key")
+    if google_api_key != "":
+        playlistlist_str += "<a>Search playlists</a> <br/>" + \
+                  "<form action='/search/playlist' method='post'><input type='text' name='playlist_search_query'><input type='submit' value='Search'></form>"
 
     playlistlist_str += "<br/><a> Other known playlists </a><br/>"
     for playlist_id in get_config()["playlist_names_dict"].keys():
@@ -126,6 +149,19 @@ def unsubscribe_playlist():
         playlists_list.remove(source_id)
         save_config()
     return redirect(url_for('show_playlist_list'))
+
+@app.route("/search/playlist", methods=['POST'])
+def search_playlist():
+    query = request.form['playlist_search_query']
+    list_str = "<a> Search results </a><br/>"
+    google_api_key = get_config().get("google_search_api_key")
+    for title, playlist_id in search_youtube_playlist_api(query, google_api_key):
+        if playlist_id not in get_config()["playlist_subscriptions"]:
+            list_str += f"<li> <form action='/subscribe/playlist' method='post'>[{title}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{playlist_id}'><input type='submit' value='Subscribe'></form></li>"
+        else:
+            list_str += f"<li> <form action='/subscribe/playlist' method='post'>[{title}](Subscribed)</li>"
+    
+    return buttons_on_top() + f"<ul>{list_str}</ul><br /> <form action='/show_playlist_list' method='get'><input type='submit' value='Back'></form>"
 
 
 #auto-downloading management for channels and playlists
@@ -265,8 +301,9 @@ def show_rss_list():
     list_str = "<a> Subscribed RSS podcasts </a><br/>"
     for link in get_config()["rss_subscriptions"]:
         list_str += f"<li> <form action='/unsubscribe/rss' method='post'>[{get_rss_name(link)}]<input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Unsubscribe'></form></li>"
-    list_str +="<a>Input podcast RSS link</a> <br/>" + \
-              "<form action='/subscribe/rss' method='post'><input type='text' name='rss_link' class='form-control' id='rss_link'><input type='submit' value='Subscribe'></form>"
+    
+    list_str +="<a>Search Podcasts with iTunes API</a> <br/>" + \
+              "<form action='/search/rss' method='post'><input type='text' name='podcast_search_query' class='form-control' id='podcast_search_query'><input type='submit' value='Search'></form>"
     list_str += "<br/><a> Other known podcasts </a><br/>"
     for link in get_config()["rss_names_dict"].keys():
         if  not link in get_config()["rss_subscriptions"]:
@@ -292,6 +329,15 @@ def unsubscribe_rss():
         sources_list.remove(link)
         save_config()
     return redirect(url_for('show_rss_list'))
+
+@app.route("/search/rss", methods=['POST'])
+def search_rss():
+    querry = request.form['podcast_search_query']
+    list_str = "<a> Search results </a><br/>"
+    for title, link in search_podcast_itunes_api(querry):
+        list_str += f"<li> <form action='/subscribe/rss' method='post'>[{title}]<input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Subscribe'></form></li>"
+    
+    return buttons_on_top() + f"<ul>{list_str}</ul><br /> <form action='/show_rss_list' method='get'><input type='submit' value='Back'></form>"
 
 
 ### atom feed generation

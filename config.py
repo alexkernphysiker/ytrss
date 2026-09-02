@@ -18,7 +18,8 @@ def default_config():
         "rss_names_dict": {},
         "enable_gemini": True,
         "enable_openai": True,
-        "enable_claude": True
+        "enable_claude": True,
+        "google_search_api_key": ""
     }
 config=default_config()
 
