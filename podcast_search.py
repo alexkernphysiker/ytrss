@@ -2,7 +2,7 @@
 import requests
 from typing import List, Tuple
 
-def search_podcast_itunes_api(query: str) -> List[Tuple[str, str]]:
+def search_podcast_itunes_api(query: str) -> List[Tuple[str, str, str]]:
     """
     Шукає подкасти за назвою через Apple iTunes API.
     
@@ -34,7 +34,7 @@ def search_podcast_itunes_api(query: str) -> List[Tuple[str, str]]:
             
             # Додаємо лише ті результати, де є і назва, і посилання на RSS
             if title and feed_url:
-                results.append((title, feed_url))
+                results.append((title, feed_url, ""))
                 
         return results
         
@@ -45,7 +45,7 @@ def search_podcast_itunes_api(query: str) -> List[Tuple[str, str]]:
         print("Помилка обробки відповіді (очікувався JSON).")
         return []
 
-def search_youtube_channel_api(query: str, api_key: str = "YOUR_YOUTUBE_API_KEY") -> List[Tuple[str, str]]:
+def search_youtube_channel_api(query: str, api_key: str = "YOUR_YOUTUBE_API_KEY") -> List[Tuple[str, str, str]]:
     """
     Пошук ID каналів через офіційний YouTube Data API v3.
     Вимагає API-ключ від Google Cloud.
@@ -68,17 +68,17 @@ def search_youtube_channel_api(query: str, api_key: str = "YOUR_YOUTUBE_API_KEY"
         for item in data.get("items", []):
             title = item.get("snippet", {}).get("channelTitle")
             channel_id = item.get("snippet", {}).get("channelId")
-            
+            description = item.get("snippet", {}).get("description", "")
             # Повертаємо назву та чистий ID
             if title and channel_id:
-                results.append((title, channel_id))
+                results.append((title, channel_id, description))
                 
         return results
     except Exception as e:
         print(f"Помилка YouTube API: {e}")
         return []
 
-def search_youtube_playlist_api(query: str, api_key: str = "YOUR_YOUTUBE_API_KEY") -> List[Tuple[str, str]]:
+def search_youtube_playlist_api(query: str, api_key: str = "YOUR_YOUTUBE_API_KEY") -> List[Tuple[str, str, str]]:
     """
     Пошук ID плейлістів через офіційний YouTube Data API v3.
     Вимагає API-ключ від Google Cloud.
@@ -100,11 +100,10 @@ def search_youtube_playlist_api(query: str, api_key: str = "YOUR_YOUTUBE_API_KEY
         results = []
         for item in data.get("items", []):
             title = item.get("snippet", {}).get("title")
-            # Для плейлістів ідентифікатор зберігається у блоці 'id' під ключем 'playlistId'
             playlist_id = item.get("id", {}).get("playlistId")
-            
+            description = item.get("snippet", {}).get("description", "")
             if title and playlist_id:
-                results.append((title, playlist_id))
+                results.append((title, playlist_id, description))
                 
         return results
     except Exception as e:
