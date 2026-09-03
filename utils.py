@@ -22,17 +22,6 @@ def remove_invalid_xml_characters(value):
         value,
     )
 
-def get_yt_dlp_options():
-    return {}
-
-
-
-def get_local_ip():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    ip = s.getsockname()[0]
-    s.close()
-    return ip
 
 def update_names_dicts():
     channel_names_dict = get_config()["channel_names_dict"]

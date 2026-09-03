@@ -37,27 +37,18 @@ def download_subtitles(filename):
         if link is None:
             return ""
         lang = detect_language(description_path) or "en"
-        options = get_yt_dlp_options()
-        options.update({
-            "skip_download": True,
-            "writesubtitles": True,
-            "writeautomaticsub": True,
-            "subtitleslangs": [lang],
-            "subtitlesformat": "srt/best",
-            "outtmpl": f"yt-video/{filename}.%(ext)s",
-            "quiet": True,
-        })
-        with yt_dlp.YoutubeDL(options) as downloader:
-            downloader.download([link])
-        for subtitle_path in glob.glob(f"yt-video/{filename}.*"):
-            if subtitle_path.endswith((".srt", ".vtt", ".ass")):
-                with open(subtitle_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                if subtitle_path != srt_path:
-                    os.replace(subtitle_path, srt_path)
-                modtime = os.path.getmtime(description_path)
-                os.utime(srt_path, (modtime, modtime))
-                return content
+        additional_options = get_config().get("yt-dlp-options")
+        proc = subprocess.run(f"yt-dlp {additional_options} --skip-download --write-auto-subs --write-subs --sub-lang {lang} {link}", shell=True, capture_output=True)
+        for line in proc.stdout.decode().splitlines():
+            if line.strip().startswith("[download] Destination: "):
+                srtname = line.strip().split("[download] Destination: ")[-1]
+                if os.path.exists(srtname):
+                    with open(srtname, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    os.rename(srtname, srt_path)
+                    modtime = os.path.getmtime(description_path)
+                    os.utime(srt_path, (modtime, modtime))
+                    return content
         return ""
 
 def save_subtitles(filename, text):
@@ -172,6 +163,22 @@ def split_mp3_file(mp3_file_path, chunk_length_s=1000):
             print(f"mp3 chunk file: {file}")
             yield(f"{file}")
 
+def download_audio_file(url, filename):
+    if filename is None:
+        return None
+    audio_file_path = "yt-video/" + filename + ".mp3"
+    if os.path.exists(audio_file_path):
+        print(f"Audio file {audio_file_path} already exists, skipping download.")
+        return audio_file_path
+    command = f"yt-dlp -x --audio-format mp3 -o '{audio_file_path}' {url.split('?')[0]}"
+    subprocess.call(command, shell=True)
+    if os.path.exists(audio_file_path):
+        modTime = os.path.getmtime("yt-video/" + filename + ".desc")
+        os.utime(audio_file_path, (modTime, modTime))
+        return audio_file_path
+    else:
+        return None
+
 def get_video_link(description_path):
     if os.path.exists(description_path):
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
@@ -241,32 +248,6 @@ def run_openai(filename, summarize):
                     for content_item in output_item.content:
                         text += content_item.text
         return text
-
-def download_audio_file(url, filename):
-    if filename is None:
-        return None
-    audio_file_path = "yt-video/" + filename + ".mp3"
-    if os.path.exists(audio_file_path):
-        print(f"Audio file {audio_file_path} already exists, skipping download.")
-        return audio_file_path
-    options = get_yt_dlp_options()
-    options.update({
-        "format": "bestaudio/best",
-        "outtmpl": audio_file_path,
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-        }],
-        "quiet": True,
-    })
-    with yt_dlp.YoutubeDL(options) as downloader:
-        downloader.download([url.split("?")[0]])
-    if os.path.exists(audio_file_path):
-        modTime = os.path.getmtime("yt-video/" + filename + ".desc")
-        os.utime(audio_file_path, (modTime, modTime))
-        return audio_file_path
-    else:
-        return None
 
 def run_gemini(filename, summarize):
     gemini_model = "gemini-3.6-flash"

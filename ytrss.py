@@ -298,6 +298,8 @@ def show_rss_list():
     list_str += "<a> Subscribed RSS podcasts </a><br/>"
     for link in get_config()["rss_subscriptions"]:
         list_str += f"<li> <form action='/unsubscribe/rss' method='post'>[{get_rss_name(link)}]<input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Unsubscribe'></form></li>"
+    list_str += "<a>Subscribe RSS podcast by link</a> <br/>" + \
+              "<form action='/subscribe/rss' method='post'><input type='text' name='rss_link' class='form-control' id='rss_link'><input type='submit' value='Subscribe'></form>"
     return buttons_on_top() + f"<ul>{list_str}</ul><br />"
 
 @app.route("/subscribe/rss", methods=['POST'])

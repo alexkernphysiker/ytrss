@@ -22,7 +22,9 @@ def default_config():
         "google_search_api_key": "",
         "gemini_api_key": "",
         "openai_api_key": "",
-        "claude_api_key": ""
+        "claude_api_key": "",
+        "yt-dlp-options": "",
+        "yt-dlp-formats": ["-S res:360", "-S res:240", "-S res:144", "-S res:480", "-x"]
     }
 config=default_config()
 

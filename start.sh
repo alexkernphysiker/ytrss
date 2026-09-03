@@ -14,7 +14,7 @@ fi
 "$python_bin" ytrss.py &
 while [ 1 ]; do
 	"$python_bin" ytrss_upd.py > ytrss_upd.log 2>&1
-	sleep 30m
+	sleep 10m
 done &
 while [ 1 ]; do
 	"$python_bin" ytrss_transcribe.py > ytrss_transcribe.log 2>&1

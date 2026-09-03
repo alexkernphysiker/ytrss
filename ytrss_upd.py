@@ -26,40 +26,28 @@ def cleanup():
 
 def is_live(link):
     try:
-        options = get_yt_dlp_options()
-        options["skip_download"] = True
-        with yt_dlp.YoutubeDL(options) as downloader:
-            info = downloader.extract_info(link, download=False)
-        return info.get("is_live", False) is True or info.get("live_status") == "is_live"
+        additional_options = get_config().get("yt-dlp-options")
+        full_command = f"yt-dlp {additional_options} --skip-download --print is_live {link}"
+        print(full_command)
+        proc = subprocess.run(full_command, shell=True, capture_output=True)
+        output = proc.stdout.decode().strip()
+        return output.lower() == "true"
     except Exception as e:
         print(f"Error occurred while trying to check if video {link} is live: {str(e)}")
         return False
 
 def download_video(link, filename):
-    for params in ["-S res:360", "-S res:240", "-S res:144", "-S res:480", "-x"]:
+    for params in get_config().get("yt-dlp-formats"):
         print(f"Trying to download video {filename} with parameters {params}p...")
-        options = get_yt_dlp_options()
-        options["outtmpl"] = f"{filename}.dl.%(ext)s"
-        options["quiet"] = True
-        if params == "-x":
-            options["format"] = "bestaudio/best"
-            options["postprocessors"] = [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-            }]
-        else:
-            options["format_sort"] = [params.removeprefix("-S ")]
-        try:
-            with yt_dlp.YoutubeDL(options) as downloader:
-                downloader.download([link])
-        except Exception as error:
-            print(f"Failed to download video {filename} with parameters {params}. yt-dlp output: {error}")
-            continue
+        additional_options = get_config().get("yt-dlp-options")
+        full_command = f"yt-dlp {additional_options} {params} -o {filename}.dl {link}"
+        print(full_command)
+        proc = subprocess.run(full_command, shell=True, capture_output=True)
         for file in Path(".").glob(filename + ".dl*"):
             os.rename(file, filename)
             print(f"Successfully downloaded video {filename} with parameters {params}p.")
             return True
-        print(f"Failed to download video {filename} with parameters {params}.")
+        print(f"Failed to download video {filename} with parameters {params}. yt-dlp output: {proc.stderr.decode()}")
     print(f"Failed to download video {filename} with all attempted resolutions.")
     return False
 
