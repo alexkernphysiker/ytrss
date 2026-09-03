@@ -8,6 +8,7 @@ from xml.etree import ElementTree
 from xml.etree import cElementTree
 from datetime import datetime, timedelta, timezone
 import dateutil.parser
+import hashlib
 from time import sleep, mktime
 from pathlib import Path
 import arrow
@@ -37,17 +38,20 @@ def is_live(link):
         return False
 
 def download_video(link, filename):
+    if not get_config().get("yt-dlp-enabled"):
+        print(f"yt-dlp is disabled globally in the configuration. Skipping download for {link}.")
+        return False
     for params in get_config().get("yt-dlp-formats"):
-        print(f"Trying to download video {filename} with parameters {params}p...")
+        sleep(get_config().get("yt-dlp-delay"))
         additional_options = get_config().get("yt-dlp-options")
         full_command = f"yt-dlp {additional_options} {params} -o {filename}.dl {link}"
         print(full_command)
         proc = subprocess.run(full_command, shell=True, capture_output=True)
         for file in Path(".").glob(filename + ".dl*"):
             os.rename(file, filename)
-            print(f"Successfully downloaded video {filename} with parameters {params}p.")
+            print(f"Successfully downloaded video {filename}.")
             return True
-        print(f"Failed to download video {filename} with parameters {params}. yt-dlp output: {proc.stderr.decode()}")
+        print(f"Failed to download video {filename}. yt-dlp output: {proc.stderr.decode()}")
     print(f"Failed to download video {filename} with all attempted resolutions.")
     return False
 
@@ -75,7 +79,7 @@ def update_channels_feed():
         sleep(1)
         response = requests.get(link, timeout=60)
         if response.status_code == 200:
-            rss = ElementTree.fromstring(response.text)
+            rss = parse_xml_response(response)
             channel = rss.find("channel")
             source_name = channel.find("title").text
             print(f"{link}: {source_name}")
@@ -85,9 +89,6 @@ def update_channels_feed():
                         print(f"Skipping entry with no title in source {source_name}")
                         continue
                     link_element = entry.find("link")
-                    if link_element is None:
-                        print(f"Skipping entry with no link in source {source_name}")
-                        continue
                     published = entry.find("pubDate")
                     if published is None or not published.text:
                         print(f"Skipping entry with no published date in source {source_name}")
@@ -101,7 +102,8 @@ def update_channels_feed():
                         title_element = ElementTree.SubElement(entry_element, "title")
                         title_element.text = "[" + source_name + "] " + title.text
                         print(f"Title: {title_element.text}")
-                        link_element_dest = ElementTree.SubElement(entry_element, "link", href=link_element.text)
+                        if link_element is not None and link_element.text is not None:
+                            link_element_dest = ElementTree.SubElement(entry_element, "link", href=link_element.text)
                         updated_element = ElementTree.SubElement(entry_element, "updated")
                         updated_element.text = insertion_date.strftime("%Y-%m-%dT%H:%M:%SZ")
                         published_element = ElementTree.SubElement(entry_element, "published")
@@ -110,16 +112,27 @@ def update_channels_feed():
                         if media_thumbnail is not None:
                             thumbnail_element = ElementTree.SubElement(entry_element, "image", href=media_thumbnail.get("href"))
                         chars = re.escape(string.punctuation)
-                        fn = re.sub('['+chars+']', '',link_element.text)
+                        source_enclosure = entry.find("enclosure")
+                        id_element = ElementTree.SubElement(entry_element, "id")
+                        fn = ""
+                        if link_element is not None and link_element.text is not None:
+                            fn += re.sub('['+chars+']', '',link_element.text)
+                            id_element.text = link_element.text
+                        if source_enclosure is not None and source_enclosure.get("url") is not None:
+                            fn += re.sub('['+chars+']', '',source_enclosure.get("url"))
+                            id_element.text = source_enclosure.get("url")
+                        if fn == "":
+                                print(f"Skipping entry with no link and no enclosure in source {source_name}")
+                                continue
+                        if len(fn) > 200:
+                            print(f"Filename {fn} is too long, generating hash.")
+                            fn = hashlib.md5(fn.encode()).hexdigest()
                         description_element = ElementTree.SubElement(entry_element, "summary")
                         description_element.text = ""
                         if media_description is not None and media_description.text is not None:
                             string_list = media_description.text.split('\n')
                             for line in string_list:
                                 description_element.text += "<p>"+line+"</p> <br/>"
-                        id_element = ElementTree.SubElement(entry_element, "id")
-                        id_element.text = link_element.text
-                        source_enclosure = entry.find("enclosure")
                         if source_enclosure == None:
                             print(f"Item {title} does not contain enclosure")
                         else:
@@ -164,7 +177,7 @@ def update_channels_feed():
             if response.status_code == 200:
                 count_all=0
                 count_used=0
-                channel_content = ElementTree.fromstring(response.text)
+                channel_content = parse_xml_response(response)
                 source_name = channel_content.find("{http://www.w3.org/2005/Atom}title").text
                 if "playlist_id" in link:
                     source_id= link.split("playlist_id=")[-1]
@@ -221,8 +234,10 @@ def update_channels_feed():
                             if source_id not in get_config()["sources_with_disabled_downloading"]:
                                 print(f"No existing file for video {fn}, downloading...")
                                 if not download_video(link_element.get("href"), file_path):
-                                    print(f"Failed to download video {fn}, skipping item.")
-                                    continue
+                                    if time_since_insertion < timedelta(hours=get_config()["wait_for_download_hours"]):
+                                        print(f"Video {fn} is too new and failed to download, skipping item.")
+                                        continue
+                                    print(f"Failed to download video {fn} but proceeding.")
                             else:
                                 print(f"Downloading is disabled for source {source_id}")
                         if os.path.exists(file_path):

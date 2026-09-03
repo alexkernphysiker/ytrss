@@ -212,7 +212,7 @@ def run_openai(filename, summarize):
         age = datetime.now() - modified_time
 
         if text=="":
-            if age < timedelta(hours=get_config()["wait_for_subtitles_hours"]) and get_video_link(description_path)!="":
+            if age < timedelta(hours=get_config()["wait_for_download_hours"]) and get_video_link(description_path)!="":
                 return ""
             if os.path.exists(video_path):
                 mp3_path = convert_video_to_audio(video_path)
@@ -288,7 +288,7 @@ def run_gemini(filename, summarize):
             finally:
                 client.files.delete(name=audio_file.name)
         else:
-            if age < timedelta(hours=get_config()["wait_for_subtitles_hours"]) and get_video_link(description_path)!="":
+            if age < timedelta(hours=get_config()["wait_for_download_hours"]) and get_video_link(description_path)!="":
                 return ""
             response = client.models.generate_content(
                 model=gemini_model,

@@ -13,6 +13,9 @@ from config import *
 from ytrss_transcribe import get_engine_map
 import html
 
+def parse_xml_response(response):
+    return ElementTree.fromstring(response.content)
+
 def remove_invalid_xml_characters(value):
     if value is None:
         return ""
@@ -87,9 +90,10 @@ def get_rss_name(link):
     try:
         response = requests.get(link, timeout=20)
         if response.status_code == 200:
-            rss = ElementTree.fromstring(response.text)
+            rss = parse_xml_response(response)  
             channel = rss.find("channel")
             source_name = channel.find("title").text
+            
             rss_names_dict[link] = source_name
             save_config()
             return source_name

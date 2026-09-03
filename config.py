@@ -9,7 +9,7 @@ def default_config():
         "max_days" : 30,
         "auto_transcript_engine" : "srt",
         "auto_transcript_hours" : 12,
-        "wait_for_subtitles_hours" : 3,
+        "wait_for_download_hours" : 3,
         "manual_transcript_days" : 7,
         "channel_subscriptions" : [],
         "playlist_subscriptions" : [],
@@ -23,8 +23,10 @@ def default_config():
         "gemini_api_key": "",
         "openai_api_key": "",
         "claude_api_key": "",
+        "yt-dlp-enabled": True,
         "yt-dlp-options": "",
-        "yt-dlp-formats": ["-S res:360", "-S res:240", "-S res:144", "-S res:480", "-x"]
+        "yt-dlp-formats": ["-S res:360", "-S res:240", "-S res:144", "-S res:480", "-x"],
+        "yt-dlp-delay": 1
     }
 config=default_config()
 
