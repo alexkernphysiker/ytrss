@@ -13,9 +13,9 @@ from ytrss_transcribe import get_engine_map
 from podcast_search import *
 
  
-host=get_local_ip()
-port=5000
-url_link=f"http://{host}:{port}"
+host=get_config().get("host")
+port=get_config().get("port")
+url_link=get_config().get("url_link")
 
 app = Flask(__name__)
 

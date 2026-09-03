@@ -1,0 +1,9 @@
+yt-dlp
+Flask
+lxml
+requests
+python-dateutil
+arrow
+openai
+anthropic
+google-genai

@@ -4,21 +4,23 @@ from http import client
 import os
 import subprocess
 import re
+import glob
 from pathlib import Path
 from urllib import response
 from lxml import etree
 from utils import *
 import json
+import yt_dlp
 
 def get_engine_map():
     res = dict()
-    if get_config()["enable_gemini"]:
+    if get_config()["gemini_api_key"] != "":
         res["gemini_s"] = "Summarize with Gemini"
         res["gemini_t"] = "Transcribe with Gemini"
-    if get_config()["enable_openai"]:
+    if get_config()["openai_api_key"] != "":
         res["openai_s"] = "Summarize with OpenAI"
         res["openai_t"] = "Transcribe with OpenAI"
-    if get_config()["enable_claude"]:
+    if get_config()["claude_api_key"] != "":
         res["claude_s"] = "Summarize with Claude"
         res["claude_t"] = "Transcribe with Claude"
     res["srt"] = "Just download subtitles from YT"
@@ -35,17 +37,27 @@ def download_subtitles(filename):
         if link is None:
             return ""
         lang = detect_language(description_path) or "en"
-        proc = subprocess.run(f"yt-dlp --skip-download --write-auto-subs --write-subs --sub-lang {lang} {link}", shell=True, capture_output=True)
-        for line in proc.stdout.decode().splitlines():
-            if line.strip().startswith("[download] Destination: "):
-                srtname = line.strip().split("[download] Destination: ")[-1]
-                if os.path.exists(srtname):
-                    with open(srtname, "r", encoding="utf-8") as f:
-                        content = f.read()
-                    os.rename(srtname, srt_path)
-                    modtime = os.path.getmtime(description_path)
-                    os.utime(srt_path, (modtime, modtime))
-                    return content
+        options = get_yt_dlp_options()
+        options.update({
+            "skip_download": True,
+            "writesubtitles": True,
+            "writeautomaticsub": True,
+            "subtitleslangs": [lang],
+            "subtitlesformat": "srt/best",
+            "outtmpl": f"yt-video/{filename}.%(ext)s",
+            "quiet": True,
+        })
+        with yt_dlp.YoutubeDL(options) as downloader:
+            downloader.download([link])
+        for subtitle_path in glob.glob(f"yt-video/{filename}.*"):
+            if subtitle_path.endswith((".srt", ".vtt", ".ass")):
+                with open(subtitle_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                if subtitle_path != srt_path:
+                    os.replace(subtitle_path, srt_path)
+                modtime = os.path.getmtime(description_path)
+                os.utime(srt_path, (modtime, modtime))
+                return content
         return ""
 
 def save_subtitles(filename, text):
@@ -184,7 +196,7 @@ def write_log(filename, message):
 
 def run_openai(filename, summarize):
         from openai import OpenAI
-        client = OpenAI()
+        client = OpenAI(api_key=get_config()["openai_api_key"])
         description_path = "yt-video/" + filename + ".desc"
         video_path = "yt-video/" + filename
         lang = detect_language(description_path) or "en"
@@ -237,8 +249,18 @@ def download_audio_file(url, filename):
     if os.path.exists(audio_file_path):
         print(f"Audio file {audio_file_path} already exists, skipping download.")
         return audio_file_path
-    command = f"yt-dlp -x --audio-format mp3 -o '{audio_file_path}' {url.split('?')[0]}"
-    subprocess.call(command, shell=True)
+    options = get_yt_dlp_options()
+    options.update({
+        "format": "bestaudio/best",
+        "outtmpl": audio_file_path,
+        "postprocessors": [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+        }],
+        "quiet": True,
+    })
+    with yt_dlp.YoutubeDL(options) as downloader:
+        downloader.download([url.split("?")[0]])
     if os.path.exists(audio_file_path):
         modTime = os.path.getmtime("yt-video/" + filename + ".desc")
         os.utime(audio_file_path, (modTime, modTime))
@@ -250,7 +272,7 @@ def run_gemini(filename, summarize):
     gemini_model = "gemini-3.6-flash"
     from google import genai
     from google.genai import types
-    client = genai.Client()
+    client = genai.Client(api_key=get_config()["gemini_api_key"])
     description_path = "yt-video/" + filename + ".desc"
     lang = detect_language(description_path) or "en"
     srt = download_subtitles(filename)
@@ -291,8 +313,11 @@ def run_gemini(filename, summarize):
                 model=gemini_model,
                 contents=types.Content(
                     parts=[
-                        types.Part(file_data=types.FileData(file_uri=youtube_link)),
-                        types.Part(text=prompt)
+                        types.Part.from_uri(
+                            file_uri=youtube_link,
+                            mime_type="video/mp4",
+                        ),
+                        types.Part.from_text(text=prompt),
                     ]
                 )
             )
@@ -306,14 +331,12 @@ def run_gemini(filename, summarize):
     for chunk in filter_subs(srt):
             response = client.models.generate_content(
                 model=gemini_model,
-                contents=types.Content(
-                    parts=[
-                        types.Part(text=make_prompt(lang, summarize = summarize)),
-                        types.Part(text="Title:\n" + title),
-                        types.Part(text="Description:\n" + description),
-                        types.Part(text="Subtitles:\n" + chunk),
-                    ]
-                )
+                contents=[
+                    make_prompt(lang, summarize=summarize),
+                    "Title:\n" + title,
+                    "Description:\n" + description,
+                    "Subtitles:\n" + chunk,
+                ],
             )
             text += response.text
     return text
@@ -324,7 +347,7 @@ def run_claude(filename, summarize=False):
     import anthropic
     from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
     from anthropic.types.messages.batch_create_params import Request
-    client = anthropic.Client()
+    client = anthropic.Client(api_key=get_config()["claude_api_key"])
     max_tokens = 100000
     description_path = "yt-video/" + filename + ".desc"
     modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))

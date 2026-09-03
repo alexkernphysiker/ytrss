@@ -3,6 +3,7 @@ from time import sleep
 import os
 import subprocess
 import re
+import shlex
 from flask import send_file
 import requests
 from xml.etree import ElementTree
@@ -11,6 +12,20 @@ import socket
 from config import *
 from ytrss_transcribe import get_engine_map
 import html
+
+def remove_invalid_xml_characters(value):
+    if value is None:
+        return ""
+    return re.sub(
+        r"[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]",
+        "",
+        value,
+    )
+
+def get_yt_dlp_options():
+    return {}
+
+
 
 def get_local_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -199,7 +214,9 @@ def generate_atom_feed(url_link, is_public):
         output_link.text = link_url
         output_item.append(output_link)
         output_description = etree.Element("description")
-        output_description.text = etree.CDATA(html.unescape(description_element.text))
+        output_description.text = etree.CDATA(
+            remove_invalid_xml_characters(html.unescape(description_element.text or ""))
+        )
         output_item.append(output_description)
         output_pubDate = etree.Element("pubDate")
         output_pubDate.text = modified_time.strftime("%a, %d %b %Y %H:%M:%S +0000")

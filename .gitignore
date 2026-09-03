@@ -7,7 +7,10 @@ __pycache__/
 *.log
 *.bak
 *.swp
+*.txt
 *.json
 .DS_Store
 .idea/
 .vscode/
+.venv/
+.venv/

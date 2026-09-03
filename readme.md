@@ -13,11 +13,11 @@ On desktop Linux, it was tested with  QuiteRSS and on firefox extension FeebBro
 
 # How to start the web server
 
-export OPENAI_API_KEY="..."
+Create the project environment and install dependencies:
 
-export ANTHROPIC_API_KEY="..."
+python3 -m venv .venv
 
-export GOOGLE_API_KEY="..."
+.venv/bin/python -m pip install -r requirements.txt
 
 . start.sh
 

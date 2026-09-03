@@ -3,6 +3,9 @@ import os
 
 def default_config():
     return {
+        "host" : "127.0.0.1",
+        "port" : 5000,
+        "url_link" : "http://127.0.0.1:5000",
         "max_days" : 30,
         "auto_transcript_engine" : "srt",
         "auto_transcript_hours" : 12,
@@ -16,10 +19,10 @@ def default_config():
         "channel_names_dict": {},
         "playlist_names_dict": {},
         "rss_names_dict": {},
-        "enable_gemini": True,
-        "enable_openai": True,
-        "enable_claude": True,
-        "google_search_api_key": ""
+        "google_search_api_key": "",
+        "gemini_api_key": "",
+        "openai_api_key": "",
+        "claude_api_key": ""
     }
 config=default_config()
 
