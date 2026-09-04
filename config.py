@@ -25,8 +25,12 @@ def default_config():
         "claude_api_key": "",
         "yt-dlp-enabled": True,
         "yt-dlp-options": "",
+        "yt-dlp-options-rss-podcasts": "",
         "yt-dlp-formats": ["-S res:360", "-S res:240", "-S res:144", "-S res:480", "-x"],
-        "yt-dlp-delay": 1
+        "yt-dlp-delay": 1,
+        "proxies-youtube": {},
+        "proxies-rss": {},
+        "delay-between-fetches": 1
     }
 config=default_config()
 

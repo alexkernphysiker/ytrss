@@ -26,6 +26,9 @@ def cleanup():
                 file.unlink()
 
 def is_live(link):
+    if not get_config().get("yt-dlp-enabled"):
+        print(f"Interacting of yt-dlp with youtube is disabled globally in the configuration.")
+        return False
     try:
         additional_options = get_config().get("yt-dlp-options")
         full_command = f"yt-dlp {additional_options} --skip-download --print is_live {link}"
@@ -39,7 +42,7 @@ def is_live(link):
 
 def download_video(link, filename):
     if not get_config().get("yt-dlp-enabled"):
-        print(f"yt-dlp is disabled globally in the configuration. Skipping download for {link}.")
+        print(f"Interacting of yt-dlp with youtube is disabled globally in the configuration.")
         return False
     for params in get_config().get("yt-dlp-formats"):
         sleep(get_config().get("yt-dlp-delay"))
@@ -75,9 +78,11 @@ def update_channels_feed():
     etree.register_namespace("itunes", ITUNES_NS)
     etree.register_namespace("media", MEDIA_NS)
     print("Fetching podcasts RSS subscriptions")
-    for link in get_config()["rss_subscriptions"]:
-        sleep(1)
-        response = requests.get(link, timeout=60)
+    links = get_config()["rss_subscriptions"]
+    shuffle(links)
+    for link in links:
+        sleep(get_config().get("delay-between-fetches"))
+        response = requests.get(link, timeout=60, proxies=get_config().get("proxies-rss"))
         if response.status_code == 200:
             rss = parse_xml_response(response)
             channel = rss.find("channel")
@@ -125,7 +130,6 @@ def update_channels_feed():
                                 print(f"Skipping entry with no link and no enclosure in source {source_name}")
                                 continue
                         if len(fn) > 200:
-                            print(f"Filename {fn} is too long, generating hash.")
                             fn = hashlib.md5(fn.encode()).hexdigest()
                         description_element = ElementTree.SubElement(entry_element, "summary")
                         description_element.text = ""
@@ -171,9 +175,9 @@ def update_channels_feed():
         links.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}")
     shuffle(links)
     for link in links:
-        sleep(1)
+        sleep(get_config().get("delay-between-fetches"))
         try:
-            response = requests.get(link, timeout=60)
+            response = requests.get(link, timeout=60, proxies=get_config().get("proxies-youtube"))
             if response.status_code == 200:
                 count_all=0
                 count_used=0
