@@ -216,12 +216,15 @@ def auto_transcription():
         if source_id in get_config()["sources_with_disabled_auto_transcription"]:
              auto_transcription_str+=f"<li><form action='/auto-transcription/enable' method='post'>[{source_name}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{source_id}'> <input type='submit' value='Enable'></form></li>"
     engines_str = ""
+    engines_rss_str = ""
     for engine,engine_text in get_engine_map().items():
         engines_str += f"<option value='{engine}' {"selected" if engine==get_config()["auto_transcript_engine"] else ""}>{engine_text}</option>"
+        engines_rss_str += f"<option value='{engine}' {"selected" if engine==get_config()["auto_transcript_engine_rss"] else ""}>{engine_text}</option>"
 
     return buttons_on_top() + "<ul>" + \
            "<form action='/auto-transcription-cfg' method='post'>" + \
-           f"<label for='default_engine'>default transcription engine:</label><select id='default_engine' name='default_engine'>{engines_str}</select><br />" + \
+           f"<label for='default_engine'>Youtube transcription engine:</label><select id='default_engine' name='default_engine'>{engines_str}</select><br />" + \
+           f"<label for='auto_transcript_engine_rss'>RSS transcription engine:</label><select id='auto_transcript_engine_rss' name='auto_transcript_engine_rss'>{engines_rss_str}</select><br />" + \
            f"<label for='auto_transcript_hours'>auto-transcript items not older than (Hr):</label><input type='number' id='auto_transcript_hours' name='auto_transcript_hours' min='3' max='24' value='{get_config()["auto_transcript_hours"]}' /><br />" + \
            f"<label for='manual_transcript_days'>show transcriptions not older than (days):</label><input type='number' id='manual_transcript_days' name='manual_transcript_days' min='1' max='{get_config()["max_days"]}' value='{get_config()["manual_transcript_days"]}' /><br />" + \
            f"<label for='wait_for_download_hours'>wait for subtitles (Hr):</label><input type='number' id='wait_for_download_hours' name='wait_for_download_hours' min='0' max='6' value='{get_config()["wait_for_download_hours"]}' /><br />" + \
@@ -250,6 +253,7 @@ def enable_auto_transcription():
 def auto_transcription_cfg():
     cfg=get_config()
     cfg["auto_transcript_engine"] = request.form['default_engine']
+    cfg["auto_transcript_engine_rss"] = request.form['auto_transcript_engine_rss']
     cfg["auto_transcript_hours"] = int(request.form['auto_transcript_hours'])
     cfg["manual_transcript_days"] = int(request.form['manual_transcript_days'])
     cfg["wait_for_download_hours"] = int(request.form['wait_for_download_hours'])

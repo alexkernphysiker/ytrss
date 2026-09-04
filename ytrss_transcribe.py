@@ -417,6 +417,8 @@ if __name__ == "__main__":
 
     video_list_auto = load_source_list_from_file("transcription.txt")
     save_source_list_to_file("transcription.txt", [])
+    audio_list_auto = load_source_list_from_file("transcription_rss.txt")
+    save_source_list_to_file("transcription_rss.txt", [])
     
     video_list_map = {}
     for engine, engine_name in get_engine_map().items():
@@ -428,6 +430,12 @@ if __name__ == "__main__":
         video_list_map[auto_engine] += video_list_auto
     else:
         print(f"Unknown auto transcript engine: {auto_engine}, skipping auto transcription.")
+    
+    auto_engine_rss = get_config()["auto_transcript_engine_rss"]
+    if auto_engine_rss in get_engine_map().keys():
+        video_list_map[auto_engine_rss] += audio_list_auto
+    else:
+        print(f"Unknown auto transcript engine for RSS: {auto_engine_rss}, skipping auto transcription for RSS.")
 
     for engine, video_list in video_list_map.items():
         for fn in video_list:

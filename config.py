@@ -8,6 +8,7 @@ def default_config():
         "url_link" : "http://127.0.0.1:5000",
         "max_days" : 30,
         "auto_transcript_engine" : "srt",
+        "auto_transcript_engine_rss": "gemini_s",
         "auto_transcript_hours" : 12,
         "wait_for_download_hours" : 3,
         "manual_transcript_days" : 7,

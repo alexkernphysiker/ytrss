@@ -157,11 +157,11 @@ def update_channels_feed():
                                 print(f"Processing auto-transcription for video {fn}")
                                 transcription_path = "yt-video/" + fn + ".txt"
                                 if not os.path.exists(transcription_path) and not link in get_config()["sources_with_disabled_auto_transcription"]:
-                                    video_list = load_source_list_from_file("transcription.txt")
+                                    video_list = load_source_list_from_file("transcription_rss.txt")
                                     if not fn in video_list:
-                                        print(f"Automatically scheduled video transcription {fn}")
+                                        print(f"Automatically scheduled video transcription_rss {fn}")
                                         video_list.append(fn)
-                                        save_source_list_to_file("transcription.txt", video_list)
+                                        save_source_list_to_file("transcription_rss.txt", video_list)
                                     else:
                                         print(f"Video {fn} is already scheduled for transcription")
                                 else:
