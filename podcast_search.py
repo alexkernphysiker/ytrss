@@ -31,10 +31,11 @@ def search_podcast_itunes_api(query: str) -> List[Tuple[str, str, str]]:
         for item in data.get("results", []):
             title = item.get("collectionName")
             feed_url = item.get("feedUrl")
+            description = item.get("collectionExplicitness")
             
             # Додаємо лише ті результати, де є і назва, і посилання на RSS
             if title and feed_url:
-                results.append((title, feed_url, ""))
+                results.append((title, feed_url, description))
                 
         return results
         
@@ -101,9 +102,10 @@ def search_youtube_playlist_api(query: str, api_key: str = "YOUR_YOUTUBE_API_KEY
         for item in data.get("items", []):
             title = item.get("snippet", {}).get("title")
             playlist_id = item.get("id", {}).get("playlistId")
+            channel_name = item.get("snippet", {}).get("channelTitle")
             description = item.get("snippet", {}).get("description", "")
             if title and playlist_id:
-                results.append((title, playlist_id, description))
+                results.append((title, playlist_id, f"Playlist in [{channel_name}]: {description}"))
                 
         return results
     except Exception as e:
