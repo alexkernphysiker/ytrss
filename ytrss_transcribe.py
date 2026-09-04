@@ -114,15 +114,20 @@ def make_prompt(lang, summarize = False, title = "", description = ""):
                            (f"Video descriptions: \"{description}\". " if description!="" else "")
             else:
                 if lang == "uk":
-                    return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци та розділи. Якщо можливо, також виділи репліки різних мовців. Уникай мовних помилок, росіянізмів та неправильного написання власних назв. " + \
+                    return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци та розділи. " + \
+                            "Якщо можливо, також виділи репліки різних мовців. Уникай мовних помилок, росіянізмів та неправильного написання власних назв. " + \
+                            "На початку напиши анотіцію від 2-3 речення, хто і про що говорять в цій розмові. " + \
                             (f"Назва відео: \"{title}\". " if title!="" else "") + \
                             (f"Опис відео: \"{description}\". " if description!="" else "")
                 elif lang == "pl":
-                    return "Proszę, zrób z tych napisów tekstową transkrypcję filmu z pełnym sprawdzeniem pisowni oraz rozbiciem na akapity oraz rozdziały. Jeśli to jest możliwe, poznacz interpunkcją słowa powiedzone przez róźnych mówców. " + \
+                    return "Proszę, zrób z tych napisów tekstową transkrypcję filmu z pełnym sprawdzeniem pisowni oraz rozbiciem na akapity oraz rozdziały. " + \
+                            "Jeśli to jest możliwe, poznacz interpunkcją słowa powiedzone przez róźnych mówców. " + \
+                            "Na początku napisz streszczenie od 2-3 zdań, kto i o czym mówi w tej rozmowie. " + \
                             (f"Nazwa filmu: \"{title}\". " if title!="" else "") + \
                             (f"Opis filmu: \"{description}\". " if description!="" else "")
                 else:
                     return "Please make from these subtitles, a text transcription of the video with correction of language mistakes and splitting the text into paragraphs and chapters. " + \
+                            "At the beginning, write a summary of 2-3 sentences, who and what the conversation is about. " + \
                             (f"Video title: \"{title}\". " if title!="" else "") + \
                             (f"Video descriptions: \"{description}\". " if description!="" else "")
 
