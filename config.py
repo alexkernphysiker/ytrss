@@ -31,7 +31,8 @@ def default_config():
         "yt-dlp-delay": 1,
         "proxies-youtube": {},
         "proxies-rss": {},
-        "delay-between-fetches": 1
+        "delay-between-fetches": 1,
+        "re-transcription": False
     }
 config=default_config()
 

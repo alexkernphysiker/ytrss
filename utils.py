@@ -178,11 +178,12 @@ def generate_atom_feed(url_link, is_public):
                 description_element.text += f"<p>[TRANSCRIPTION]</p> <br/>"
                 for line in string_list:
                     description_element.text += "<p>"+line+"</p> <br/>"
-                transcribe_link = f"<br/> <a>Get new text version</a> <a>|</a> "
-                for engine, engine_name in get_engine_map().items():
-                    transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine_name}</a> <a>|</a> "
-                description_element.text += f"<br/> {transcribe_link}<br/>"
-                description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"
+                if get_config()["re-transcription"]:
+                    transcribe_link = f"<br/> <a>Get new text version</a> <a>|</a> "
+                    for engine, engine_name in get_engine_map().items():
+                        transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine_name}</a> <a>|</a> "
+                    description_element.text += f"<br/> {transcribe_link}<br/>"
+                    description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"
             description_element.text += "<p>[DESCRIPTION]</p> <br/>" + descr
         elif age < timedelta(days=get_config()["manual_transcript_days"]) and not is_public:
                 transcribe_link = f"<br/> <a>Transcript with</a> <a>|</a> "
