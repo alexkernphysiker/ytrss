@@ -186,12 +186,13 @@ def generate_atom_feed(url_link, is_public):
                     description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"
             description_element.text += "<p>[DESCRIPTION]</p> <br/>" + descr
         elif age < timedelta(days=get_config()["manual_transcript_days"]) and not is_public:
-                transcribe_link = f"<br/> <a>Transcript with</a> <a>|</a> "
-                for engine, engine_name in get_engine_map().items():
-                    transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine_name}</a> <a>|</a> "
-                description_element.text += transcribe_link + "<br/>[Video description] <br/>" + descr
+                if get_config()["re-transcription"]:
+                    transcribe_link = f"<br/> <a>Transcript with</a> <a>|</a> "
+                    for engine, engine_name in get_engine_map().items():
+                        transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine_name}</a> <a>|</a> "
+                    description_element.text += transcribe_link + "<br/>[Video description] <br/>" + descr
         else:
-            description_element.text += f"[Video description] <br/> " + descr
+            description_element.text += f"[DESCRIPTION] <br/> " + descr
         description_element.set("type", "html")
         image_url = input_entry.find("image").get("href").replace("__URL_LINK__", url_link) if input_entry.find("image") is not None else ""
         input_duration_element = input_entry.find("duration")
