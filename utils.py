@@ -190,7 +190,7 @@ def generate_atom_feed(url_link, is_public):
                     transcribe_link = f"<br/> <a>Transcript with</a> <a>|</a> "
                     for engine, engine_name in get_engine_map().items():
                         transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine_name}</a> <a>|</a> "
-                    description_element.text += transcribe_link + "<br/>[Video description] <br/>" + descr
+                description_element.text += transcribe_link + "<br/>[Video description] <br/>" + descr
         else:
             description_element.text += f"[DESCRIPTION] <br/> " + descr
         description_element.set("type", "html")
