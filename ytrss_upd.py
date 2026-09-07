@@ -81,14 +81,15 @@ def update_channels_feed():
     links = get_config()["rss_subscriptions"]
     shuffle(links)
     for link in links:
-        sleep(get_config().get("delay-between-fetches"))
-        response = requests.get(link, timeout=60, proxies=get_config().get("proxies-rss"))
-        if response.status_code == 200:
-            rss = parse_xml_response(response)
-            channel = rss.find("channel")
-            source_name = channel.find("title").text
-            print(f"{link}: {source_name}")
-            for entry in channel.findall("item"):
+        try:
+            sleep(get_config().get("delay-between-fetches"))
+            response = requests.get(link, timeout=60, proxies=get_config().get("proxies-rss"))
+            if response.status_code == 200:
+                rss = parse_xml_response(response)
+                channel = rss.find("channel")
+                source_name = channel.find("title").text
+                print(f"{link}: {source_name}")
+                for entry in channel.findall("item"):
                     title = entry.find("title")
                     if title is None or not title.text:
                         print(f"Skipping entry with no title in source {source_name}")
@@ -166,7 +167,10 @@ def update_channels_feed():
                                         print(f"Video {fn} is already scheduled for transcription")
                                 else:
                                     print(f"Video {fn} already has transcription")
-
+            else:
+                print(f"Failed to fetch {link}: HTTP {response.status_code}")
+        except requests.RequestException as e:
+            print(f"Error fetching {link}: {e}")
     print(f"Fetching youtube channels and playlists")
     links=[]
     for channel_id in get_config()["channel_subscriptions"]:
