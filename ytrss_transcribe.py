@@ -101,33 +101,46 @@ def get_video_title_and_description(filename):
 def make_prompt(lang, summarize = False, title = "", description = ""):
             if summarize:
                 if lang == "uk":
-                    return "Це транскрипція відео. Напиши стислий переказ цієї розмови уточнюючи хто озвучив наведені твердження та на що послався. Уникай мовних помилок, росіянізмів та неправильного написання власних назв. " + \
+                    return get_config()["transcription-prompts"]["uk"][1] + \
+                            "\n" + \
+                            get_config()["transcription-prompts"]["uk"][2] + \
+                            "\n" + \
                            (f"Назва відео: \"{title}\". " if title!="" else "") + \
                            (f"Опис відео: \"{description}\". " if description!="" else "")
                 elif lang == "pl":
-                    return "To jest transkrypcja filmu. Zrób proszę streszczenie owej rozmowy wyjaśniając skąd się bierzą podawane twierdzenia (kto mówi, na co się odwołuje). " + \
+                    return get_config()["transcription-prompts"]["pl"][1] + \
+                            "\n" + \
+                            get_config()["transcription-prompts"]["pl"][2] + \
+                            "\n" + \
                            (f"Nazwa filmu: \"{title}\". " if title!="" else "") + \
                            (f"Opis filmu: \"{description}\". " if description!="" else "")
                 else:
-                    return "This is a video transcription. Please summarize it pointing who told the given statements and what sources they mentioned. " + \
+                    return get_config()["transcription-prompts"]["en"][1] + \
+                            "\n" + \
+                            get_config()["transcription-prompts"]["en"][2] + \
+                            "\n" + \
                            (f"Video title: \"{title}\". " if title!="" else "") + \
                            (f"Video descriptions: \"{description}\". " if description!="" else "")
             else:
                 if lang == "uk":
-                    return "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци та розділи. " + \
-                            "Якщо можливо, також виділи репліки різних мовців. Уникай мовних помилок, росіянізмів та неправильного написання власних назв. " + \
-                            "На початку напиши анотіцію від 2-3 речення, хто і про що говорять в цій розмові. " + \
-                            (f"Назва відео: \"{title}\". " if title!="" else "") + \
-                            (f"Опис відео: \"{description}\". " if description!="" else "")
+                    return get_config()["transcription-prompts"]["uk"][0] + \
+                            "\n" + \
+                            get_config()["transcription-prompts"]["uk"][2] + \
+                            "\n" + \
+                           (f"Назва відео: \"{title}\". " if title!="" else "") + \
+                           (f"Опис відео: \"{description}\". " if description!="" else "")
                 elif lang == "pl":
-                    return "Proszę, zrób z tych napisów tekstową transkrypcję filmu z pełnym sprawdzeniem pisowni oraz rozbiciem na akapity oraz rozdziały. " + \
-                            "Jeśli to jest możliwe, poznacz interpunkcją słowa powiedzone przez róźnych mówców. " + \
-                            "Na początku napisz streszczenie od 2-3 zdań, kto i o czym mówi w tej rozmowie. " + \
-                            (f"Nazwa filmu: \"{title}\". " if title!="" else "") + \
+                    return get_config()["transcription-prompts"]["pl"][0] + \
+                            "\n" + \
+                            get_config()["transcription-prompts"]["pl"][2] + \
+                            "\n" + \
+                           (f"Nazwa filmu: \"{title}\". " if title!="" else "") + \
                             (f"Opis filmu: \"{description}\". " if description!="" else "")
                 else:
-                    return "Please make from these subtitles, a text transcription of the video with correction of language mistakes and splitting the text into paragraphs and chapters. " + \
-                            "At the beginning, write a summary of 2-3 sentences, who and what the conversation is about. " + \
+                    return get_config()["transcription-prompts"]["en"][0] + \
+                            "\n" + \
+                            get_config()["transcription-prompts"]["en"][2] + \
+                            "\n" + \
                             (f"Video title: \"{title}\". " if title!="" else "") + \
                             (f"Video descriptions: \"{description}\". " if description!="" else "")
 
