@@ -1,14 +1,11 @@
 from datetime import datetime, timedelta
 from time import sleep
 import os
-import subprocess
 import re
-import shlex
 from flask import send_file
 import requests
 from xml.etree import ElementTree
 from pathlib import Path
-import socket
 from config import *
 from ytrss_transcribe import get_engine_map
 import html

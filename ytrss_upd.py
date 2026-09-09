@@ -13,6 +13,7 @@ from time import sleep, mktime
 from pathlib import Path
 import arrow
 from random import shuffle
+from repeatings_detector import find_duplicate_episode
 from utils import *
 from config import *
 
@@ -132,6 +133,19 @@ def update_channels_feed():
                                 continue
                         if len(fn) > 200:
                             fn = hashlib.md5(fn.encode()).hexdigest()
+
+                        if not os.path.exists("yt-video/" + fn + ".desc"):
+                            print(f"New episode detected: {fn}")
+                            new_episode = {
+                                "id": fn,
+                                "title": title.text if title.text is not None else "",
+                                "description": media_description.text if media_description is not None else "",
+                            }
+                            duplicate_fn = find_duplicate_episode(new_episode)
+                            if duplicate_fn is not None:
+                                print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
+                                continue
+
                         description_element = ElementTree.SubElement(entry_element, "summary")
                         description_element.text = ""
                         if media_description is not None and media_description.text is not None:
@@ -216,7 +230,6 @@ def update_channels_feed():
                     else:
                         media_description = entry.find("{http://www.w3.org/2005/Atom}summary")
                     if "shorts" not in link_element.get("href") and time_since_insertion < timedelta(days=get_config()["max_days"]):
-                        file_duration_yt=""
                         entry_element = ElementTree.Element("entry")
                         title_element = ElementTree.SubElement(entry_element, "title")
                         title_element.text = "[" + source_name + "] " + title.text
@@ -236,6 +249,16 @@ def update_channels_feed():
                         if os.path.exists(file_path):
                             print(f"Existing file for video {fn} found")
                         else:
+                            new_episode = {
+                                "id": fn,
+                                "title": title_element.text if title_element.text is not None else "",
+                                "description": media_description.text if media_description is not None else "",
+                            }
+                            duplicate_fn = find_duplicate_episode(new_episode)
+                            if duplicate_fn is not None:
+                                print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
+                                continue
+
                             if is_live(link_element.get("href")):
                                 print(f"Video {fn} is currently live, skipping item.")
                                 continue

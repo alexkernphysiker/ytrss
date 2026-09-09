@@ -7,3 +7,4 @@ arrow
 openai
 anthropic
 google-genai
+thefuzz

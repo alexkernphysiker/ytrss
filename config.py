@@ -54,7 +54,8 @@ def default_config():
                 "To jest transkrypcja filmu. Zrób proszę streszczenie owej rozmowy wyjaśniając skąd się bierzą podawane twierdzenia (kto mówi, na co się odwołuje). " ,
                 ""
             ]
-        }
+        },
+        "dupticate_detection_threshold": 85
     }
 config=default_config()
 

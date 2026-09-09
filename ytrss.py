@@ -174,6 +174,7 @@ def auto_download():
     return buttons_on_top() + f"<ul>" + \
            "<form action='/download-cfg' method='post'>" + \
            f"<label for='max_days'>Keep downloaded items (days):</label><input type='number' id='max_days' name='max_days' min='7' max='90' value='{get_config()["max_days"]}' /><br />" + \
+           f"<label for='dupticate_detection_threshold'>Duplicate Detection Threshold:</label><input type='number' id='dupticate_detection_threshold' name='dupticate_detection_threshold' min='0' max='100' value='{get_config()["dupticate_detection_threshold"]}' /><br />" + \
             "<input type='submit' value='Save config'></form>" + \
            f"{downloading_str}</ul><br />"
 
@@ -198,6 +199,7 @@ def enable_downloading():
 def download_cfg():
     cfg=get_config()
     cfg["max_days"] = int(request.form['max_days'])
+    cfg["dupticate_detection_threshold"] = int(request.form['dupticate_detection_threshold'])
     save_config()
     return redirect(url_for('auto_download'))
 
