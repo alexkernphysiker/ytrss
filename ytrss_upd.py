@@ -246,9 +246,8 @@ def update_channels_feed():
                         fn = re.sub('['+chars+']', '',link_element.get("href"))
                         file_path = "yt-video/" + fn
                         description_path = "yt-video/" + fn + ".desc"
-                        if os.path.exists(file_path):
-                            print(f"Existing file for video {fn} found")
-                        else:
+                        if not os.path.exists(description_path):
+                            print(f"New episode detected: {fn}")
                             new_episode = {
                                 "id": fn,
                                 "title": title_element.text if title_element.text is not None else "",
@@ -259,6 +258,9 @@ def update_channels_feed():
                                 print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
                                 continue
 
+                        if os.path.exists(file_path):
+                            print(f"Existing file for video {fn} found")
+                        else:
                             if is_live(link_element.get("href")):
                                 print(f"Video {fn} is currently live, skipping item.")
                                 continue
