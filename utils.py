@@ -114,20 +114,6 @@ def save_source_list_to_file(filename, sources):
 def duration_string(duration_secs):
     return f"{duration_secs//3600}:{(duration_secs%3600)//60:02d}:{duration_secs%60:02d}" if duration_secs >= 3600 else f"{duration_secs//60}:{duration_secs%60:02d}"
 
-def detect_language(description_path):
-    if os.path.exists(description_path):
-        parser1 = etree.XMLParser(encoding="utf-8", recover=True)
-        entry = etree.parse(description_path, parser1)
-        text = entry.find("title").text
-        if bool(re.search('[а-яА-ЯЇЄїєҐґ]', text)):
-            return "uk"
-        elif bool(re.search('[ąęłżĄĘŁŻńŃóÓćĆ]', text)) or "rz" in text.lower() or "cz" in text.lower() or "sz" in text.lower():
-            return "pl"
-        else:
-            return "en"
-    else:
-        return ""
-
 from lxml import etree
 def generate_atom_feed(url_link, is_public):
     ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
@@ -234,6 +220,10 @@ def generate_atom_feed(url_link, is_public):
     return output
 
 def generate_transcriptions_page(url_link):
+    ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
+    MEDIA_NS = "http://search.yahoo.com/mrss/"
+    etree.register_namespace("itunes", ITUNES_NS)
+    etree.register_namespace("media", MEDIA_NS)
     pubs = {}
     for description_path in Path("yt-video").glob("*.desc"):
         transcription_path = str(description_path).replace(".desc", ".txt")

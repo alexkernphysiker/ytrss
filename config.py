@@ -46,16 +46,10 @@ def default_config():
                     "На початку напиши анотіцію від 2-3 речення, хто і про що говорять в цій розмові. ",
                 "Це транскрипція відео. Напиши стислий переказ цієї розмови уточнюючи хто озвучив наведені твердження та на що послався. Уникай мовних помилок, росіянізмів та неправильного написання власних назв. ",
                 ""
-            ],
-            "pl": [
-                "Proszę, zrób z tych napisów tekstową transkrypcję filmu z pełnym sprawdzeniem pisowni oraz rozbiciem na akapity oraz rozdziały. " + \
-                    "Jeśli to jest możliwe, poznacz interpunkcją słowa powiedzone przez róźnych mówców. " + \
-                    "Na początku napisz streszczenie od 2-3 zdań, kto i o czym mówi w tej rozmowie. ",
-                "To jest transkrypcja filmu. Zrób proszę streszczenie owej rozmowy wyjaśniając skąd się bierzą podawane twierdzenia (kto mówi, na co się odwołuje). " ,
-                ""
             ]
         },
-        "dupticate_detection_threshold": 85
+        "default_language": "en",
+        "duplicate_detection_threshold": 85
     }
 config=default_config()
 

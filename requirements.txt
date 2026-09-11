@@ -8,3 +8,4 @@ openai
 anthropic
 google-genai
 thefuzz
+lingua-language-detector

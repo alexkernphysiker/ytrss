@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib import response
 from lxml import etree
 from utils import *
+from lang_detect import detect_language
 import json
 import yt_dlp
 
@@ -99,50 +100,23 @@ def get_video_title_and_description(filename):
         return title,descr
 
 def make_prompt(lang, summarize = False, title = "", description = ""):
+            if lang not in get_config()["transcription-prompts"]:
+                lang = get_config()["default_language"]
+            
             if summarize:
-                if lang == "uk":
-                    return get_config()["transcription-prompts"]["uk"][1] + \
-                            "\n" + \
-                            get_config()["transcription-prompts"]["uk"][2] + \
-                            "\n" + \
-                           (f"Назва відео: \"{title}\". " if title!="" else "") + \
-                           (f"Опис відео: \"{description}\". " if description!="" else "")
-                elif lang == "pl":
-                    return get_config()["transcription-prompts"]["pl"][1] + \
-                            "\n" + \
-                            get_config()["transcription-prompts"]["pl"][2] + \
-                            "\n" + \
-                           (f"Nazwa filmu: \"{title}\". " if title!="" else "") + \
-                           (f"Opis filmu: \"{description}\". " if description!="" else "")
-                else:
-                    return get_config()["transcription-prompts"]["en"][1] + \
-                            "\n" + \
-                            get_config()["transcription-prompts"]["en"][2] + \
-                            "\n" + \
-                           (f"Video title: \"{title}\". " if title!="" else "") + \
-                           (f"Video descriptions: \"{description}\". " if description!="" else "")
+                return get_config()["transcription-prompts"][lang][1] + \
+                        "\n" + \
+                        get_config()["transcription-prompts"][lang][2] + \
+                        "\n" + \
+                       (f"Title: \"{title}\". " if title!="" else "") + \
+                       (f"Description: \"{description}\". " if description!="" else "")
             else:
-                if lang == "uk":
-                    return get_config()["transcription-prompts"]["uk"][0] + \
-                            "\n" + \
-                            get_config()["transcription-prompts"]["uk"][2] + \
-                            "\n" + \
-                           (f"Назва відео: \"{title}\". " if title!="" else "") + \
-                           (f"Опис відео: \"{description}\". " if description!="" else "")
-                elif lang == "pl":
-                    return get_config()["transcription-prompts"]["pl"][0] + \
-                            "\n" + \
-                            get_config()["transcription-prompts"]["pl"][2] + \
-                            "\n" + \
-                           (f"Nazwa filmu: \"{title}\". " if title!="" else "") + \
-                            (f"Opis filmu: \"{description}\". " if description!="" else "")
-                else:
-                    return get_config()["transcription-prompts"]["en"][0] + \
-                            "\n" + \
-                            get_config()["transcription-prompts"]["en"][2] + \
-                            "\n" + \
-                            (f"Video title: \"{title}\". " if title!="" else "") + \
-                            (f"Video descriptions: \"{description}\". " if description!="" else "")
+                return get_config()["transcription-prompts"][lang][0] + \
+                        "\n" + \
+                        get_config()["transcription-prompts"][lang][2] + \
+                        "\n" + \
+                       (f"Title: \"{title}\". " if title!="" else "") + \
+                       (f"Description: \"{description}\". " if description!="" else "")
 
 
 def convert_video_to_audio(video_file_path):
