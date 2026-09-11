@@ -81,7 +81,7 @@ def detect_language(description_path) -> str:
         if detected_languages:
             if len(detected_languages) > 0 and detected_languages[0].probability > 0.6:
                 return detected_languages[0].language
-    return get_config().get("default_language")
+    return ""
 
 
 

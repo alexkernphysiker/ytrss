@@ -218,7 +218,7 @@ def run_openai(filename, summarize):
                 print(f"Transcribing chunk {chunk} for video {filename}...")
                 audio_file= open(chunk, "rb")
                 transcription = client.audio.transcriptions.create(
-                    model="gpt-4o-transcribe-diarize",
+                    model=get_config()["open_ai_audio_model"],
                     file=audio_file,
                     response_format="diarized_json",
                     chunking_strategy="auto",
@@ -237,7 +237,7 @@ def run_openai(filename, summarize):
         text = ""
         for chunk in filter_subs(text):
                 response = client.responses.create(
-                    model="gpt-5.6",
+                    model=get_config()["open_ai_text_model"],
                     input= make_prompt(lang, summarize, title=title, description=descr) + ":\n\n" + text
                 )
                 for output_item in response.output:
@@ -246,7 +246,7 @@ def run_openai(filename, summarize):
         return text
 
 def run_gemini(filename, summarize):
-    gemini_model = "gemini-3.6-flash"
+    gemini_model = get_config()["gemini_model"]
     from google import genai
     from google.genai import types
     client = genai.Client(api_key=get_config()["gemini_api_key"])
@@ -349,7 +349,7 @@ def run_claude(filename, summarize=False):
         ]
 
         with client.messages.stream(
-            model="claude-opus-5",
+            model=get_config()["claude_model"],
             max_tokens=max_tokens,
             messages=messages
         ) as stream:
@@ -362,7 +362,6 @@ def run_claude(filename, summarize=False):
         return ""
 
 def transcribe_video(filename, engine):
-    video_path = "yt-video/" + filename
     description_path = "yt-video/" + filename + ".desc"
     transcription_path = "yt-video/" + filename + ".txt"
 
