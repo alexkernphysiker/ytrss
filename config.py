@@ -39,7 +39,7 @@ def default_config():
         "re-transcription": False,
         "transcription-prompts": {
             "en": [
-                "Please make a text transcription of the video with splitting the text into paragraphs and chapters. " + \
+                "Please make a text transcription with splitting the text into paragraphs and chapters. " + \
                     "At the beginning, write a summary of 2-3 sentences, who and what the conversation is about. ",
                 "Please summarize this pointing who told the given statements and what sources they mentioned. ",
                 ""
