@@ -31,7 +31,7 @@ def default_config():
         "yt-dlp-enabled": True,
         "yt-dlp-options": "",
         "yt-dlp-options-rss-podcasts": "",
-        "yt-dlp-formats": ["-S res:360", "-S res:240", "-S res:144", "-S res:480", "-x"],
+        "yt-dlp-formats": ["-S res:480", "-S res:360", "-S res:240", "-S res:144", "-x", ""],
         "yt-dlp-delay": 1,
         "proxies-youtube": {},
         "proxies-rss": {},
@@ -39,16 +39,16 @@ def default_config():
         "re-transcription": False,
         "transcription-prompts": {
             "en": [
-                "Please make from these subtitles, a text transcription of the video with correction of language mistakes and splitting the text into paragraphs and chapters. " + \
+                "Please make a text transcription of the video with splitting the text into paragraphs and chapters. " + \
                     "At the beginning, write a summary of 2-3 sentences, who and what the conversation is about. ",
-                "This is a video transcription. Please summarize it pointing who told the given statements and what sources they mentioned. ",
+                "Please summarize this pointing who told the given statements and what sources they mentioned. ",
                 ""
             ],
             "uk": [
-                "Будь ласка, зроби з цих субтитрів текстову транскрипцію з повною вичиткою тексту та логічним розбиттям на абзаци та розділи. " + \
-                    "Якщо можливо, також виділи репліки різних мовців. Уникай мовних помилок, росіянізмів та неправильного написання власних назв. " + \
-                    "На початку напиши анотіцію від 2-3 речення, хто і про що говорять в цій розмові. ",
-                "Це транскрипція відео. Напиши стислий переказ цієї розмови уточнюючи хто озвучив наведені твердження та на що послався. Уникай мовних помилок, росіянізмів та неправильного написання власних назв. ",
+                "Будь ласка, зроби текстову транскрипцію з логічним розбиттям на абзаци та розділи. " + \
+                    "Якщо можливо, також виділи репліки різних мовців. " + \
+                    "На початку напиши анотацію від 2-3 речення, хто і про що говорять в цій розмові. ",
+                "Напиши стислий переказ розмови уточнюючи хто озвучив наведені твердження та на що послався.",
                 ""
             ]
         },
