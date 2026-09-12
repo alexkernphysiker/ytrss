@@ -99,11 +99,13 @@ def search_channel():
     google_api_key = get_config().get("google_search_api_key")
     for title, channel_id, descr in search_youtube_channel_api(query, google_api_key):
         if channel_id not in get_config()["channel_subscriptions"]:
-            list_str += f"<li> <form action='/subscribe/channel' method='post'>[{title}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{channel_id}'><input type='submit' value='Subscribe'></form></li>" + \
+            channel_link = f"https://www.youtube.com/channel/{channel_id}" if channel_id else ""
+            list_str += f"<li> <form action='/subscribe/channel' method='post'><a href='{channel_link}' target='_blank'>[{title}]</a><input type='hidden' name='source_id' class='form-control' id='source_id' value='{channel_id}'><input type='submit' value='Subscribe'></form></li>" + \
                         f"<br /> {descr}"
         else:
-            list_str += f"<li> <form action='/subscribe/channel' method='post'>[{title}] (is subscribed)</li>"
-    
+            channel_link = f"https://www.youtube.com/channel/{channel_id}" if channel_id else ""
+            list_str += f"<li> <form action='/subscribe/channel' method='post'><a href='{channel_link}' target='_blank'>[{title}]</a> (is subscribed)</li>"
+
     return buttons_on_top() + f"<ul>{list_str}</ul><br /> <form action='/show_channel_list' method='get'><input type='submit' value='Back'></form>" 
 
 
@@ -149,11 +151,12 @@ def search_playlist():
     list_str = "<a> Search results </a><br/>"
     google_api_key = get_config().get("google_search_api_key")
     for title, playlist_id, descr in search_youtube_playlist_api(query, google_api_key):
+        playlist_link = f"https://www.youtube.com/playlist?list={playlist_id}" if playlist_id else ""
         if playlist_id not in get_config()["playlist_subscriptions"]:
-            list_str += f"<li> <form action='/subscribe/playlist' method='post'>[{title}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{playlist_id}'><input type='submit' value='Subscribe'></form></li>" + \
+            list_str += f"<li> <form action='/subscribe/playlist' method='post'><a href='{playlist_link}' target='_blank'>[{title}]</a><input type='hidden' name='source_id' class='form-control' id='source_id' value='{playlist_id}'><input type='submit' value='Subscribe'></form></li>" + \
                         f"<br /> {descr}"
         else:
-            list_str += f"<li> <form action='/subscribe/playlist' method='post'>[{title}](Subscribed)</li>"
+            list_str += f"<li> <form action='/subscribe/playlist' method='post'><a href='{playlist_link}' target='_blank'>[{title}]</a>(Subscribed)</li>"
     
     return buttons_on_top() + f"<ul>{list_str}</ul><br /> <form action='/show_playlist_list' method='get'><input type='submit' value='Back'></form>"
 

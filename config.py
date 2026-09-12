@@ -42,14 +42,14 @@ def default_config():
                 "Please make a text transcription with splitting the text into paragraphs and chapters. " + \
                     "At the beginning, write a summary of 2-3 sentences, who and what the conversation is about. ",
                 "Please summarize this pointing who told the given statements and what sources they mentioned. ",
-                ""
+                "Start your response with the requested text without explainations how it was obtained."
             ],
             "uk": [
                 "Будь ласка, зроби текстову транскрипцію з логічним розбиттям на абзаци та розділи. " + \
                     "Якщо можливо, також виділи репліки різних мовців. " + \
                     "На початку напиши анотацію від 2-3 речення, хто і про що говорять в цій розмові. ",
                 "Напиши стислий переказ розмови уточнюючи хто озвучив наведені твердження та на що послався.",
-                ""
+                "Починай відповідь відразу з тексту без пояснень, як ти його отримав."
             ]
         },
         "default_language": "en",
