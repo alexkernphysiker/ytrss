@@ -10,8 +10,8 @@ def search_podcast_itunes_api(query: str) -> List[Tuple[str, str, str]]:
         query (str): Пошуковий запит (наприклад, назва подкасту).
         
     Returns:
-        List[Tuple[str, str]]: Список знайдених результатів, 
-                               де кожен елемент - це кортеж (назва_подкасту, URL_стрічки_RSS).
+        List[Tuple[str, str, str, str]]: Список знайдених результатів, 
+                               де кожен елемент - це кортеж (назва_подкасту, URL_стрічки_RSS, опис, посилання).
                                Якщо нічого не знайдено або сталася помилка, повертає порожній список.
     """
     url = "https://itunes.apple.com/search"
@@ -32,10 +32,10 @@ def search_podcast_itunes_api(query: str) -> List[Tuple[str, str, str]]:
             title = item.get("collectionName")
             feed_url = item.get("feedUrl")
             description = item.get("collectionExplicitness")
-            
+            link = item.get("collectionViewUrl")
             # Додаємо лише ті результати, де є і назва, і посилання на RSS
             if title and feed_url:
-                results.append((title, feed_url, description))
+                results.append((title, feed_url, description, link))
                 
         return results
         

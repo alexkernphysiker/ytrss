@@ -335,12 +335,12 @@ def unsubscribe_rss():
 def search_rss():
     querry = request.form['podcast_search_query']
     list_str = "<a> Search results </a><br/>"
-    for title, link, descr in search_podcast_itunes_api(querry):
+    for title, link, descr, url in search_podcast_itunes_api(querry):
         if link not in get_config()["rss_subscriptions"]:
-            list_str += f"<li> <form action='/subscribe/rss' method='post'>[{title}]<input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Subscribe'></form></li>" + \
+            list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a><input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Subscribe'></form></li>" + \
                         f"<br /> {descr}"
         else:
-            list_str += f"<li> <form action='/subscribe/rss' method='post'>[{title}](Subscribed)</li>"
+            list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a>(Subscribed)</form></li>"
     
     return buttons_on_top() + f"<ul>{list_str}</ul><br /> <form action='/show_rss_list' method='get'><input type='submit' value='Back'></form>"
 
