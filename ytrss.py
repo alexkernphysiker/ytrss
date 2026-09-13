@@ -233,6 +233,7 @@ def auto_transcription():
            f"<label for='auto_transcript_hours'>auto-transcript items not older than (Hr):</label><input type='number' id='auto_transcript_hours' name='auto_transcript_hours' min='3' max='24' value='{get_config()["auto_transcript_hours"]}' /><br />" + \
            f"<label for='manual_transcript_days'>show transcriptions not older than (days):</label><input type='number' id='manual_transcript_days' name='manual_transcript_days' min='1' max='{get_config()["max_days"]}' value='{get_config()["manual_transcript_days"]}' /><br />" + \
            f"<label for='wait_for_download_hours'>wait for subtitles (Hr):</label><input type='number' id='wait_for_download_hours' name='wait_for_download_hours' min='0' max='6' value='{get_config()["wait_for_download_hours"]}' /><br />" + \
+           f"<label for='duplicate_detection_threshold_transcription'>Duplicate Detection Threshold for Transcription:</label><input type='number' id='duplicate_detection_threshold_transcription' name='duplicate_detection_threshold_transcription' min='0' max='100' value='{get_config()["duplicate_detection_threshold_transcription"]}' /><br />" + \
             "<input type='submit' value='Save config'></form>" + \
            f"{auto_transcription_str}</ul><br />"
 
@@ -262,6 +263,7 @@ def auto_transcription_cfg():
     cfg["auto_transcript_hours"] = int(request.form['auto_transcript_hours'])
     cfg["manual_transcript_days"] = int(request.form['manual_transcript_days'])
     cfg["wait_for_download_hours"] = int(request.form['wait_for_download_hours'])
+    cfg["duplicate_detection_threshold_transcription"] = int(request.form['duplicate_detection_threshold_transcription'])
     save_config()
     return redirect(url_for('auto_transcription'))
 

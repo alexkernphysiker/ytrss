@@ -141,7 +141,7 @@ def update_channels_feed():
                                 "title": title.text if title.text is not None else "",
                                 "description": media_description.text if media_description is not None else "",
                             }
-                            duplicate_fn = find_duplicate_episode(new_episode)
+                            duplicate_fn = find_duplicate_episode(new_episode, threshold=get_config()["duplicate_detection_threshold"])
                             if duplicate_fn is not None:
                                 print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
                                 continue
@@ -253,7 +253,7 @@ def update_channels_feed():
                                 "title": title_element.text if title_element.text is not None else "",
                                 "description": media_description.text if media_description is not None else "",
                             }
-                            duplicate_fn = find_duplicate_episode(new_episode)
+                            duplicate_fn = find_duplicate_episode(new_episode, threshold=get_config()["duplicate_detection_threshold"])
                             if duplicate_fn is not None:
                                 print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
                                 continue

@@ -8,6 +8,7 @@ import glob
 from pathlib import Path
 from urllib import response
 from lxml import etree
+from repeatings_detector import find_duplicate_episode, mark_episode_as_duplicate
 from utils import *
 from lang_detect import detect_language
 import json
@@ -400,6 +401,18 @@ def transcribe_video(filename, engine):
         modTime = os.path.getmtime(description_path)
         os.utime(transcription_path, (modTime, modTime))
         print(f"Transcription for video {filename} completed")
+        title, description = get_video_title_and_description(filename)
+        new_episode = {
+            "id": fn,
+            "title": title if title is not None else "",
+            "description": description if description is not None else ""
+        }
+        duplicate_fn = find_duplicate_episode(new_episode, threshold=get_config()["duplicate_detection_threshold_transcription"])
+        if duplicate_fn is not None:
+            print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
+            mark_episode_as_duplicate(duplicate_fn)
+
+
     else:
         print(f"Transcription for video {filename} is empty, not creating transcription file.")
 

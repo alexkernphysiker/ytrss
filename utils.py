@@ -141,6 +141,11 @@ def generate_atom_feed(url_link, is_public):
         
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
         input_entry = etree.parse(description_path, parser1)
+
+        duplicate_element = input_entry.find("duplicate")
+        if duplicate_element is not None and duplicate_element.text == "true":
+            continue  # Skip duplicate entries
+    
         title_element = input_entry.find("title")
         description_element = input_entry.find("summary")
         
@@ -230,6 +235,11 @@ def generate_transcriptions_page(url_link):
         fn = os.path.basename(description_path).replace(".desc", "")
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
         entry = etree.parse(description_path, parser1)
+
+        duplicate_element = entry.find("duplicate")
+        if duplicate_element is not None and duplicate_element.text == "true":
+            continue  # Skip duplicate entries
+
         title_element = entry.find("title")
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
