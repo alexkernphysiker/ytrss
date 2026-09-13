@@ -45,11 +45,9 @@ def get_text_to_compare(episode, transcription=None):
     description = episode.get("description", "")
 
     if transcription:
-        combined_text = f"{title} {transcription}"
+        return f"{transcription}".lower()
     else:
-        combined_text = f"{title} {description}"
-
-    return combined_text.lower()  
+        return f"{title} {description}".lower()
 
 def compare_episodes(episode1, episode2):
     transcription1 = get_episode_transcription(episode1.get("id"))
@@ -67,8 +65,11 @@ def find_duplicate_episode(new_episode, threshold=85):
 
     best_match_fn = None
     highest_score = 0
-    
+    transcription = True if get_episode_transcription(new_episode.get("id")) else False
     for known in get_known_episodes():
+        if transcription:
+            if not get_episode_transcription(known.get("id")):
+                continue  # Skip known episodes without transcription if new episode has transcription
         score = compare_episodes(new_episode, known)
         if score > highest_score:
             highest_score = score

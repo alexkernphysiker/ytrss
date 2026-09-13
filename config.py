@@ -53,8 +53,8 @@ def default_config():
             ]
         },
         "default_language": "en",
-        "duplicate_detection_threshold": 85,
-        "duplicate_detection_threshold_transcription": 75
+        "duplicate_detection_threshold": 100,
+        "duplicate_detection_threshold_transcription": 100
     }
 config=default_config()
 
