@@ -1,18 +1,12 @@
-from email.mime import text
-from http import client
-from http import client
 import os
 import subprocess
-import re
-import glob
 from pathlib import Path
-from urllib import response
 from lxml import etree
 from repeatings_detector import find_duplicate_episode, mark_episode_as_duplicate
 from utils import *
+from config import *
 from lang_detect import detect_language
 import json
-import yt_dlp
 
 def get_engine_map():
     res = dict()

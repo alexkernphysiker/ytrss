@@ -131,8 +131,7 @@ def update_channels_feed():
                         if fn == "":
                                 print(f"Skipping entry with no link and no enclosure in source {source_name}")
                                 continue
-                        if len(fn) > 200:
-                            fn = hashlib.md5(fn.encode()).hexdigest()
+                        fn = hashlib.md5(fn.encode()).hexdigest()
 
                         if not os.path.exists("yt-video/" + fn + ".desc"):
                             print(f"New episode detected: {fn}")

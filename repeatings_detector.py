@@ -4,6 +4,7 @@ from lxml import etree
 from xml.etree import ElementTree
 from pathlib import Path
 from thefuzz import fuzz
+import json
 
 def get_known_episodes(directory="yt-video"):
     episodes = []
@@ -34,7 +35,7 @@ def get_known_episodes(directory="yt-video"):
     return episodes
 
 def get_episode_transcription(episode_id):
-    transcription_path = Path(f"yt-video/{episode_id}.transcription")
+    transcription_path = Path(f"yt-video/{episode_id}.txt")
     if transcription_path.exists():
         with open(transcription_path, "r", encoding="utf-8") as f:
             return f.read()
@@ -80,7 +81,7 @@ def find_duplicate_episode(new_episode, threshold=85):
         
     return None
 
-def mark_episode_as_duplicate(episode_id):
+def mark_episode_as_duplicate(episode_id, other_episode_id):
     description_path = Path(f"yt-video/{episode_id}.desc")
     if description_path.exists():
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
@@ -90,5 +91,40 @@ def mark_episode_as_duplicate(episode_id):
         if duplicate_element is None:
             duplicate_element = etree.SubElement(entry.getroot(), "duplicate")
         duplicate_element.text = "true"
+
+        other_episode_element = entry.find("duplicate_of")
+        if other_episode_element is None:
+            other_episode_element = etree.SubElement(entry.getroot(), "duplicate_of")
+        other_episode_element.text = other_episode_id
         
         entry.write(description_path, encoding="utf-8", xml_declaration=True)
+
+if __name__ == "__main__":
+    def get_first_episode():
+        for transcription_path in Path("yt-video").glob("*.txt"):
+            fn = os.path.basename(transcription_path).replace(".txt", "")
+            description_path = "yt-video/" + fn + ".desc"
+            parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+            input_entry = etree.parse(description_path, parser1)
+            title_element = input_entry.find("title")
+            description_element = input_entry.find("summary")
+            return {
+                "id": fn,
+                "title": title_element.text if title_element is not None else "",
+                "description": description_element.text if description_element is not None else "",
+            }
+
+    test_episode = get_first_episode()
+    results = []
+    for other_episode in get_known_episodes():
+        prob = compare_episodes(test_episode, other_episode)
+        results.append({
+            "episode": other_episode,
+            "probability": prob
+        })
+    output = sorted(results, key=lambda d: d['probability'])
+    with open("output.json", "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
+
+
+
