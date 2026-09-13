@@ -403,7 +403,7 @@ def transcribe_video(filename, engine):
         }
         duplicate_fn = find_duplicate_episode(new_episode, threshold=get_config()["duplicate_detection_threshold_transcription"])
         if duplicate_fn is not None:
-            print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
+            print(f"Duplicate episode found for {fn} Duplicate ID: {duplicate_fn}")
             mark_episode_as_duplicate(duplicate_fn)
 
 
