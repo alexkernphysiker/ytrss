@@ -26,20 +26,20 @@ def cleanup():
                 print(f"Removing old video file: {file}")
                 file.unlink()
 
-def is_live(link):
+def get_live_status(link):
     if not get_config().get("yt-dlp-enabled"):
         print(f"Interacting of yt-dlp with youtube is disabled globally in the configuration.")
         return False
     try:
         additional_options = get_config().get("yt-dlp-options")
-        full_command = f"yt-dlp {additional_options} --skip-download --print is_live {link}"
+        full_command = f"yt-dlp {additional_options} --skip-download --print live_status {link}"
         print(full_command)
         proc = subprocess.run(full_command, shell=True, capture_output=True)
         output = proc.stdout.decode().strip()
-        return output.lower() == "true"
+        return output.lower()
     except Exception as e:
         print(f"Error occurred while trying to check if video {link} is live: {str(e)}")
-        return False
+        return ""
 
 def download_video(link, filename):
     if not get_config().get("yt-dlp-enabled"):
@@ -260,7 +260,7 @@ def update_channels_feed():
                         if os.path.exists(file_path):
                             print(f"Existing file for video {fn} found")
                         else:
-                            if is_live(link_element.get("href")):
+                            if get_live_status(link_element.get("href")) in ["is_live", "is_upcoming"]:
                                 print(f"Video {fn} is currently live, skipping item.")
                                 continue
                             if source_id not in get_config()["sources_with_disabled_downloading"]:
