@@ -160,6 +160,10 @@ def generate_atom_feed(url_link, is_public):
         if os.path.exists(log_path) and not os.path.exists(transcription_path) and not is_public:
             log_content = open(log_path, "r").read()
             description_element.text += "<p>[LOG]</p> <br/>" + log_content + "<br/>"
+        auto_transcription = False
+        auto_transcription_element = input_entry.find("auto_transcription")
+        if auto_transcription_element is not None:
+            auto_transcription = auto_transcription_element.text=="true"
         if os.path.exists(transcription_path):
             if age < timedelta(days=get_config()["manual_transcript_days"]):
                 string_list = open(transcription_path, "r").read().split('\n')
@@ -173,15 +177,18 @@ def generate_atom_feed(url_link, is_public):
                     description_element.text += f"<br/> {transcribe_link}<br/>"
                     description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"
             description_element.text += "<p>[DESCRIPTION]</p> <br/>" + descr
-        elif age < timedelta(days=get_config()["manual_transcript_days"]) and not is_public:
+        elif auto_transcription:
+            continue # will wait for transcription and final deduplication
+        else:
+            if age < timedelta(days=get_config()["manual_transcript_days"]) and not is_public:
                 if get_config()["re-transcription"]:
                     transcribe_link = f"<br/> <a>Transcript with</a> <a>|</a> "
                     for engine, engine_name in get_engine_map().items():
                         transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine_name}</a> <a>|</a> "
                     description_element.text += transcribe_link
                 description_element.text += "<br/>[Video description] <br/>" + descr
-        else:
-            description_element.text += f"[DESCRIPTION] <br/> " + descr
+            else:
+                description_element.text += f"[DESCRIPTION] <br/> " + descr
         description_element.set("type", "html")
         image_url = input_entry.find("image").get("href").replace("__URL_LINK__", url_link) if input_entry.find("image") is not None else ""
         input_duration_element = input_entry.find("duration")
