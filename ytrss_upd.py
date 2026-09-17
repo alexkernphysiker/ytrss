@@ -60,17 +60,13 @@ def download_video(link, filename):
     return False
 
 def get_duration(file_path):
-    command = [
-        'ffprobe',
-        '-v', 'error',
-        '-show_entries', 'format=duration',
-        '-of', 'default=noprint_wrappers=1:nokey=1',
-        file_path
-    ]
+    command = f"ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 {file_path}"
     try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
-        return int(float(result.stdout.strip()))
+        result = subprocess.run(command, shell=True, capture_output=True)
+        output = int(float(result.stdout.decode().strip()))
+        return output
     except (subprocess.CalledProcessError, ValueError):
+        print("duration estimation error")
         return None
 
 def update_channels_feed():
@@ -278,7 +274,7 @@ def update_channels_feed():
                             length = os.path.getsize(file_path)
                             modTime = mktime(insertion_date.timetuple())
                             os.utime(file_path, (modTime, modTime))
-                            enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url="__URL_LINK__/file/"+fn+".mp4", type="video/webm", length=str(length))
+                            enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url="__URL_LINK__/file/"+fn+".mp4", type="video/mp4", length=str(length))
                             duration = get_duration(file_path)
                             if duration is not None:
                                 duration_element = ElementTree.SubElement(entry_element, "duration")

@@ -111,9 +111,6 @@ def save_source_list_to_file(filename, sources):
         for source in sources:
             f.write(source + '\n') 
 
-def duration_string(duration_secs):
-    return f"{duration_secs//3600}:{(duration_secs%3600)//60:02d}:{duration_secs%60:02d}" if duration_secs >= 3600 else f"{duration_secs//60}:{duration_secs%60:02d}"
-
 from lxml import etree
 def generate_atom_feed(url_link, is_public):
     ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"

@@ -7,6 +7,7 @@ from flask import send_file
 from flask import request
 from flask import redirect
 from flask import Response
+from pathlib import PurePath
 from utils import *
 from lxml import etree
 from ytrss_transcribe import get_engine_map
@@ -356,7 +357,12 @@ def yt_feed():
 
 @app.route("/file/<path:filename>.mp4")
 def download(filename):
-    return return_file(filename)
+    response = return_file(filename)
+    response.headers["Content-Type"] = "video/mp4"
+    response.headers["Content-Disposition"] = (
+        f'inline; filename="{PurePath(filename).name}.mp4"'
+    )
+    return response
 
 @app.route("/read")
 def read_transcriptions():
