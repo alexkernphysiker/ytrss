@@ -161,7 +161,7 @@ def update_channels_feed():
                             duration_element = ElementTree.SubElement(entry_element, "duration")
                             duration_element.text = str(duration)
                         auto_transcription_element = ElementTree.SubElement(entry_element, "auto_transcription")
-                        auto_transcription_element.text = "true" if link in get_config()["sources_with_disabled_auto_transcription"] else "false"
+                        auto_transcription_element.text = "true" if link not in get_config()["sources_with_disabled_auto_transcription"] else "false"
                         description_path = "yt-video/" + fn + ".desc"
                         with open(description_path, "w") as f:
                             item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
@@ -310,7 +310,7 @@ def update_channels_feed():
                             for media_content in media_group.findall("{http://search.yahoo.com/mrss/}content"):
                                 media_content_element = ElementTree.SubElement(entry_element, "media:content", url=media_content.get("url"), type=media_content.get("type"))
                         auto_transcription_element = ElementTree.SubElement(entry_element, "auto_transcription")
-                        auto_transcription_element.text = "true" if source_id in get_config()["sources_with_disabled_auto_transcription"] else "false"
+                        auto_transcription_element.text = "true" if source_id not in get_config()["sources_with_disabled_auto_transcription"] else "false"
                         with open(description_path, "w") as f:
                             item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
                             f.write(item_string)
