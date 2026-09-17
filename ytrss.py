@@ -21,7 +21,8 @@ app = Flask(__name__)
 
 
 def buttons_on_top():
-    return "<form action='/subscription' method='post'>" + \
+    return "<head><title>YTRSS subscriptions and configuration</title></head>" + \
+           "<form action='/subscription' method='post'>" + \
            "<input type='submit' name='show_channel_list' value='YT channels'>" + \
            "<input type='submit' name='show_playlist_list' value='YT playlists'>" + \
            "<input type='submit' name='show_rss_list' value='RSS'>" + \
