@@ -307,6 +307,8 @@ def remove_transcription(filename):
 def show_rss_list():
     list_str ="<a>Search Podcasts with iTunes API</a> <br/>" + \
               "<form action='/search/rss' method='post'><input type='text' name='podcast_search_query' class='form-control' id='podcast_search_query'><input type='submit' value='Search'></form>"
+    list_str +="<a>Search RSS with Feedly</a> <br/>" + \
+              "<form action='/search/rss2' method='post'><input type='text' name='rss_search_query' class='form-control' id='rss_search_query'><input type='submit' value='Search'></form>"
 
     list_str += "<a> Subscribed RSS podcasts </a><br/>"
     for link in get_config()["rss_subscriptions"]:
@@ -340,6 +342,19 @@ def search_rss():
     querry = request.form['podcast_search_query']
     list_str = "<a> Search results </a><br/>"
     for title, link, descr, url in search_podcast_itunes_api(querry):
+        if link not in get_config()["rss_subscriptions"]:
+            list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a><input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Subscribe'></form></li>" + \
+                        f"<br /> {descr}"
+        else:
+            list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a>(Subscribed)</form></li>"
+    
+    return buttons_on_top() + f"<ul>{list_str}</ul><br /> <form action='/show_rss_list' method='get'><input type='submit' value='Back'></form>"
+
+@app.route("/search/rss2", methods=['POST'])
+def search_rss2():
+    querry = request.form['rss_search_query']
+    list_str = "<a> Search results </a><br/>"
+    for title, link, descr, url in search_rss_feeds(querry):
         if link not in get_config()["rss_subscriptions"]:
             list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a><input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Subscribe'></form></li>" + \
                         f"<br /> {descr}"

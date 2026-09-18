@@ -225,6 +225,9 @@ def run_openai(filename, summarize):
                 mp3_path = convert_video_to_audio(video_path)
             else:
                 mp3_path = get_enclosure_link(filename)
+            if mp3_path is None:
+                #ToDo: get web-page content
+                return  ""
             for chunk in split_mp3_file(mp3_path):
                 print(f"Transcribing chunk {chunk} for video {filename}...")
                 audio_file= open(chunk, "rb")
@@ -356,6 +359,7 @@ def run_claude(filename, summarize=False):
     srt = download_subtitles(filename)
     if srt == "":
         write_log(filename, "Transcription error: Claude requires subtitles.")
+        #ToDo: implement  obtaining web-pagecontent
         return ""
     for chunk_srt in filter_subs(srt):
         messages=[

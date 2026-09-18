@@ -3,47 +3,69 @@ import requests
 from typing import List, Tuple
 
 def search_podcast_itunes_api(query: str) -> List[Tuple[str, str, str]]:
-    """
-    Шукає подкасти за назвою через Apple iTunes API.
-    
-    Args:
-        query (str): Пошуковий запит (наприклад, назва подкасту).
-        
-    Returns:
-        List[Tuple[str, str, str, str]]: Список знайдених результатів, 
-                               де кожен елемент - це кортеж (назва_подкасту, URL_стрічки_RSS, опис, посилання).
-                               Якщо нічого не знайдено або сталася помилка, повертає порожній список.
-    """
     url = "https://itunes.apple.com/search"
     params = {
         "term": query,
         "entity": "podcast",
-        # Можна додати параметр "limit": 10, якщо хочете обмежити кількість результатів
     }
     
     try:
-        # Встановлюємо таймаут, щоб скрипт не завис у разі проблем з мережею
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
-        
         results = []
         for item in data.get("results", []):
             title = item.get("collectionName")
             feed_url = item.get("feedUrl")
             description = item.get("collectionExplicitness")
             link = item.get("collectionViewUrl")
-            # Додаємо лише ті результати, де є і назва, і посилання на RSS
             if title and feed_url:
                 results.append((title, feed_url, description, link))
-                
         return results
-        
     except requests.exceptions.RequestException as e:
         print(f"Помилка з'єднання з iTunes API: {e}")
         return []
     except ValueError:
         print("Помилка обробки відповіді (очікувався JSON).")
+        return []
+
+def search_rss_feeds(query: str) -> List[Tuple[str, str, str, str]]:
+    url = "https://api.feedly.com/v3/search/feeds"
+
+    params = {
+        "query": query,
+        "count": 20,
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+
+        results = []
+
+        for item in response.json().get("results", []):
+            title = item.get("title")
+            feed_id = item.get("feedId", "")
+            website = item.get("website", "")
+
+            feed_url = (
+                feed_id.removeprefix("feed/")
+                if feed_id.startswith("feed/")
+                else ""
+            )
+
+            if title and feed_url:
+                results.append((
+                    title,
+                    feed_url,
+                    "",        # Опис може бути відсутній
+                    website,
+                ))
+
+        return results
+
+    except (requests.RequestException, ValueError) as e:
+        print(f"Помилка пошуку RSS: {e}")
         return []
 
 def search_youtube_channel_api(query: str, api_key: str = "YOUR_YOUTUBE_API_KEY") -> List[Tuple[str, str, str]]:
