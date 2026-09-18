@@ -22,7 +22,7 @@ def default_config():
         "rss_names_dict": {},
         "google_search_api_key": "",
         "gemini_api_key": "",
-        "gemini_model": "gemini-3.6-flash",
+        "gemini_model": "gemini-3.8-flash",
         "openai_api_key": "",
         "open_ai_text_model": "gpt-5.6",
         "open_ai_audio_model": "gpt-4o-transcribe-diarize",

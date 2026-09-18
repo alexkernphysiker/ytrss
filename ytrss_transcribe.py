@@ -117,8 +117,7 @@ def make_page_text_prompt(lang, link):
     if lang not in get_config()["transcription-prompts"]:
         lang = get_config()["default_language"]
     return get_config()["transcription-prompts"][lang][3] + "\n" + \
-                      (f"Link: {link}" if link is not None else "") + \
-           get_config()["transcription-prompts"][lang][2]
+                      (f"Link: {link}" if link is not None else "")
 
 def convert_video_to_audio(video_file_path):
     audio_file_path = video_file_path + ".mp3"
@@ -274,7 +273,21 @@ def run_gemini(filename, summarize):
             audio_link = get_enclosure_link(filename)
             audio_file_path = download_audio_file(audio_link, filename) if audio_link is not None else None
             if audio_file_path is None or not os.path.exists(audio_file_path):
-                return ""
+
+                interaction = client.interactions.create(
+                    model=gemini_model,
+                    input= make_page_text_prompt(lang, get_page_link(filename)),
+                    tools=[
+                        {"type": "url_context"},
+                        {"type": "google_search"}
+                    ]
+                )
+                for step in interaction.steps:
+                    if step.type == "model_output":
+                        for content_block in step.content:
+                            if content_block.type == "text":
+                                srt += content_block.text
+                return srt
             audio_file = client.files.upload(file=audio_file_path)
             try:
                 response = client.models.generate_content(

@@ -147,6 +147,13 @@ def update_channels_feed():
                             string_list = media_description.text.split('\n')
                             for line in string_list:
                                 description_element.text += "<p>"+line+"</p> <br/>"
+                        content_element = entry.find("content")
+                        if content_element is not None:
+                            description_element.text = content_element.text
+                        else:
+                            content_element = entry.find("content:encoded")
+                            if content_element is not None:
+                                description_element.text = content_element.text
                         if source_enclosure is not None:
                             enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url=source_enclosure.get("url"), type=source_enclosure.get("type"), length = source_enclosure.get("length"))
                         duration = get_duration(source_enclosure.get("url")) if source_enclosure is not None else None
@@ -154,14 +161,14 @@ def update_channels_feed():
                             duration_element = ElementTree.SubElement(entry_element, "duration")
                             duration_element.text = str(duration)
                         auto_transcription_element = ElementTree.SubElement(entry_element, "auto_transcription")
-                        auto_transcription_element.text = "true" if link not in get_config()["sources_with_disabled_auto_transcription"] and source_enclosure is not None else "false"
+                        auto_transcription_element.text = "true" if link not in get_config()["sources_with_disabled_auto_transcription"] else "false"
                         description_path = "yt-video/" + fn + ".desc"
                         with open(description_path, "w") as f:
                             item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
                             f.write(item_string)
                         modTime = mktime(insertion_date.timetuple())
                         os.utime(description_path, (modTime, modTime))
-                        if get_config()["auto_transcript_hours"] > 0 and source_enclosure is not None:
+                        if get_config()["auto_transcript_hours"] > 0:
                             if time_since_insertion < timedelta(hours=get_config()["auto_transcript_hours"]):
                                 print(f"Processing auto-transcription for video {fn}")
                                 transcription_path = "yt-video/" + fn + ".txt"
