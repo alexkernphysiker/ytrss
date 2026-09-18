@@ -31,7 +31,7 @@ def default_config():
         "yt-dlp-enabled": True,
         "yt-dlp-options": "",
         "yt-dlp-options-rss-podcasts": "",
-        "yt-dlp-formats": ["-S res:480", "-S res:360", "-S res:240", "-S res:144", "-x", ""],
+        "yt-dlp-formats": ["-S res:480", "-S res:360", "-S res:240", "-x"],
         "yt-dlp-delay": 1,
         "proxies-youtube": {},
         "proxies-rss": {},
@@ -42,14 +42,16 @@ def default_config():
                 "Please make a text transcription with splitting the text into paragraphs and chapters. " + \
                     "At the beginning, write a summary of 2-3 sentences, who and what the conversation is about. ",
                 "Please summarize this pointing who told the given statements and what sources they mentioned. ",
-                "Start your response with the requested text without explainations how it was obtained."
+                "Start your response with the requested text without explainations how it was obtained.",
+                "Please obtain the full text of the article available on this page"
             ],
             "uk": [
                 "Будь ласка, зроби текстову транскрипцію з логічним розбиттям на абзаци та розділи. " + \
                     "Якщо можливо, також виділи репліки різних мовців. " + \
                     "На початку напиши анотацію від 2-3 речення, хто і про що говорять в цій розмові. ",
                 "Напиши стислий переказ розмови уточнюючи хто озвучив наведені твердження та на що послався.",
-                "Починай відповідь відразу з тексту без пояснень, як ти його отримав."
+                "Починай відповідь відразу з тексту без пояснень, як ти його отримав.",
+                "Будь ласка, напиши повний текст статті доступної на цій сторінці"
             ]
         },
         "default_language": "en",

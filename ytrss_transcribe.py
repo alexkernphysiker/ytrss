@@ -113,6 +113,12 @@ def make_prompt(lang, summarize = False, title = "", description = ""):
                        (f"Title: \"{title}\". " if title!="" else "") + \
                        (f"Description: \"{description}\". " if description!="" else "")
 
+def make_page_text_prompt(lang, link):
+    if lang not in get_config()["transcription-prompts"]:
+        lang = get_config()["default_language"]
+    return get_config()["transcription-prompts"][lang][3] + "\n" + \
+                      (f"Link: {link}" if link is not None else "") + \
+           get_config()["transcription-prompts"][lang][2]
 
 def convert_video_to_audio(video_file_path):
     audio_file_path = video_file_path + ".mp3"
@@ -138,6 +144,17 @@ def get_enclosure_link(filename):
             enclosure =  enclosure_element.get("url")
             if enclosure is not None:
                 return enclosure
+    return None
+def get_page_link(filename):
+    description_path = "yt-video/" + filename + ".desc"
+    if os.path.exists(description_path):
+        parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+        entry = etree.parse(description_path, parser1)
+        link_element = entry.find("link")
+        if link_element is not None:
+            link =  link_element.get("href")
+            if link is not None:
+                return link
     return None
 
 
@@ -252,15 +269,10 @@ def run_gemini(filename, summarize):
     age = datetime.now() - modified_time
     title, description = get_video_title_and_description(filename)
     if srt == "":
-        if lang == "uk":
-            prompt = "Будь ласка, транскрибуй це відео."
-        elif lang == "pl":
-            prompt = "Proszę, przetranskrybuj ten film."
-        else:        
-            prompt = "Please transcribe the video."
         youtube_link = get_video_link(description_path)
         if youtube_link is None:
-            audio_file_path = download_audio_file(get_enclosure_link(filename), filename)
+            audio_link = get_enclosure_link(filename)
+            audio_file_path = download_audio_file(audio_link, filename) if audio_link is not None else None
             if audio_file_path is None or not os.path.exists(audio_file_path):
                 return ""
             audio_file = client.files.upload(file=audio_file_path)
@@ -269,7 +281,7 @@ def run_gemini(filename, summarize):
                     model=gemini_model,
                     contents=[
                         audio_file, 
-                        prompt
+                         make_prompt(lang, summarize=False)
                     ]
                 )
                 srt = response.text
@@ -289,16 +301,18 @@ def run_gemini(filename, summarize):
                             file_uri=youtube_link,
                             mime_type="video/mp4",
                         ),
-                        types.Part.from_text(text=prompt),
+                        types.Part.from_text(text=make_prompt(lang, summarize=False)),
                     ]
                 )
             )
             srt = response.text
+            if not summarize and srt is not None:
+                return srt
+
         if srt is None:
             write_log(filename, "Transcription error: Failed to generate transcription.")
             return ""
         save_subtitles(filename=filename, text= "Transcribed from video link by Gemini:\n"+ srt)
-
     text = ""
     for chunk in filter_subs(srt):
             response = client.models.generate_content(
@@ -404,7 +418,7 @@ def transcribe_video(filename, engine):
         duplicate_fn = find_duplicate_episode(new_episode, threshold=get_config()["duplicate_detection_threshold_transcription"])
         if duplicate_fn is not None:
             print(f"Duplicate episode found for {fn} Duplicate ID: {duplicate_fn}")
-            mark_episode_as_duplicate(duplicate_fn)
+            mark_episode_as_duplicate(fn, duplicate_fn)
 
 
     else:

@@ -62,7 +62,7 @@ def compare_episodes(episode1, episode2):
     
     return score
 
-def find_duplicate_episode(new_episode, threshold=85):
+def find_duplicate_episode(new_episode, threshold):
 
     best_match_fn = None
     highest_score = 0
