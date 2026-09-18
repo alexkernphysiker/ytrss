@@ -4,6 +4,7 @@ import os
 import re
 from flask import send_file
 import requests
+import subprocess
 from xml.etree import ElementTree
 from pathlib import Path
 from config import *
@@ -90,7 +91,6 @@ def get_rss_name(link):
             rss = parse_xml_response(response)  
             channel = rss.find("channel")
             source_name = channel.find("title").text
-            
             rss_names_dict[link] = source_name
             save_config()
             return source_name
@@ -110,6 +110,75 @@ def save_source_list_to_file(filename, sources):
     with open(filename, 'w') as f:
         for source in sources:
             f.write(source + '\n') 
+
+def probe_media(file_path):
+    try:
+        command = f"ffprobe -v error -show_entries format=format_name,format_long_name,duration -of json {file_path}"
+        result = subprocess.run(command, shell=True, capture_output=True)
+        data = json.loads(result.stdout)
+        format_info = data.get("format", {})
+        duration_value = format_info.get("duration")
+
+        return {
+            "duration": (
+                round(float(duration_value))
+                if duration_value is not None
+                else None
+            ),
+            "format_names": format_info.get(
+                "format_name", ""
+            ).split(","),
+            "format_long_name": format_info.get(
+                "format_long_name"
+            ),
+            "streams": data.get("streams", []),
+        }
+
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+        json.JSONDecodeError,
+        TypeError,
+        ValueError,
+    ) as error:
+        print(f"media probe error: {error}")
+        return None
+
+def detect_mimetype(media_info):
+    print(media_info)
+    formats = set(media_info["format_names"])
+    streams = media_info["streams"]
+
+    if "webm" in formats:
+        print("webm")
+        return "webm", "video/webm"
+
+    if "mp4" in formats or "mov" in formats:
+        print("mp4")
+        return "mp4", "video/mp4" 
+
+    if "mp3" in formats:
+        print("mp3")
+        return "mp3", "audio/mpeg"
+
+    if "ogg" in formats:
+        print("ogg")
+        return "ogg", "audio/ogg"
+
+    if "flac" in formats:
+        print("flac")
+        return "flac", "audio/flac"
+
+    if "wav" in formats:
+        print("wav")
+        return "wav", "audio/wav"
+
+    if "m4a" in formats:
+        print("m4a")
+        return "m4a", "audio/m4a"
+
+    return "raw", "application/octet-stream"
 
 from lxml import etree
 def generate_atom_feed(url_link, is_public):
@@ -217,7 +286,16 @@ def generate_atom_feed(url_link, is_public):
             output_item.append(output_duration_element)
         
         if enclosure_element is not None:
-            output_item.append(enclosure_element)
+            if url_link not in enclosure_element.get("url"):
+                output_item.append(enclosure_element)
+            else:
+                file_path = "yt-video/"+fn
+                if os.path.exists(file_path):
+                    length = os.path.getsize(file_path)
+                    ext,media_type = detect_mimetype(probe_media(file_path))
+                    url = f"{url_link}/file/{fn}.{ext}"
+                    enclosure_element = etree.Element("enclosure", url=url, type=media_type, length=str(length))
+                    output_item.append(enclosure_element)
 
         output += "\n    " + etree.tostring(output_item, encoding="utf-8", method="xml").decode("utf-8")
 

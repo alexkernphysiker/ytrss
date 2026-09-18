@@ -355,12 +355,13 @@ def yt_feed():
     global url_link
     return Response(generate_atom_feed(url_link, False), mimetype='application/rss+xml')
 
-@app.route("/file/<path:filename>.mp4")
-def download(filename):
+@app.route("/file/<path:filename>.<extension>")
+def download(filename, extension):
+    _,media_type = detect_mimetype(probe_media("yt-video/"+filename))
     response = return_file(filename)
-    response.headers["Content-Type"] = "video/mp4"
+    response.headers["Content-Type"] = media_type
     response.headers["Content-Disposition"] = (
-        f'inline; filename="{PurePath(filename).name}.mp4"'
+        f'inline; filename="{PurePath(filename).name}.{extension}"'
     )
     return response
 
