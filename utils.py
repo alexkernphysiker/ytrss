@@ -146,36 +146,27 @@ def probe_media(file_path):
         return None
 
 def detect_mimetype(media_info):
-    print(media_info)
     formats = set(media_info["format_names"])
-    streams = media_info["streams"]
 
     if "webm" in formats:
-        print("webm")
         return "webm", "video/webm"
 
     if "mp4" in formats or "mov" in formats:
-        print("mp4")
         return "mp4", "video/mp4" 
 
     if "mp3" in formats:
-        print("mp3")
         return "mp3", "audio/mpeg"
 
     if "ogg" in formats:
-        print("ogg")
         return "ogg", "audio/ogg"
 
     if "flac" in formats:
-        print("flac")
         return "flac", "audio/flac"
 
     if "wav" in formats:
-        print("wav")
         return "wav", "audio/wav"
 
     if "m4a" in formats:
-        print("m4a")
         return "m4a", "audio/m4a"
 
     return "raw", "application/octet-stream"
