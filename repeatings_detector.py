@@ -68,6 +68,8 @@ def find_duplicate_episode(new_episode, threshold):
     highest_score = 0
     transcription = True if get_episode_transcription(new_episode.get("id")) else False
     for known in get_known_episodes():
+        if known.get("id") == new_episode.get("id"):
+            continue
         if transcription:
             if not get_episode_transcription(known.get("id")):
                 continue  # Skip known episodes without transcription if new episode has transcription
