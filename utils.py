@@ -210,6 +210,8 @@ def generate_atom_feed(url_link, is_public):
 
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
+        if age > timedelta(days=get_config()["deliver_days"]):
+            continue
         descr = description_element.text if description_element.text is not None else ""
         description_element.text = ""
         if os.path.exists(log_path) and not os.path.exists(transcription_path) and not is_public:
@@ -220,7 +222,6 @@ def generate_atom_feed(url_link, is_public):
         if auto_transcription_element is not None:
             auto_transcription = auto_transcription_element.text=="true"
         if os.path.exists(transcription_path):
-            if age < timedelta(days=get_config()["manual_transcript_days"]):
                 string_list = open(transcription_path, "r").read().split('\n')
                 description_element.text += f"<p>[TRANSCRIPTION]</p> <br/>"
                 for line in string_list:
@@ -231,19 +232,16 @@ def generate_atom_feed(url_link, is_public):
                         transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine_name}</a> <a>|</a> "
                     description_element.text += f"<br/> {transcribe_link}<br/>"
                     description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"
-            description_element.text += "<p>[DESCRIPTION]</p> <br/>" + descr
+                description_element.text += "<p>[DESCRIPTION]</p> <br/>" + descr
         elif auto_transcription:
             continue # will wait for transcription and final deduplication
         else:
-            if age < timedelta(days=get_config()["manual_transcript_days"]) and not is_public:
                 if get_config()["re-transcription"]:
                     transcribe_link = f"<br/> <a>Transcript with</a> <a>|</a> "
                     for engine, engine_name in get_engine_map().items():
                         transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine_name}</a> <a>|</a> "
                     description_element.text += transcribe_link
                 description_element.text += descr
-            else:
-                description_element.text += f"[DESCRIPTION] <br/> " + descr
         description_element.set("type", "html")
         image_url = input_entry.find("image").get("href").replace("__URL_LINK__", url_link) if input_entry.find("image") is not None else ""
         input_duration_element = input_entry.find("duration")

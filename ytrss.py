@@ -12,6 +12,7 @@ from utils import *
 from lxml import etree
 from ytrss_transcribe import get_engine_map
 from podcast_search import *
+from feed_discover import discover_rss_feeds
 
  
 host=get_config().get("host")
@@ -38,6 +39,10 @@ def subscription():
             return redirect(url_for(action))
     else:
         return buttons_on_top()
+
+@app.route("/config")
+def config_page():
+    return buttons_on_top()
 
 ##### channel subscriptions
 
@@ -179,6 +184,7 @@ def auto_download():
     return buttons_on_top() + f"<ul>" + \
            "<form action='/download-cfg' method='post'>" + \
            f"<label for='max_days'>Keep downloaded items (days):</label><input type='number' id='max_days' name='max_days' min='7' max='90' value='{get_config()["max_days"]}' /><br />" + \
+           f"<label for='deliver_days'>RSS contains items from (days):</label><input type='number' id='deliver_days' name='deliver_days' min='1' max='90' value='{get_config()["deliver_days"]}' /><br />" + \
            f"<label for='duplicate_detection_threshold'>Duplicate Detection Threshold:</label><input type='number' id='duplicate_detection_threshold' name='duplicate_detection_threshold' min='0' max='100' value='{get_config()["duplicate_detection_threshold"]}' /><br />" + \
             "<input type='submit' value='Save config'></form>" + \
            f"{downloading_str}</ul><br />"
@@ -204,6 +210,7 @@ def enable_downloading():
 def download_cfg():
     cfg=get_config()
     cfg["max_days"] = int(request.form['max_days'])
+    cfg["deliver_days"] = int(request.form['deliver_days'])
     cfg["duplicate_detection_threshold"] = int(request.form['duplicate_detection_threshold'])
     save_config()
     return redirect(url_for('auto_download'))
@@ -232,8 +239,7 @@ def auto_transcription():
            "<form action='/auto-transcription-cfg' method='post'>" + \
            f"<label for='default_engine'>Youtube transcription engine:</label><select id='default_engine' name='default_engine'>{engines_str}</select><br />" + \
            f"<label for='auto_transcript_engine_rss'>RSS transcription engine:</label><select id='auto_transcript_engine_rss' name='auto_transcript_engine_rss'>{engines_rss_str}</select><br />" + \
-           f"<label for='auto_transcript_hours'>auto-transcript items not older than (Hr):</label><input type='number' id='auto_transcript_hours' name='auto_transcript_hours' min='3' max='24' value='{get_config()["auto_transcript_hours"]}' /><br />" + \
-           f"<label for='manual_transcript_days'>show transcriptions not older than (days):</label><input type='number' id='manual_transcript_days' name='manual_transcript_days' min='1' max='{get_config()["max_days"]}' value='{get_config()["manual_transcript_days"]}' /><br />" + \
+           f"<label for='auto_transcript_hours'>auto-transcript items not older than (Hr):</label><input type='number' id='auto_transcript_hours' name='auto_transcript_hours' min='3' max='96' value='{get_config()["auto_transcript_hours"]}' /><br />" + \
            f"<label for='wait_for_download_hours'>wait for subtitles (Hr):</label><input type='number' id='wait_for_download_hours' name='wait_for_download_hours' min='0' max='6' value='{get_config()["wait_for_download_hours"]}' /><br />" + \
            f"<label for='duplicate_detection_threshold_transcription'>Duplicate Detection Threshold for Transcription:</label><input type='number' id='duplicate_detection_threshold_transcription' name='duplicate_detection_threshold_transcription' min='0' max='100' value='{get_config()["duplicate_detection_threshold_transcription"]}' /><br />" + \
             "<input type='submit' value='Save config'></form>" + \
@@ -263,7 +269,6 @@ def auto_transcription_cfg():
     cfg["auto_transcript_engine"] = request.form['default_engine']
     cfg["auto_transcript_engine_rss"] = request.form['auto_transcript_engine_rss']
     cfg["auto_transcript_hours"] = int(request.form['auto_transcript_hours'])
-    cfg["manual_transcript_days"] = int(request.form['manual_transcript_days'])
     cfg["wait_for_download_hours"] = int(request.form['wait_for_download_hours'])
     cfg["duplicate_detection_threshold_transcription"] = int(request.form['duplicate_detection_threshold_transcription'])
     save_config()
@@ -309,12 +314,12 @@ def show_rss_list():
               "<form action='/search/rss' method='post'><input type='text' name='podcast_search_query' class='form-control' id='podcast_search_query'><input type='submit' value='Search'></form>"
     list_str +="<a>Search RSS with Feedly</a> <br/>" + \
               "<form action='/search/rss2' method='post'><input type='text' name='rss_search_query' class='form-control' id='rss_search_query'><input type='submit' value='Search'></form>"
+    list_str +="<a>Discover RSS by site URL</a> <br/>" + \
+              "<form action='/search/rss3' method='post'><input type='text' name='site_url' class='form-control' id='site_url'><input type='submit' value='Search'></form>"
 
     list_str += "<a> Subscribed RSS podcasts </a><br/>"
     for link in get_config()["rss_subscriptions"]:
         list_str += f"<li> <form action='/unsubscribe/rss' method='post'>[{get_rss_name(link)}]<input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Unsubscribe'></form></li>"
-    list_str += "<a>Subscribe RSS podcast by link</a> <br/>" + \
-              "<form action='/subscribe/rss' method='post'><input type='text' name='rss_link' class='form-control' id='rss_link'><input type='submit' value='Subscribe'></form>"
     return buttons_on_top() + f"<ul>{list_str}</ul><br />"
 
 @app.route("/subscribe/rss", methods=['POST'])
@@ -355,6 +360,19 @@ def search_rss2():
     querry = request.form['rss_search_query']
     list_str = "<a> Search results </a><br/>"
     for title, link, descr, url in search_rss_feeds(querry):
+        if link not in get_config()["rss_subscriptions"]:
+            list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a><input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Subscribe'></form></li>" + \
+                        f"<br /> {descr}"
+        else:
+            list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a>(Subscribed)</form></li>"
+    
+    return buttons_on_top() + f"<ul>{list_str}</ul><br /> <form action='/show_rss_list' method='get'><input type='submit' value='Back'></form>"
+
+@app.route("/search/rss3", methods=['POST'])
+def search_rss3():
+    querry = request.form['site_url']
+    list_str = "<a> Search results </a><br/>"
+    for title, link, descr, url in discover_rss_feeds(querry):
         if link not in get_config()["rss_subscriptions"]:
             list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a><input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Subscribe'></form></li>" + \
                         f"<br /> {descr}"
