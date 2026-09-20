@@ -80,7 +80,7 @@ def update_channels_feed():
     for link in links:
         try:
             sleep(get_config().get("delay-between-fetches"))
-            response = requests.get(link, timeout=60, proxies=get_config().get("proxies-rss"))
+            response = requests.get(link, timeout=60, headers=get_config()["headers"], proxies=get_config().get("proxies-rss"))
             if response.status_code == 200:
                 rss = parse_xml_response(response)
                 channel = rss.find("channel")
@@ -196,7 +196,7 @@ def update_channels_feed():
     for link in links:
         sleep(get_config().get("delay-between-fetches"))
         try:
-            response = requests.get(link, timeout=60, proxies=get_config().get("proxies-youtube"))
+            response = requests.get(link, timeout=60, headers=get_config()["headers"], proxies=get_config().get("proxies-youtube"))
             if response.status_code == 200:
                 count_all=0
                 count_used=0

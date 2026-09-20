@@ -51,7 +51,7 @@ def get_channel_name(channel_id):
         return channel_names_dict[channel_id]
     sleep(1)  # To avoid hitting YouTube's rate limits
     try:
-        response = requests.get("https://www.youtube.com/feeds/videos.xml?channel_id=" + channel_id, timeout=20)
+        response = requests.get("https://www.youtube.com/feeds/videos.xml?channel_id=" + channel_id, headers=get_config()["headers"], timeout=20)
         if response.status_code == 200:
             channel_content = ElementTree.fromstring(response.text)
             channel_name = channel_content.find("{http://www.w3.org/2005/Atom}author/{http://www.w3.org/2005/Atom}name").text
@@ -69,7 +69,7 @@ def get_playlist_name(playlist_id):
         return playlist_names_dict[playlist_id]
     sleep(1)  # To avoid hitting YouTube's rate limits
     try:
-        response = requests.get("https://www.youtube.com/feeds/videos.xml?playlist_id=" + playlist_id, timeout=20)
+        response = requests.get("https://www.youtube.com/feeds/videos.xml?playlist_id=" + playlist_id, headers=get_config()["headers"], timeout=20)
         if response.status_code == 200:
             playlist_content = ElementTree.fromstring(response.text)
             playlist_name = playlist_content.find("{http://www.w3.org/2005/Atom}title").text
@@ -86,7 +86,7 @@ def get_rss_name(link):
     if link in rss_names_dict:
         return rss_names_dict[link]
     try:
-        response = requests.get(link, timeout=20)
+        response = requests.get(link, timeout=20, headers=get_config()["headers"])
         if response.status_code == 200:
             rss = parse_xml_response(response)  
             channel = rss.find("channel")

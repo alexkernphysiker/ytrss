@@ -56,7 +56,11 @@ def default_config():
         },
         "default_language": "en",
         "duplicate_detection_threshold": 100,
-        "duplicate_detection_threshold_transcription": 100
+        "duplicate_detection_threshold_transcription": 100,
+        "headers" : {
+            "User-Agent": "ytrss/0.1 (+https://github.com/alexkernphysiker/ytrss)",
+            "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*;q=0.8"
+        }
     }
 config=default_config()
 
