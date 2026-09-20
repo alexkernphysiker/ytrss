@@ -60,7 +60,8 @@ def default_config():
         "headers" : {
             "User-Agent": "ytrss/0.1 (+https://github.com/alexkernphysiker/ytrss)",
             "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*;q=0.8"
-        }
+        },
+        "title": "YTRSS feed"
     }
 config=default_config()
 
