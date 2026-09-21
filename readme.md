@@ -1,76 +1,172 @@
 # ytrss
 
-ytrss is a lightweight utility for generating RSS feeds from YouTube channels and videos. It fetches YouTube content and exposes it in a simple RSS-compatible format for feed readers and automation workflows.
+ytrss builds a single RSS 2.0 podcast feed from YouTube channels, YouTube
+playlists, and existing RSS/podcast feeds. It can download YouTube videos for
+use as local enclosures, collect subtitles, transcribe or summarize episodes,
+extract readable text from linked articles, and present saved text in a simple
+web page.
 
-Additionally, ytrss supports video transcription, allowing users to obtain text transcripts of YouTube videos for accessibility, searchability, or further processing.
+The project consists of a small Flask web application plus two polling workers:
 
-This utility uses yt-dlp to download videos from youtube and then uses them as enclosures for rss entries.
+- `ytrss.py` manages subscriptions and serves the generated feed, downloads,
+  and transcriptions.
+- `ytrss_upd.py` fetches subscribed sources, downloads eligible YouTube videos,
+  writes episode metadata, schedules transcription, and removes expired files.
+- `ytrss_transcribe.py` processes automatic and manually requested
+  transcription jobs.
 
-On Android, the generated RSS feed was tested with the application 'RSS reader offline | Podcasts' https://play.google.com/store/apps/details?id=com.vanniktech.rssreader. That is the best RSS application for Android I've ever seen.
+## Requirements
 
-On desktop Linux, it was tested with  QuiteRSS and on firefox extension FeedBro
+- Python 3.9 or newer
+- `ffmpeg` and `ffprobe`
+- `yt-dlp` available on `PATH`
+- Python packages from `requirements.txt`
+- Optional API credentials for YouTube search and AI transcription providers
 
-
-# Requirements
-
-- Python 3
-- `ffmpeg` (used to extract audio for transcription)
-- API keys for any transcription or summarization providers you want to use
-
-On Debian or Ubuntu, install `ffmpeg` and `yt-dlp` with:
+On Debian or Ubuntu, the system tools can be installed with:
 
 ```sh
-sudo apt install ffmpeg yt-dlp
+sudo apt install ffmpeg yt-dlp python3-venv
 ```
 
-# Installation
+## Installation
 
-From the project directory, create a virtual environment and install the Python dependencies:
+Clone the repository, then run the following commands from its root directory:
 
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
+mkdir -p yt-video
+.venv/bin/python -c 'from config import save_config; save_config()'
 ```
 
-# Configuration
+The last command creates `ytrss_config.json` with the defaults from
+`config.py`. Both `ytrss_config.json` and the contents of `yt-video/` are local
+runtime data and are ignored by Git.
 
-The application reads settings from `ytrss_config.json`. After the first run, the tool creates the file with default configuration that can be editted then either via tool's web-interface (some parameters) or manually in the file (all other parameters).
+## Configuration
 
-# Running
+Edit `ytrss_config.json` before starting the application. The web interface can
+change subscriptions and a subset of operational settings; other settings must
+be edited directly in the JSON file.
 
-Start the web server and background workers from the project directory:
+Important settings include:
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `host`, `port` | `127.0.0.1`, `5000` | Address used by the Flask server. |
+| `url_link` | `http://127.0.0.1:5000` | Public base URL embedded in feed and download links. |
+| `title` | `YTRSS feed` | Feed and web-page title. |
+| `deliver_days` | `3` | Maximum item age included in the generated feed and processed from sources. |
+| `max_days` | `30` | Retention time for files under `yt-video/`. |
+| `wait_for_download_hours` | `3` | Time to wait for a new YouTube video/subtitles before continuing without them. |
+| `auto_transcript_hours` | `12` | Automatically transcribe items newer than this many hours; set to `0` to disable scheduling. |
+| `auto_transcript_engine` | `srt` | Default engine for YouTube items. |
+| `auto_transcript_engine_rss` | `gemini_s` | Default engine for RSS items. |
+| `yt-dlp-enabled` | `true` | Globally allow YouTube interaction through `yt-dlp`. |
+| `yt-dlp-formats` | several fallbacks | Ordered download format arguments passed to `yt-dlp`. |
+| `yt-dlp-options` | empty | Extra `yt-dlp` arguments for YouTube downloads and subtitles. |
+| `yt-dlp-options-rss-podcasts` | empty | Extra `yt-dlp` arguments used when downloading podcast audio. |
+| `proxies-youtube`, `proxies-rss` | `{}` | Proxy dictionaries passed to `requests`. |
+| `delay-between-fetches` | `1` | Delay in seconds between source requests. |
+| `duplicate_detection_threshold` | `100` | Fuzzy-match threshold used before downloading new items. |
+| `duplicate_detection_threshold_transcription` | `100` | Fuzzy-match threshold used after transcription. |
+| `re-transcription` | `false` | Show manual transcription/removal links in feed entries. |
+
+Subscriptions, disabled-source lists, cached source names, request headers,
+language prompts, and model names are also stored in this file. See
+`default_config()` in `config.py` for the complete schema and current defaults.
+
+### API credentials and transcription engines
+
+Credentials are read from `ytrss_config.json`:
+
+- `google_search_api_key` enables YouTube channel and playlist search through
+  YouTube Data API v3.
+- `gemini_api_key` enables `gemini_s` and `gemini_t`.
+- `openai_api_key` enables `openai_s` and `openai_t`.
+- `claude_api_key` enables `claude_s` and `claude_t`.
+- `srt` is always available and downloads YouTube subtitles without using an AI
+  provider.
+
+The `_s` variants summarize available subtitles or media; the `_t` variants
+request a fuller transcription. Provider model names and multilingual prompts
+are configurable in the same file. Leaving a provider key empty hides its
+engines from the web interface. The default RSS engine is `gemini_s`, so either
+configure `gemini_api_key` or change `auto_transcript_engine_rss` to an enabled
+engine such as `srt`.
+
+## Running
+
+Start the server and workers from the repository root:
 
 ```sh
-. start.sh
+./start.sh
 ```
 
-The web interface is available at [http://127.0.0.1:5000/subscription](http://127.0.0.1:5000/subscription). The launcher starts:
+The launcher uses `.venv/bin/python` when it exists, otherwise `python3`. It
+starts the Flask server once, runs the feed updater every 5 minutes, and runs the
+transcription worker every minute. Worker output is written to
+`ytrss_upd.log` and `ytrss_transcribe.log`.
 
-- the Flask web server (`ytrss.py`)
-- the RSS update worker (`ytrss_upd.py`), which runs every 10 minutes
-- the transcription worker (`ytrss_transcribe.py`), which runs every minute
+Open [http://127.0.0.1:5000/subscription](http://127.0.0.1:5000/subscription)
+with the default configuration.
 
-# Web interfaces
+`start.sh` launches background processes but does not install a service or
+provide process supervision. For a permanent deployment, run the three Python
+programs under your preferred service manager and reproduce the polling
+intervals there.
 
-The web application provides a simple HTML interface with navigation buttons at the top of each management page.
+## Web interface and endpoints
 
-## Subscriptions
+The subscription pages provide navigation between:
 
-- **YT channels** (`/show_channel_list`) lists subscribed YouTube channels, allows channels to be added or removed by ID, and can search for channels when `google_search_api_key` is configured.
-- **YT playlists** (`/show_playlist_list`) lists subscribed YouTube playlists and allows playlists to be added or removed by ID. Playlist search also uses the configured Google search API key.
-- **RSS** (`/show_rss_list`) searches podcasts through the iTunes API and allows RSS podcast feeds to be subscribed or removed.
+- **YT channels** (`/show_channel_list`): add/remove channels by ID and, when a
+  Google API key is configured, search for channels.
+- **YT playlists** (`/show_playlist_list`): add/remove playlists by ID and
+  optionally search for them.
+- **RSS** (`/show_rss_list`): search podcasts with the iTunes API, search feeds
+  with Feedly, discover feeds from a site URL, and unsubscribe from feeds.
+- **Auto-downloading** (`/auto_download`): enable or disable downloads per
+  YouTube source and configure retention, delivery age, and pre-download
+  duplicate detection.
+- **Auto-transcription** (`/auto_transcription`): enable or disable processing
+  per source, select YouTube and RSS engines, and configure age, subtitle wait,
+  and post-transcription duplicate detection.
 
-Changes made through these pages are saved to `ytrss_config.json`.
+The main output endpoints are:
 
-## Downloading and transcription
+- `/feed` serves the combined RSS 2.0 feed (`application/rss+xml`).
+- `/read` shows stored transcriptions or extracted episode text.
+- `/file/<episode>.<extension>` serves a locally downloaded enclosure.
+- `/transcribe/<engine>/<episode>` queues a manual transcription.
+- `/remove_transcription/<episode>` removes saved transcription output.
 
-- **Auto-downloading** (`/auto_download`) enables or disables downloading for each subscribed YouTube channel or playlist and sets how many days downloaded items are kept.
-- **Auto-transcription** (`/auto_transcription`) enables or disables automatic transcription for subscribed sources and selects separate transcription engines for YouTube and RSS items. It also controls transcription age limits and the wait time for YouTube subtitles.
+Add `http://127.0.0.1:5000/feed` (or the corresponding configured public URL)
+to a feed or podcast reader. The generated feed has been used with RSS Reader
+Offline on Android, QuiteRSS on Linux, and the Feedbro browser extension.
 
-The available transcription engines depend on the API keys configured (directly in `ytrss_config.json`). YouTube items can also expose links for manually scheduling transcription with a selected engine. A completed transcription can be removed through its **Remove this transcription** link. These links are enabled directly in `ytrss_config.json` as well.
+## How items are processed
 
-## RSS feed and transcripts
+For YouTube subscriptions, the updater reads YouTube's channel/playlist Atom
+feeds, ignores Shorts and active/upcoming live streams, optionally downloads
+videos using the configured format fallbacks, and creates local enclosure URLs.
 
-- **RSS feed** (`/feed`) returns the generated Atom feed. Add this URL to an RSS or podcast reader.
-- **Transcriptions** (`/read`) displays saved transcription text in a browser.
-- Downloaded MP4 files are available through `/file/<filename>.mp4` when they exist (used for downloading the episodes' enclosures).
+For RSS subscriptions, existing remote enclosures are preserved. Entries
+without enclosures may use a sufficiently long description or readable article
+text as their saved text. New items can be rejected as duplicates before a
+download; another duplicate check runs after transcription. Items waiting for
+automatic transcription are withheld from `/feed` until processing completes.
+
+Episode metadata is stored as `yt-video/*.desc`; downloads, subtitles,
+transcriptions, and error details use the same episode ID with other extensions.
+Text files in the repository root are transient transcription queues.
+
+## Security notes
+
+The web interface has no authentication and includes state-changing routes.
+Keep the default loopback binding unless access is protected by a trusted
+reverse proxy or another authentication layer. Treat `ytrss_config.json` as a
+secret because it can contain API credentials. Extra `yt-dlp` option fields are
+passed to shell commands, so only trusted administrators should edit the
+configuration.
