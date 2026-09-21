@@ -37,7 +37,7 @@ def download_subtitles(filename):
             print(f"Interacting of yt-dlp with youtube is disabled globally in the configuration.")
             return ""
         additional_options = get_config().get("yt-dlp-options")
-        proc = subprocess.run(f"yt-dlp {additional_options} --skip-download --write-auto-subs --write-subs --sub-lang {lang} {link}", shell=True, capture_output=True)
+        proc = subprocess.run(f"yt-dlp {additional_options} --skip-download --write-auto-subs --write-subs --sub-lang {lang} {link}", shell=True, capture_output=True, timeout=1800)
         for line in proc.stdout.decode().splitlines():
             if line.strip().startswith("[download] Destination: "):
                 srtname = line.strip().split("[download] Destination: ")[-1]
@@ -421,7 +421,6 @@ def transcribe_video(filename, engine):
 
     if text is not None and text.strip() != "":
         with open(transcription_path, "w") as f:
-            f.write(get_engine_map()[engine]+"\n")
             f.write(text)
         modTime = os.path.getmtime(description_path)
         os.utime(transcription_path, (modTime, modTime))

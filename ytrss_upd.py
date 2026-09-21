@@ -34,7 +34,7 @@ def get_live_status(link):
         additional_options = get_config().get("yt-dlp-options")
         full_command = f"yt-dlp {additional_options} --skip-download --print live_status {link}"
         print(full_command)
-        proc = subprocess.run(full_command, shell=True, capture_output=True)
+        proc = subprocess.run(full_command, shell=True, capture_output=True, timeout=60)
         output = proc.stdout.decode().strip()
         return output.lower()
     except Exception as e:
@@ -50,7 +50,7 @@ def download_video(link, filename):
         additional_options = get_config().get("yt-dlp-options")
         full_command = f"yt-dlp {additional_options} {params} -o {filename}.dl {link}"
         print(full_command)
-        proc = subprocess.run(full_command, shell=True, capture_output=True)
+        proc = subprocess.run(full_command, shell=True, capture_output=True, timeout=1800)
         for file in Path(".").glob(filename + ".dl*"):
             os.rename(file, filename)
             print(f"Successfully downloaded video {filename}.")
@@ -62,7 +62,7 @@ def download_video(link, filename):
 def get_duration(file_path):
     command = f"ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 {file_path}"
     try:
-        result = subprocess.run(command, shell=True, capture_output=True)
+        result = subprocess.run(command, shell=True, capture_output=True, timeout=60)
         output = int(float(result.stdout.decode().strip()))
         return output
     except (subprocess.CalledProcessError, ValueError):

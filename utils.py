@@ -114,7 +114,7 @@ def save_source_list_to_file(filename, sources):
 def probe_media(file_path):
     try:
         command = f"ffprobe -v error -show_entries format=format_name,format_long_name,duration -of json {file_path}"
-        result = subprocess.run(command, shell=True, capture_output=True)
+        result = subprocess.run(command, shell=True, capture_output=True, timeout=60)
         data = json.loads(result.stdout)
         format_info = data.get("format", {})
         duration_value = format_info.get("duration")
