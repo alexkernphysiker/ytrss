@@ -140,7 +140,7 @@ def update_channels_feed():
                     time_since_insertion = datetime.now(timezone.utc) - insertion_date
                     media_description = entry.find("description", NS)
                     media_thumbnail = entry.find("itunes:image", NS)
-                    if time_since_insertion < timedelta(days=get_config()["max_days"]):
+                    if time_since_insertion < timedelta(days=get_config()["deliver_days"]):
                         entry_element = ElementTree.Element("entry")
                         title_element = ElementTree.SubElement(entry_element, "title")
                         title_element.text = "[" + source_name + "] " + title.text
@@ -214,7 +214,7 @@ def update_channels_feed():
                         transcription_path = "yt-video/" + fn + ".txt"
                         if source_enclosure is not None:
                             enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url=source_enclosure.get("url"), type=source_enclosure.get("type"), length = source_enclosure.get("length"))
-                        else:
+                        elif not os.path.exists(transcription_path):
                             descr_len = html_text_length(description_element.text)
                             if descr_len >=1024:
                                 with open(transcription_path, "w") as f:
@@ -299,7 +299,7 @@ def update_channels_feed():
                         media_thumbnail = media_group.find("{http://search.yahoo.com/mrss/}thumbnail")
                     else:
                         media_description = entry.find("{http://www.w3.org/2005/Atom}summary")
-                    if "shorts" not in link_element.get("href") and time_since_insertion < timedelta(days=get_config()["max_days"]):
+                    if "shorts" not in link_element.get("href") and time_since_insertion < timedelta(days=get_config()["deliver_days"]):
                         entry_element = ElementTree.Element("entry")
                         title_element = ElementTree.SubElement(entry_element, "title")
                         title_element.text = "[" + source_name + "] " + title.text
