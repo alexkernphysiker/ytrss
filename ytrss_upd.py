@@ -13,9 +13,13 @@ from time import sleep, mktime
 from pathlib import Path
 import arrow
 from random import shuffle
+from urllib.parse import urljoin, urlsplit
+from lxml.etree import ParserError
+from lxml import html as lxml_html
 from repeatings_detector import find_duplicate_episode
 from utils import *
 from config import *
+from extract_page import *
 
 def cleanup():
     now = arrow.now()
@@ -69,11 +73,47 @@ def get_duration(file_path):
         print("duration estimation error")
         return None
 
+def find_image_in_html(html_text, base_url):
+    if not html_text or not html_text.strip():
+        return None
+
+    try:
+        root = lxml_html.fragment_fromstring(
+            html_text,
+            create_parent="div",
+        )
+    except (ParserError, ValueError):
+        return None
+
+    for img in root.iter("img"):
+        # data-src часто містить справжню картинку
+        # при відкладеному завантаженні.
+        for attribute in ("data-src", "src"):
+            src = (img.get(attribute) or "").strip()
+            if not src:
+                continue
+
+            try:
+                image_url = urljoin(base_url, src)
+                parsed = urlsplit(image_url)
+            except ValueError:
+                continue
+
+            if parsed.scheme in ("http", "https") and parsed.netloc:
+                return image_url
+
+    return None
+
 def update_channels_feed():
-    ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
-    MEDIA_NS = "http://search.yahoo.com/mrss/"
-    etree.register_namespace("itunes", ITUNES_NS)
-    etree.register_namespace("media", MEDIA_NS)
+    NS = {
+        "itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd",
+        "media": "http://search.yahoo.com/mrss/",
+        "content": "http://purl.org/rss/1.0/modules/content/",
+        "atom": "http://www.w3.org/2005/Atom",
+        "podcast": "https://podcastindex.org/namespace/1.0",
+    }
+    for ns_name in NS.keys():
+        etree.register_namespace(ns_name, NS[ns_name])
     print("Fetching podcasts RSS subscriptions")
     links = get_config()["rss_subscriptions"]
     shuffle(links)
@@ -83,23 +123,23 @@ def update_channels_feed():
             response = requests.get(link, timeout=60, headers=get_config()["headers"], proxies=get_config().get("proxies-rss"))
             if response.status_code == 200:
                 rss = parse_xml_response(response)
-                channel = rss.find("channel")
-                source_name = channel.find("title").text
+                channel = rss.find("channel", NS)
+                source_name = channel.find("title", NS).text
                 print(f"{link}: {source_name}")
-                for entry in channel.findall("item"):
-                    title = entry.find("title")
+                for entry in channel.findall("item", NS):
+                    title = entry.find("title", NS)
                     if title is None or not title.text:
                         print(f"Skipping entry with no title in source {source_name}")
                         continue
-                    link_element = entry.find("link")
-                    published = entry.find("pubDate")
+                    link_element = entry.find("link", NS)
+                    published = entry.find("pubDate", NS)
                     if published is None or not published.text:
                         print(f"Skipping entry with no published date in source {source_name}")
                         continue
                     insertion_date = dateutil.parser.parse(published.text)
                     time_since_insertion = datetime.now(timezone.utc) - insertion_date
-                    media_description = entry.find("description")
-                    media_thumbnail = entry.find(f"{{{ITUNES_NS}}}image")
+                    media_description = entry.find("description", NS)
+                    media_thumbnail = entry.find("itunes:image", NS)
                     if time_since_insertion < timedelta(days=get_config()["max_days"]):
                         entry_element = ElementTree.Element("entry")
                         title_element = ElementTree.SubElement(entry_element, "title")
@@ -115,7 +155,7 @@ def update_channels_feed():
                         if media_thumbnail is not None:
                             thumbnail_element = ElementTree.SubElement(entry_element, "image", href=media_thumbnail.get("href"))
                         chars = re.escape(string.punctuation)
-                        source_enclosure = entry.find("enclosure")
+                        source_enclosure = entry.find("enclosure", NS)
                         id_element = ElementTree.SubElement(entry_element, "id")
                         fn = ""
                         if link_element is not None and link_element.text is not None:
@@ -141,21 +181,51 @@ def update_channels_feed():
                                 print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
                                 continue
 
+                        article = fetch_readable_article(
+                            link_element.text,
+                            headers=get_config()["headers"],
+                            proxies=get_config().get("proxies-rss"),
+                        ) if link_element is not None and link_element.text is not None and source_enclosure is None else None
+
                         description_element = ElementTree.SubElement(entry_element, "summary")
                         description_element.text = ""
                         if media_description is not None and media_description.text is not None:
                             string_list = media_description.text.split('\n')
                             for line in string_list:
                                 description_element.text += "<p>"+line+"</p> <br/>"
-                        content_element = entry.find("content")
+                        content_element = entry.find("content", NS)
                         if content_element is not None:
                             description_element.text = content_element.text
                         else:
-                            content_element = entry.find("content:encoded")
+                            content_element = entry.find("content:encoded", NS)
                             if content_element is not None:
                                 description_element.text = content_element.text
+                                if media_thumbnail is None and link_element is not None and link_element.text is not None:
+                                    img_url = find_image_in_html(content_element.text, link_element.text)
+                                    if False and img_url is None:
+                                        if article is not None:
+                                            img_url = find_image_in_html(
+                                                article["html"],
+                                                base_url=article["url"],
+                                            )
+                                    if img_url is not None:
+                                        thumbnail_element = ElementTree.SubElement(entry_element, "image", href=img_url)
+
+                        transcription_path = "yt-video/" + fn + ".txt"
                         if source_enclosure is not None:
                             enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url=source_enclosure.get("url"), type=source_enclosure.get("type"), length = source_enclosure.get("length"))
+                        else:
+                            descr_len = html_text_length(description_element.text)
+                            if descr_len >=1024:
+                                with open(transcription_path, "w") as f:
+                                    f.write(extract_plain_text(description_element.text))
+                                    print("Description seems to be long enough to be considered as full text. No need to transcript")
+                            if article is not None:
+                                if html_text_length(article["html"]) > descr_len:
+                                    with open(transcription_path, "w") as f:
+                                        f.write(extract_plain_text(article["html"]))
+                                        print("Extracted page text is longer than description. It is considered as full text. No need to transcript")
+
                         duration = get_duration(source_enclosure.get("url")) if source_enclosure is not None else None
                         if duration is not None:
                             duration_element = ElementTree.SubElement(entry_element, "duration")
@@ -171,7 +241,6 @@ def update_channels_feed():
                         if get_config()["auto_transcript_hours"] > 0:
                             if time_since_insertion < timedelta(hours=get_config()["auto_transcript_hours"]):
                                 print(f"Processing auto-transcription for video {fn}")
-                                transcription_path = "yt-video/" + fn + ".txt"
                                 if not os.path.exists(transcription_path) and not link in get_config()["sources_with_disabled_auto_transcription"]:
                                     video_list = load_source_list_from_file("transcription_rss.txt")
                                     if not fn in video_list:

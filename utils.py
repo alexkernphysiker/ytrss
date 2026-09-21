@@ -223,7 +223,6 @@ def generate_atom_feed(url_link, is_public):
             auto_transcription = auto_transcription_element.text=="true"
         if os.path.exists(transcription_path):
                 string_list = open(transcription_path, "r").read().split('\n')
-                description_element.text += f"<p>[TRANSCRIPTION]</p> <br/>"
                 for line in string_list:
                     description_element.text += "<p>"+line+"</p> <br/>"
                 if get_config()["re-transcription"]:
@@ -232,7 +231,6 @@ def generate_atom_feed(url_link, is_public):
                         transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine_name}</a> <a>|</a> "
                     description_element.text += f"<br/> {transcribe_link}<br/>"
                     description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"
-                description_element.text += "<p>[DESCRIPTION]</p> <br/>" + descr
         elif auto_transcription:
             continue # will wait for transcription and final deduplication
         else:
@@ -315,16 +313,15 @@ def generate_transcriptions_page(url_link):
         listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
         output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
         enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""
-        output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
+        if enclosure_url != "":
+            output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
         output += f"<br/><a href='#{fn}-end'>[next]</a>"
         if os.path.exists(transcription_path):
-            output += "<p>[transcription]</p>"
             string_list = open(transcription_path, "r").read().split('\n')
             for line in string_list:
                 if line.strip() != "":
                     output += f"<p>{line}</p>"
-        if entry.find("summary") is not None and entry.find("summary").text is not None:
-            output += "<p>[description]</p>"
+        elif entry.find("summary") is not None and entry.find("summary").text is not None:
             for line in entry.find("summary").text.split('\n'):
                 if line.strip() != "":
                     output += f"<p>{line}</p>"
