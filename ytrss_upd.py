@@ -184,11 +184,13 @@ def update_channels_feed():
                                     print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
                                     continue
 
-                        article = fetch_readable_article(
-                            link_element.text,
-                            headers=get_config()["headers"],
-                            proxies=get_config().get("proxies-rss"),
-                        ) if link_element is not None and link_element.text is not None and source_enclosure is None else None
+                            article = fetch_readable_article(
+                                link_element.text,
+                                headers=get_config()["headers"],
+                                proxies=get_config().get("proxies-rss"),
+                            ) if link_element is not None and link_element.text is not None and source_enclosure is None else None
+                        else:
+                            article = None
 
                         description_element = ElementTree.SubElement(entry_element, "summary")
                         description_element.text = ""
@@ -205,12 +207,6 @@ def update_channels_feed():
                                 description_element.text = content_element.text
                                 if media_thumbnail is None and link_element is not None and link_element.text is not None:
                                     img_url = find_image_in_html(content_element.text, link_element.text)
-                                    if False and img_url is None:
-                                        if article is not None:
-                                            img_url = find_image_in_html(
-                                                article["html"],
-                                                base_url=article["url"],
-                                            )
                                     if img_url is not None:
                                         thumbnail_element = ElementTree.SubElement(entry_element, "image", href=img_url)
 
