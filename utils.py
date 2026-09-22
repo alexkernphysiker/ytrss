@@ -316,6 +316,9 @@ def generate_transcriptions_page(url_link):
         if enclosure_url != "":
             output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
         output += f"<br/><a href='#{fn}-end'>[next]</a>"
+        image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
+        if image_url != "":
+            output+=f"<br/> <img src='{image_url}' width='80%' alt='{title_element.text}'>"
         if os.path.exists(transcription_path):
             string_list = open(transcription_path, "r").read().split('\n')
             for line in string_list:
