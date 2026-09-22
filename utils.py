@@ -328,6 +328,8 @@ def generate_transcriptions_page(url_link):
         title_element = entry.find("title")
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
+        if age > timedelta(days=get_config()["deliver_days"]):
+            continue
         listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
         output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
         enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""

@@ -17,7 +17,7 @@ The project consists of a small Flask web application plus two polling workers:
 
 ## Requirements
 
-- Python 3.9 or newer
+- Python 3.12 or newer (the source uses Python 3.12 f-string syntax)
 - `ffmpeg` and `ffprobe`
 - `yt-dlp` available on `PATH`
 - Python packages from `requirements.txt`
@@ -89,12 +89,24 @@ Credentials are read from `ytrss_config.json`:
 - `srt` is always available and downloads YouTube subtitles without using an AI
   provider.
 
-The `_s` variants summarize available subtitles or media; the `_t` variants
-request a fuller transcription. Provider model names and multilingual prompts
-are configurable in the same file. Leaving a provider key empty hides its
-engines from the web interface. The default RSS engine is `gemini_s`, so either
-configure `gemini_api_key` or change `auto_transcript_engine_rss` to an enabled
-engine such as `srt`.
+The `_s` variants request a summary and the `_t` variants request a fuller
+transcription. Provider model names and multilingual prompts are configurable
+in the same file. Leaving a provider key empty hides its engines from the web
+interface and causes an automatic queue configured for that engine to be
+skipped.
+
+Engine capabilities currently differ:
+
+- `srt` only downloads YouTube subtitles.
+- Claude requires subtitles and therefore currently works for YouTube items
+  that have subtitles.
+- OpenAI can use subtitles, local YouTube media, or a podcast enclosure.
+- Gemini can use subtitles, a YouTube URL, a podcast enclosure, or URL context
+  for an article page.
+
+The default RSS engine is `gemini_s`; configure `gemini_api_key`, select another
+provider that can process podcast media, disable automatic transcription for
+the relevant RSS sources, or set `auto_transcript_hours` to `0`.
 
 ## Running
 
@@ -116,6 +128,14 @@ with the default configuration.
 provide process supervision. For a permanent deployment, run the three Python
 programs under your preferred service manager and reproduce the polling
 intervals there.
+
+Each program can also be run once on its own:
+
+```sh
+.venv/bin/python ytrss.py             # web server (long-running)
+.venv/bin/python ytrss_upd.py         # one update and cleanup pass
+.venv/bin/python ytrss_transcribe.py  # drain the current transcription queues
+```
 
 ## Web interface and endpoints
 
@@ -153,14 +173,26 @@ feeds, ignores Shorts and active/upcoming live streams, optionally downloads
 videos using the configured format fallbacks, and creates local enclosure URLs.
 
 For RSS subscriptions, existing remote enclosures are preserved. Entries
-without enclosures may use a sufficiently long description or readable article
-text as their saved text. New items can be rejected as duplicates before a
-download; another duplicate check runs after transcription. Items waiting for
-automatic transcription are withheld from `/feed` until processing completes.
+without enclosures first use a sufficiently long feed description as saved
+text. The updater also fetches the linked HTML page and saves its readable text
+when it is longer and looks like a complete article. An image is taken from
+encoded feed content when the feed has no podcast image.
+
+Duplicate detection compares fuzzy title/description text before processing and
+transcription text after processing, considering only items within
+`deliver_days`. A post-transcription duplicate is marked in its metadata and is
+omitted from both `/feed` and `/read`. Items configured for automatic
+transcription are withheld from `/feed` until a text file is produced.
 
 Episode metadata is stored as `yt-video/*.desc`; downloads, subtitles,
 transcriptions, and error details use the same episode ID with other extensions.
-Text files in the repository root are transient transcription queues.
+YouTube IDs are derived from the video URL. RSS episode IDs are SHA-256 hashes
+of the source feed URL plus the entry link and/or enclosure URL, keeping IDs
+stable while avoiding collisions between feeds. Text files in the repository
+root are transient queues: `transcription.txt` and `transcription_rss.txt` hold
+automatic jobs, while `<engine>.txt` files hold manual jobs. The transcription
+worker clears a queue before processing it, and removes temporary MP3 files
+after a pass.
 
 ## Security notes
 

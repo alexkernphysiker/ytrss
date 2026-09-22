@@ -167,7 +167,8 @@ def update_channels_feed():
                         if fn == "":
                                 print(f"Skipping entry with no link and no enclosure in source {source_name}")
                                 continue
-                        fn = hashlib.md5(fn.encode()).hexdigest()
+                        fn = link + fn
+                        fn = hashlib.sha256(fn.encode()).hexdigest()
 
                         if not os.path.exists("yt-video/" + fn + ".desc"):
                             print(f"New episode detected: {fn}")
@@ -179,7 +180,7 @@ def update_channels_feed():
                             duplicate_fn = find_duplicate_episode(new_episode, threshold=get_config()["duplicate_detection_threshold"])
                             if duplicate_fn is not None:
                                 if get_enclosure_link(duplicate_fn) is not None \
-                                    or enclosure_element is None:
+                                    or source_enclosure is None:
                                     print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
                                     continue
 
