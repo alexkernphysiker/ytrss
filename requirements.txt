@@ -12,3 +12,4 @@ lingua-language-detector
 feedparser
 beautifulsoup4
 trafilatura
+pendulum

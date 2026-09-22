@@ -10,6 +10,23 @@ from pathlib import Path
 from config import *
 from ytrss_transcribe import get_engine_map
 import html
+import pendulum
+
+def convert_date_to_iso_with_pendulum(date):
+    date_cp = date
+    for tzcode, tzoffs in {
+        "UT": "+0", "UTC": "+0", "GMT": "+0",
+        "EST": "-5", "EDT": "-4",
+        "CST": "-6", "CDT": "-5",
+        "MST": "-7", "MDT": "-6",
+        "PST": "-8", "PDT": "-7",
+        "HST": "-10", "AKST": "-9", "AKDT": "-8",
+        "CEDT": "+2", "EET": "+2", "EEST": "+3",
+        "CES": "+1", "MET": "+1" 
+    }.items():
+        date_cp.replace(tzcode, tzoffs)
+    return pendulum.parse(date_cp, strict=False)
+
 
 def parse_xml_response(response):
     return ElementTree.fromstring(response.content)
@@ -171,8 +188,8 @@ def detect_mimetype(media_info):
 
     return "raw", "application/octet-stream"
 
-from lxml import etree
 def generate_atom_feed(url_link, is_public):
+    from lxml import etree
     ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
     MEDIA_NS = "http://search.yahoo.com/mrss/"
     etree.register_namespace("itunes", ITUNES_NS)
@@ -292,6 +309,7 @@ def generate_atom_feed(url_link, is_public):
     return output
 
 def generate_transcriptions_page(url_link):
+    from lxml import etree
     ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
     MEDIA_NS = "http://search.yahoo.com/mrss/"
     etree.register_namespace("itunes", ITUNES_NS)

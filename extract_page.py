@@ -22,7 +22,6 @@ def html_text_length(html_text):
     return len(text)
 
 def extract_plain_text(article_html):
-    """Перетворює очищений HTML статті на звичайний текст."""
     try:
         document = lxml_html.fromstring(article_html)
     except (ValueError, TypeError):
@@ -35,59 +34,30 @@ def extract_plain_text(article_html):
     ):
         text = " ".join(element.itertext())
         text = re.sub(r"\s+", " ", text).strip()
+        if text and len(text) > 5:
+            if len(paragraphs)==0 or text != paragraphs[-1]:
+                paragraphs.append(text)
 
-        if text:
-            paragraphs.append(text)
-
-    return "\n\n".join(paragraphs)
+    return "\n".join(paragraphs)
 
 
 def extract_readable_article(page_html, page_url):
-    """
-    Виділяє основний вміст HTML-сторінки.
-
-    Повертає:
-        {
-            "html": очищений HTML,
-            "text": звичайний текст,
-            "url": кінцевий URL сторінки,
-        }
-
-    або None, якщо статтю надійно виділити не вдалося.
-    """
     article_html = extract(
         page_html,
         url=page_url,
         output_format="html",
-
-        # Не включати коментарі під статтею.
         include_comments=False,
-
-        # Таблиці можна лишити, якщо вони важливі для статей.
         include_tables=True,
-
-        # Зберегти посилання та картинки основного тексту.
         include_links=True,
         include_images=True,
-
-        # Краще пропустити сумнівний блок, ніж захопити меню
-        # або супутні матеріали.
         favor_precision=True,
-
-        # Прибирати повторювані фрагменти.
         deduplicate=True,
     )
-
     if not article_html:
         return None
-
     article_text = extract_plain_text(article_html)
-
-    # Захист від сторінок-заглушок, cookie-повідомлень
-    # і невдалого розпізнавання.
     if len(article_text) < 200:
         return None
-
     return {
         "html": article_html,
         "text": article_text,
@@ -96,7 +66,6 @@ def extract_readable_article(page_html, page_url):
 
 
 def fetch_readable_article(url, headers=None, proxies=None):
-    """Завантажує сторінку і виділяє основний текст статті."""
     try:
         response = requests.get(
             url,
@@ -153,4 +122,4 @@ def looks_like_full_article(html_text):
 
     total_length = sum(len(text) for text in paragraphs)
 
-    return len(paragraphs) >= 3 and total_length >= 600
+    return len(paragraphs) >= 3 and total_length >= 768

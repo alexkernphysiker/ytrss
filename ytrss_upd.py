@@ -20,6 +20,7 @@ from repeatings_detector import find_duplicate_episode
 from utils import *
 from config import *
 from extract_page import *
+from ytrss_transcribe import get_enclosure_link
 
 def cleanup():
     now = arrow.now()
@@ -136,7 +137,7 @@ def update_channels_feed():
                     if published is None or not published.text:
                         print(f"Skipping entry with no published date in source {source_name}")
                         continue
-                    insertion_date = dateutil.parser.parse(published.text)
+                    insertion_date = convert_date_to_iso_with_pendulum(published.text)
                     time_since_insertion = datetime.now(timezone.utc) - insertion_date
                     media_description = entry.find("description", NS)
                     media_thumbnail = entry.find("itunes:image", NS)
@@ -178,8 +179,10 @@ def update_channels_feed():
                             }
                             duplicate_fn = find_duplicate_episode(new_episode, threshold=get_config()["duplicate_detection_threshold"])
                             if duplicate_fn is not None:
-                                print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
-                                continue
+                                if get_enclosure_link(duplicate_fn) is not None \
+                                    or enclosure_element is None:
+                                    print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
+                                    continue
 
                         article = fetch_readable_article(
                             link_element.text,
@@ -215,13 +218,13 @@ def update_channels_feed():
                         if source_enclosure is not None:
                             enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url=source_enclosure.get("url"), type=source_enclosure.get("type"), length = source_enclosure.get("length"))
                         elif not os.path.exists(transcription_path):
-                            descr_len = html_text_length(description_element.text)
-                            if descr_len >=1024:
+                            if looks_like_full_article(description_element.text):
                                 with open(transcription_path, "w") as f:
                                     f.write(extract_plain_text(description_element.text))
                                     print("Description seems to be long enough to be considered as full text. No need to transcript")
                             if article is not None:
-                                if html_text_length(article["html"]) > descr_len:
+                                if html_text_length(article["html"]) > html_text_length(description_element.text) \
+                                    and looks_like_full_article(article["html"]):
                                     with open(transcription_path, "w") as f:
                                         f.write(extract_plain_text(article["html"]))
                                         print("Extracted page text is longer than description. It is considered as full text. No need to transcript")
@@ -289,7 +292,7 @@ def update_channels_feed():
                     if published is None or not published.text:
                         print(f"Skipping entry with no published date in source {source_name}")
                         continue
-                    insertion_date = dateutil.parser.parse(published.text)
+                    insertion_date =convert_date_to_iso_with_pendulum(published.text)
                     time_since_insertion = datetime.now(timezone.utc) - insertion_date
                     count_all += 1
                     media_group = entry.find("{http://search.yahoo.com/mrss/}group")
