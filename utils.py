@@ -338,7 +338,7 @@ def generate_transcriptions_page(url_link):
         output += f"<br/><a href='#{fn}-end'>[next]</a>"
         image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
         if image_url != "":
-            output+=f"<br/> <img src='{image_url}' width='80%' alt='{title_element.text}'>"
+            output+=f"<br/> <img src='{image_url}' width='30%' alt='{title_element.text}'>"
         if os.path.exists(transcription_path):
             string_list = open(transcription_path, "r").read().split('\n')
             for line in string_list:
@@ -353,7 +353,7 @@ def generate_transcriptions_page(url_link):
     output = ""
     for age, (fn, title, content, modified_time) in asc.items():
         output += f"<div id='{fn}'> <h2><li>{title} ({modified_time})</li></h2><br/>{content}<br/></div><br/><div id='{fn}-end'><a href='#{fn}'>[back]</a></div><br/>"
-    return f"<html><body><h1>Youtube videos and podcasts</h1><ul>{output}</ul></body></html>"
+    return f"<html><body><h1>{get_config()["title"]}</h1><ul>{output}</ul></body></html>"
 
 def return_file(filename):
     return send_file("yt-video/"+filename)
