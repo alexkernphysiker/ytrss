@@ -5,9 +5,7 @@ import string
 import re
 import requests
 from xml.etree import ElementTree
-from xml.etree import cElementTree
 from datetime import datetime, timedelta, timezone
-import dateutil.parser
 import hashlib
 from time import sleep, mktime
 from pathlib import Path
@@ -106,6 +104,7 @@ def find_image_in_html(html_text, base_url):
     return None
 
 def update_channels_feed():
+    from lxml import etree
     NS = {
         "itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd",
         "media": "http://search.yahoo.com/mrss/",
@@ -241,6 +240,8 @@ def update_channels_feed():
                             f.write(item_string)
                         modTime = mktime(insertion_date.timetuple())
                         os.utime(description_path, (modTime, modTime))
+                        if os.path.exists(transcription_path):
+                            os.utime(transcription_path, (modTime, modTime))
                         if get_config()["auto_transcript_hours"] > 0:
                             if time_since_insertion < timedelta(hours=get_config()["auto_transcript_hours"]):
                                 print(f"Processing auto-transcription for video {fn}")

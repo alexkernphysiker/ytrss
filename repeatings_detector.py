@@ -5,6 +5,8 @@ from xml.etree import ElementTree
 from pathlib import Path
 from thefuzz import fuzz
 import json
+from datetime import datetime, timedelta
+from config import get_config
 
 def get_known_episodes(directory="yt-video"):
     episodes = []
@@ -72,7 +74,12 @@ def find_duplicate_episode(new_episode, threshold):
             continue
         if transcription:
             if not get_episode_transcription(known.get("id")):
-                continue  # Skip known episodes without transcription if new episode has transcription
+                continue
+        description_path = Path(f"yt-video/{known.get("id")}.desc")
+        modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
+        age = datetime.now() - modified_time
+        if age > timedelta(days=get_config()["deliver_days"]):
+            continue
         score = compare_episodes(new_episode, known)
         if score > highest_score:
             highest_score = score

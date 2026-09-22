@@ -1,8 +1,8 @@
 import re
-
 import requests
 from lxml import html as lxml_html
 from trafilatura import extract
+from time import sleep
 
 def html_text_length(html_text):
     if not html_text:
@@ -66,7 +66,9 @@ def extract_readable_article(page_html, page_url):
 
 
 def fetch_readable_article(url, headers=None, proxies=None):
+    from config import get_config
     try:
+        sleep(get_config().get("delay-between-fetches"))
         response = requests.get(
             url,
             headers=headers,
