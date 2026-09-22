@@ -216,7 +216,7 @@ def run_openai(filename, summarize):
         lang = detect_language(description_path) or "en"
         text = download_subtitles(filename)
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
-        age = datetime.now(datetime.timezone.utc) - modified_time
+        age = datetime.now() - modified_time
 
         if text=="":
             if age < timedelta(hours=get_config()["wait_for_download_hours"]) and get_video_link(description_path)!="":
@@ -268,7 +268,7 @@ def run_gemini(filename, summarize):
     lang = detect_language(description_path) or "en"
     srt = download_subtitles(filename)
     modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
-    age = datetime.now(datetime.timezone.utc) - modified_time
+    age = datetime.now() - modified_time
     title, description = get_video_title_and_description(filename)
     if srt == "":
         youtube_link = get_video_link(description_path)
@@ -353,7 +353,7 @@ def run_claude(filename, summarize=False):
     max_tokens = 100000
     description_path = "yt-video/" + filename + ".desc"
     modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
-    age = datetime.now(datetime.timezone.utc) - modified_time
+    age = datetime.now() - modified_time
     title, description = get_video_title_and_description(filename)
     output=""
     srt = download_subtitles(filename)
