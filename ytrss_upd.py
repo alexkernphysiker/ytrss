@@ -335,7 +335,7 @@ def update_channels_feed():
                             if get_live_status(link_element.get("href")) in ["is_live", "is_upcoming"]:
                                 print(f"Video {fn} is currently live, skipping item.")
                                 continue
-                            if source_id not in get_config()["sources_with_disabled_downloading"]:
+                            if source_id not in get_config()["sources_with_disabled_downloading"] and not get_config()["temporary_block_yt_download"]:
                                 print(f"No existing file for video {fn}, downloading...")
                                 if not download_video(link_element.get("href"), file_path):
                                     if time_since_insertion < timedelta(hours=get_config()["wait_for_download_hours"]):
