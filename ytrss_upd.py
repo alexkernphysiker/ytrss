@@ -87,8 +87,6 @@ def find_image_in_html(html_text, base_url):
         return None
 
     for img in root.iter("img"):
-        # data-src часто містить справжню картинку
-        # при відкладеному завантаженні.
         for attribute in ("data-src", "src"):
             src = (img.get(attribute) or "").strip()
             if not src:
