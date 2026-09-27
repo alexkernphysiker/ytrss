@@ -35,7 +35,7 @@ def get_live_status(link):
         return False
     try:
         additional_options = get_config().get("yt-dlp-options")
-        full_command = f"yt-dlp {additional_options} --skip-download --print live_status {link}"
+        full_command = f"yt-dlp {additional_options} --simulate --ignore-no-formats-error --skip-download --print live_status {link}"
         print(full_command)
         proc = subprocess.run(full_command, shell=True, capture_output=True, timeout=60)
         output = proc.stdout.decode().strip()
@@ -55,6 +55,8 @@ def download_video(link, filename):
         print(full_command)
         proc = subprocess.run(full_command, shell=True, capture_output=True, timeout=1800)
         for file in Path(".").glob(filename + ".dl*"):
+            if os.path.exists(filename):
+                os.remove(filename)
             os.rename(file, filename)
             print(f"Successfully downloaded video {filename}.")
             return True
@@ -329,8 +331,11 @@ def update_channels_feed():
                                 print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
                                 continue
 
+                        ext = "raw"
                         if os.path.exists(file_path):
-                            print(f"Existing file for video {fn} found")
+                            ext,_ = detect_mimetype(probe_media(file_path))
+                        if os.path.exists(file_path) and ext != "raw":
+                            print(f"Existing and valid file for video {fn} found")
                         else:
                             if get_live_status(link_element.get("href")) in ["is_live", "is_upcoming"]:
                                 print(f"Video {fn} is currently live, skipping item.")

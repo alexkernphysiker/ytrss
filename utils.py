@@ -297,9 +297,10 @@ def generate_atom_feed(url_link, is_public):
                 if os.path.exists(file_path):
                     length = os.path.getsize(file_path)
                     ext,media_type = detect_mimetype(probe_media(file_path))
-                    url = f"{url_link}/file/{fn}.{ext}"
-                    enclosure_element = etree.Element("enclosure", url=url, type=media_type, length=str(length))
-                    output_item.append(enclosure_element)
+                    if ext != "raw":
+                        url = f"{url_link}/file/{fn}.{ext}"
+                        enclosure_element = etree.Element("enclosure", url=url, type=media_type, length=str(length))
+                        output_item.append(enclosure_element)
 
         output += "\n    " + etree.tostring(output_item, encoding="utf-8", method="xml").decode("utf-8")
 
