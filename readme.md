@@ -1,19 +1,20 @@
 # ytrss
 
-ytrss builds a single RSS 2.0 podcast feed from YouTube channels, YouTube
-playlists, and existing RSS/podcast feeds. It can download YouTube videos for
-use as local enclosures, collect subtitles, transcribe or summarize episodes,
-extract readable text from linked articles, and present saved text in a simple
-web page.
+YTRSS is a self-hosted podcast and media archiver for YouTube channels,
+playlists, and RSS feeds. It combines subscribed sources into one RSS 2.0 feed,
+auto-downloads eligible video/audio items for local enclosure use, preserves
+subtitles and article text, and can queue AI-based summarization or
+transcription jobs for saved episodes.
 
-The project consists of a small Flask web application plus two polling workers:
+The project currently consists of a small Flask web app plus two background
+workers:
 
-- `ytrss.py` manages subscriptions and serves the generated feed, downloads,
-  and transcriptions.
-- `ytrss_upd.py` fetches subscribed sources, downloads eligible YouTube videos,
-  writes episode metadata, schedules transcription, and removes expired files.
-- `ytrss_transcribe.py` processes automatic and manually requested
-  transcription jobs.
+- `ytrss.py` manages subscriptions, source settings, and the generated feed,
+  downloads, and transcription views.
+- `ytrss_upd.py` polls subscribed sources, downloads eligible media, writes
+  episode metadata, schedules transcription, and cleans up expired files.
+- `ytrss_transcribe.py` processes automatic and manual transcription jobs from
+  local queues and provider-specific engines.
 
 ## Requirements
 
