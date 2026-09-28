@@ -335,7 +335,6 @@ def parce_yt_item(link):
                                 if not download_video(link_element.get("href"), file_path):
                                     if time_since_insertion < timedelta(hours=get_config()["wait_for_download_hours"]):
                                         print(f"Video {fn} is too new and failed to download, skipping item.")
-                                        continue
                                     print(f"Failed to download video {fn} but proceeding.")
                             else:
                                 print(f"Downloading is disabled for source {source_id}")
