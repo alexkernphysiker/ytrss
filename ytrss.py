@@ -1,7 +1,3 @@
-from datetime import datetime, timedelta
-from pathlib import Path
-from time import sleep
-from xmlrpc import client
 from flask import Flask, url_for
 from flask import send_file
 from flask import request
@@ -9,7 +5,6 @@ from flask import redirect
 from flask import Response
 from pathlib import PurePath
 from utils import *
-from lxml import etree
 from ytrss_transcribe import get_engine_map
 from podcast_search import *
 from feed_discover import discover_rss_feeds

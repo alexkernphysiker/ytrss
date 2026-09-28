@@ -7,7 +7,7 @@ import requests
 from xml.etree import ElementTree
 from datetime import datetime, timedelta, timezone
 import hashlib
-from time import sleep, mktime
+from time import mktime
 from pathlib import Path
 import arrow
 from random import shuffle
