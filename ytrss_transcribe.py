@@ -37,6 +37,7 @@ def download_subtitles(filename):
             print(f"Interacting of yt-dlp with youtube is disabled globally in the configuration.")
             return ""
         additional_options = get_config().get("yt-dlp-options")
+        secure_wait()
         proc = subprocess.run(f"yt-dlp {additional_options} --skip-download --write-auto-subs --write-subs --sub-lang {lang} {link}", shell=True, capture_output=True, timeout=600)
         for line in proc.stdout.decode().splitlines():
             if line.strip().startswith("[download] Destination: "):
@@ -178,6 +179,7 @@ def download_audio_file(url, filename):
         return audio_file_path
     additional_options = get_config().get("yt-dlp-options-rss-podcasts")
     command = f"yt-dlp {additional_options} -x --audio-format mp3 -o '{audio_file_path}' {url.split('?')[0]}"
+    secure_wait()
     subprocess.call(command, shell=True, timeout=1800)
     if os.path.exists(audio_file_path):
         modTime = os.path.getmtime("yt-video/" + filename + ".desc")

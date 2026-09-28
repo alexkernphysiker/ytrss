@@ -7,10 +7,20 @@ import requests
 import subprocess
 from xml.etree import ElementTree
 from pathlib import Path
+from random import shuffle, random
 from config import *
 from ytrss_transcribe import get_engine_map
 import html
 import pendulum
+
+def secure_wait():
+    delay = 0.0
+    n=15
+    for i in range(n):
+        delay += random()
+    delay = 1.0 + delay *  get_config().get("delay-between-fetches") / float(n)
+    print(f"delay for {delay} sec.")
+    sleep(delay)
 
 def convert_date_to_iso_with_pendulum(date):
     date_cp = date

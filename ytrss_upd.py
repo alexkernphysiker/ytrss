@@ -20,15 +20,6 @@ from config import *
 from extract_page import *
 from ytrss_transcribe import get_enclosure_link
 
-def secure_wait():
-    delay = 0.0
-    n=15
-    for i in range(n):
-        delay += random()
-    delay = 1.0 + delay *  get_config().get("delay-between-fetches") / float(n)
-    print(f"delay for {delay} sec.")
-    sleep(delay)
-
 def cleanup():
     now = arrow.now()
     for file in Path("yt-video").glob("*"):
