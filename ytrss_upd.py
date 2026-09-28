@@ -10,7 +10,7 @@ import hashlib
 from time import sleep, mktime
 from pathlib import Path
 import arrow
-from random import shuffle, random
+from random import shuffle
 from urllib.parse import urljoin, urlsplit
 from lxml.etree import ParserError
 from lxml import html as lxml_html

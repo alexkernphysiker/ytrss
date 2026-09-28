@@ -7,11 +7,13 @@ import requests
 import subprocess
 from xml.etree import ElementTree
 from pathlib import Path
-from random import shuffle, random
+from random import seed, random
 from config import *
 from ytrss_transcribe import get_engine_map
 import html
 import pendulum
+
+seed()
 
 def secure_wait():
     delay = 0.0
