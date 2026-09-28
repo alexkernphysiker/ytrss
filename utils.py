@@ -17,7 +17,7 @@ seed()
 
 def secure_wait():
     delay = 0.0
-    n=15
+    n=8
     for i in range(n):
         delay += random()
     delay = 1.0 + delay *  get_config().get("delay-between-fetches") / float(n)

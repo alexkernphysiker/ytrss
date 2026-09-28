@@ -55,11 +55,15 @@ def download_video(link, filename):
         print(full_command)
         proc = subprocess.run(full_command, shell=True, capture_output=True, timeout=1800)
         for file in Path(".").glob(filename + ".dl*"):
-            if os.path.exists(filename):
-                os.remove(filename)
-            os.rename(file, filename)
-            print(f"Successfully downloaded video {filename}.")
-            return True
+            ext,_ = detect_mimetype(probe_media(file))
+            if ext!="raw":
+                if os.path.exists(filename):
+                    os.remove(filename)
+                os.rename(file, filename)
+                print(f"Successfully downloaded video {filename}.")
+                return True
+            else:
+                print("What has been downloaded, is not a valid media file")
         print(f"Failed to download video {filename}. yt-dlp output: {proc.stderr.decode()}")
     print(f"Failed to download video {filename} with all attempted resolutions.")
     return False
