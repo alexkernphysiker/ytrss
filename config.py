@@ -32,7 +32,6 @@ def default_config():
         "yt-dlp-options": "",
         "yt-dlp-options-rss-podcasts": "",
         "yt-dlp-formats": ["-S res:480", "-S res:360", "-S res:240", "-x"],
-        "yt-dlp-delay": 1,
         "proxies-youtube": {},
         "proxies-rss": {},
         "delay-between-fetches": 1,

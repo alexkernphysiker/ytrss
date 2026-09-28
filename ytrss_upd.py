@@ -10,7 +10,7 @@ import hashlib
 from time import sleep, mktime
 from pathlib import Path
 import arrow
-from random import shuffle
+from random import shuffle, random
 from urllib.parse import urljoin, urlsplit
 from lxml.etree import ParserError
 from lxml import html as lxml_html
@@ -19,6 +19,15 @@ from utils import *
 from config import *
 from extract_page import *
 from ytrss_transcribe import get_enclosure_link
+
+def secure_wait():
+    delay = 0.0
+    n=15
+    for i in range(n):
+        delay += random()
+    delay = 1.0 + delay *  get_config().get("delay-between-fetches") / float(n)
+    print(f"delay for {delay} sec.")
+    sleep(delay)
 
 def cleanup():
     now = arrow.now()
@@ -49,7 +58,7 @@ def download_video(link, filename):
         print(f"Interacting of yt-dlp with youtube is disabled globally in the configuration.")
         return False
     for params in get_config().get("yt-dlp-formats"):
-        sleep(get_config().get("yt-dlp-delay"))
+        secure_wait()
         additional_options = get_config().get("yt-dlp-options")
         full_command = f"yt-dlp {additional_options} {params} -o {filename}.dl {link}"
         print(full_command)
@@ -103,23 +112,20 @@ def find_image_in_html(html_text, base_url):
 
     return None
 
-def update_channels_feed():
-    from lxml import etree
-    NS = {
-        "itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd",
-        "media": "http://search.yahoo.com/mrss/",
-        "content": "http://purl.org/rss/1.0/modules/content/",
-        "atom": "http://www.w3.org/2005/Atom",
-        "podcast": "https://podcastindex.org/namespace/1.0",
-    }
-    for ns_name in NS.keys():
-        etree.register_namespace(ns_name, NS[ns_name])
-    print("Fetching podcasts RSS subscriptions")
-    links = get_config()["rss_subscriptions"]
-    shuffle(links)
-    for link in links:
+def parce_rss_item(link):
+        from lxml import etree
+        NS = {
+            "itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd",
+            "media": "http://search.yahoo.com/mrss/",
+            "content": "http://purl.org/rss/1.0/modules/content/",
+            "atom": "http://www.w3.org/2005/Atom",
+            "podcast": "https://podcastindex.org/namespace/1.0",
+        }
+        for ns_name in NS.keys():
+            etree.register_namespace(ns_name, NS[ns_name])
+
         try:
-            sleep(get_config().get("delay-between-fetches"))
+            secure_wait()
             response = requests.get(link, timeout=60, headers=get_config()["headers"], proxies=get_config().get("proxies-rss"))
             if response.status_code == 200:
                 rss = parse_xml_response(response)
@@ -256,15 +262,10 @@ def update_channels_feed():
                 print(f"Failed to fetch {link}: HTTP {response.status_code}")
         except requests.RequestException as e:
             print(f"Error fetching {link}: {e}")
-    print(f"Fetching youtube channels and playlists")
-    links=[]
-    for channel_id in get_config()["channel_subscriptions"]:
-        links.append(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
-    for playlist_id in get_config()["playlist_subscriptions"]:
-        links.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}")
-    shuffle(links)
-    for link in links:
-        sleep(get_config().get("delay-between-fetches"))
+        return
+
+def parce_yt_item(link):
+        secure_wait()
         try:
             response = requests.get(link, timeout=60, headers=get_config()["headers"], proxies=get_config().get("proxies-youtube"))
             if response.status_code == 200:
@@ -409,10 +410,24 @@ def update_channels_feed():
                 print(f"Failed to fetch {link}: HTTP {response.status_code}")
         except requests.RequestException as e:
             print(f"Error fetching {link}: {e}")
-            
+
+
+def update_channels_feed():
+    links=[]
+    for channel_id in get_config()["channel_subscriptions"]:
+        links.append(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
+    for playlist_id in get_config()["playlist_subscriptions"]:
+        links.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}")
+    links += get_config()["rss_subscriptions"]
+    shuffle(links)
+    for link in links:
+        if "youtube.com" in link:
+            parce_yt_item(link)
+        else:
+            parce_rss_item(link)
+
 
 if __name__ == "__main__":
     cleanup()
     update_channels_feed()
-    update_names_dicts()
-    save_config()
+    secure_wait()
