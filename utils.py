@@ -211,6 +211,7 @@ def generate_atom_feed(url_link, is_public):
         <atom:link href="{url_link}/feed" rel="self" type="application/rss+xml" />"""
 
     for description_path in Path("yt-video").glob("*.desc"):
+      try:
         transcription_path = str(description_path).replace(".desc", ".txt")
         log_path = str(description_path).replace(".desc", ".log")
         fn = os.path.basename(description_path).replace(".desc", "")
@@ -307,7 +308,9 @@ def generate_atom_feed(url_link, is_public):
                         output_item.append(enclosure_element)
 
         output += "\n    " + etree.tostring(output_item, encoding="utf-8", method="xml").decode("utf-8")
-
+      except Exception as e:
+          print(e)
+          
     output += """
     </channel>
 </rss>"""
