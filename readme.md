@@ -131,8 +131,15 @@ The launcher runs one process with three independent worker threads: the Flask
 web server, feed updater, and transcriber. Both periodic workers run immediately
 and wait 60 seconds after each completed or failed pass, matching the former
 `start.sh`. HTTP requests can use additional server request threads. Worker
-output is written separately to `ytrss_upd.log` and `ytrss_transcribe.log`; each
-pass replaces that worker's previous log.
+output is appended separately to `ytrss_upd.log` and `ytrss_transcribe.log`,
+preserving previous passes and application runs. Before each pass, each log is
+trimmed to its last 20,000 lines if necessary. Output added during a pass can
+exceed this limit until the next pass starts; the worker and its synchronous
+subprocesses are not writing during trimming. An empty pass keeps the existing
+log, applying the same line limit at its start.
+The transcriber's `subprocess.call` commands send both stdout and stderr to its
+log. Commands whose captured output is parsed by the application keep their
+existing output handling.
 
 Open [http://127.0.0.1:5000/subscription](http://127.0.0.1:5000/subscription)
 with the default configuration.

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run the web server, feed updater and transcriber in one shared process."""
 
+from collections import deque
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 import signal
@@ -15,6 +16,7 @@ from config import get_config, save_config
 
 UPDATE_INTERVAL = 60
 TRANSCRIPTION_INTERVAL = 60
+LOG_MAX_LINES = 20_000
 _worker_output = local()
 
 
@@ -38,13 +40,28 @@ class ThreadOutput:
         return getattr(_worker_output, "stream", self.fallback).flush()
 
 
+def trim_worker_log(path):
+    """Keep the last LOG_MAX_LINES, preserving raw subprocess output bytes.
+
+    Called only before a pass, when this worker and its synchronous
+    subprocesses are not writing. The two workers own separate log files.
+    """
+    with open(path, "r+b") as stream:
+        lines = deque(stream, maxlen=LOG_MAX_LINES + 1)
+        if len(lines) > LOG_MAX_LINES:
+            lines.popleft()
+            stream.seek(0)
+            stream.writelines(lines)
+            stream.truncate()
+
+
 @contextmanager
 def worker_log(path):
     if path is None:
         yield
         return
-    # Match start.sh: each pass replaces that worker's previous log.
-    with open(path, "w", encoding="utf-8", buffering=1) as stream:
+    with open(path, "a", encoding="utf-8", buffering=1) as stream:
+        trim_worker_log(path)
         _worker_output.stream = stream
         try:
             yield

@@ -133,7 +133,7 @@ def convert_video_to_audio(video_file_path):
         print(f"Audio file {audio_file_path} already exists, skipping conversion.")
         return
     command = "ffmpeg -i {} -vn -ar 44100 -ac 1 -b:a 48k {}".format(video_file_path, audio_file_path)
-    subprocess.call(command, shell=True, timeout=1800)
+    subprocess.call(command, shell=True, timeout=1800, stdout=sys.stdout, stderr=sys.stderr)
     if os.path.exists(audio_file_path):
         modTime = os.path.getmtime(video_file_path)
         os.utime(audio_file_path, (modTime, modTime))
@@ -171,7 +171,7 @@ def split_mp3_file(mp3_file_path, chunk_length_s=1000):
             print(f"Removing old mp3 chunk file: {file}")
             file.unlink()
     command = "ffmpeg -i {} -f segment -segment_time {} -c copy yt-video/chunk.%05d.mp3".format(mp3_file_path, chunk_length_s)
-    subprocess.call(command, shell=True, timeout=1800)
+    subprocess.call(command, shell=True, timeout=1800, stdout=sys.stdout, stderr=sys.stderr)
     for file in sorted(Path("yt-video").glob("chunk.*.mp3")):
         if file.is_file():
             print(f"mp3 chunk file: {file}")
@@ -187,7 +187,7 @@ def download_audio_file(url, filename):
     additional_options = get_config().get("yt-dlp-options-rss-podcasts")
     command = f"yt-dlp {additional_options} -x --audio-format mp3 -o '{audio_file_path}' {url.split('?')[0]}"
     secure_wait()
-    subprocess.call(command, shell=True, timeout=1800)
+    subprocess.call(command, shell=True, timeout=1800, stdout=sys.stdout, stderr=sys.stderr)
     if os.path.exists(audio_file_path):
         modTime = os.path.getmtime("yt-video/" + filename + ".desc")
         os.utime(audio_file_path, (modTime, modTime))

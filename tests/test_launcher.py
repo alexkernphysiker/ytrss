@@ -68,6 +68,8 @@ class LauncherTests(unittest.TestCase):
             with store.edit() as cfg:
                 cfg["port"] = 0
             stack.enter_context(patch.object(config, "_store", store))
+            Path("ytrss_upd.log").write_text("update history\n" * start.LOG_MAX_LINES)
+            Path("ytrss_transcribe.log").write_text("transcribe history\n" * start.LOG_MAX_LINES)
             stop = Event()
             release = Event()
             ready = Barrier(3)
@@ -124,6 +126,10 @@ class LauncherTests(unittest.TestCase):
                 self.assertIn(f"transcribe {suffix}", transcription_log)
             self.assertNotIn("transcribe", update_log)
             self.assertNotIn("update", transcription_log)
+            self.assertIn("update history", update_log)
+            self.assertIn("transcribe history", transcription_log)
+            self.assertEqual(len(update_log.splitlines()), start.LOG_MAX_LINES + 3)
+            self.assertEqual(len(transcription_log.splitlines()), start.LOG_MAX_LINES + 3)
 
     def test_main_starts_actual_app_and_handles_sigint_and_sigterm(self):
         script = Path(start.__file__).resolve()

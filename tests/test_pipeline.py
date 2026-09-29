@@ -1,7 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import chdir, ExitStack
+from contextlib import chdir, ExitStack, redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
 import json
+import io
 from pathlib import Path
 import subprocess
 import sys
@@ -13,6 +14,7 @@ from xml.etree import ElementTree
 from lxml import etree
 
 import config
+import start
 import utils
 import ytrss
 import ytrss_transcribe as transcriber
@@ -224,6 +226,35 @@ class PipelineTests(unittest.TestCase):
                 f"import sys; sys.path.insert(0, {source!r}); import {modules}",
             ], capture_output=True, text=True, timeout=15)
             self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_all_subprocess_call_helpers_redirect_both_output_streams(self):
+        real_call = subprocess.call
+        calls = []
+
+        def run_fixture_command(command, **kwargs):
+            self.assertIs(kwargs.get("stdout"), sys.stdout)
+            self.assertIs(kwargs.get("stderr"), sys.stderr)
+            calls.append(command)
+            kwargs["shell"] = False
+            return real_call(
+                [sys.executable, "-u", "-c",
+                 "import sys; print('command stdout'); print('command stderr', file=sys.stderr)"],
+                **kwargs,
+            )
+
+        fallback = io.StringIO()
+        with redirect_stdout(start.ThreadOutput(fallback)), \
+             redirect_stderr(start.ThreadOutput(fallback)), \
+             start.worker_log("ytrss_transcribe.log"), \
+             patch.object(transcriber.subprocess, "call", side_effect=run_fixture_command), \
+             patch.object(transcriber, "secure_wait"):
+            transcriber.convert_video_to_audio("yt-video/episode")
+            list(transcriber.split_mp3_file("yt-video/episode.mp3"))
+            transcriber.download_audio_file("https://fixture.invalid/audio.mp3", "episode")
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(Path("ytrss_transcribe.log").read_text().splitlines(),
+                         ["command stdout", "command stderr"] * 3)
+        self.assertEqual(fallback.getvalue(), "")
 
 
 if __name__ == "__main__":
