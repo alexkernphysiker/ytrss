@@ -21,7 +21,7 @@ def secure_wait():
     n=8
     for i in range(n):
         delay += random()
-    delay = 1.0 + delay *  get_config().get("delay-between-fetches") / float(n)
+    delay = 1.0 + delay *  get_config().get("delay-between-fetches") * 2.0 / float(n)
     print(f"delay for {delay} sec.")
     sleep(delay)
 
