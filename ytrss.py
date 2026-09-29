@@ -8,6 +8,8 @@ from utils import *
 from ytrss_transcribe import get_engine_map
 from podcast_search import *
 from feed_discover import discover_rss_feeds
+from config import edit_config, get_config
+from transcription_queue import transcription_queues
 
  
 host=get_config().get("host")
@@ -79,19 +81,19 @@ def subscribe_channel():
     source_id = request.form['source_id']
     #if get_channel_name(source_id)=="":
     #    return buttons_on_top() + f"cannot obtain the channel {source_id}"
-    sources_list = get_config()["channel_subscriptions"]
-    if source_id not in sources_list:
-        sources_list.append(source_id)
-        save_config()
+    with edit_config() as cfg:
+        sources_list = cfg["channel_subscriptions"]
+        if source_id not in sources_list:
+            sources_list.append(source_id)
     return redirect(url_for('show_channel_list'))
 
 @app.route("/unsubscribe/channel", methods=['POST'])
 def unsubscribe_channel():
     source_id = request.form['source_id']
-    sources_list = get_config()["channel_subscriptions"]
-    if source_id in sources_list:
-        sources_list.remove(source_id)
-        save_config()
+    with edit_config() as cfg:
+        sources_list = cfg["channel_subscriptions"]
+        if source_id in sources_list:
+            sources_list.remove(source_id)
     return redirect(url_for('show_channel_list'))
 
 @app.route("/search/channel", methods=['POST'])
@@ -132,19 +134,19 @@ def subscribe_playlist():
     source_id = request.form['source_id']
     #if get_playlist_name(source_id)=="":
     #    return buttons_on_top() + f"cannot obtain the playlist {source_id}"
-    playlists_list = get_config()["playlist_subscriptions"]
-    if source_id not in playlists_list:
-        playlists_list.append(source_id)
-        save_config()
+    with edit_config() as cfg:
+        playlists_list = cfg["playlist_subscriptions"]
+        if source_id not in playlists_list:
+            playlists_list.append(source_id)
     return redirect(url_for('show_playlist_list'))
 
 @app.route("/unsubscribe/playlist", methods=['POST'])
 def unsubscribe_playlist():
     source_id = request.form['source_id']
-    playlists_list = get_config()["playlist_subscriptions"]
-    if source_id in playlists_list:
-        playlists_list.remove(source_id)
-        save_config()
+    with edit_config() as cfg:
+        playlists_list = cfg["playlist_subscriptions"]
+        if source_id in playlists_list:
+            playlists_list.remove(source_id)
     return redirect(url_for('show_playlist_list'))
 
 @app.route("/search/playlist", methods=['POST'])
@@ -187,27 +189,26 @@ def auto_download():
 @app.route("/downloading/disable", methods=['POST'])
 def disable_downloading():
     source_id = request.form['source_id']
-    sources_list = get_config()["sources_with_disabled_downloading"]
-    if source_id not in sources_list:
-        sources_list.append(source_id)
-        save_config()
+    with edit_config() as cfg:
+        sources_list = cfg["sources_with_disabled_downloading"]
+        if source_id not in sources_list:
+            sources_list.append(source_id)
     return redirect(url_for('auto_download'))
 
 @app.route("/downloading/enable", methods=['POST'])
 def enable_downloading():
     source_id = request.form['source_id']
-    sources_list = get_config()["sources_with_disabled_downloading"]
-    if source_id in sources_list:
-        sources_list.remove(source_id)
-        save_config()
+    with edit_config() as cfg:
+        sources_list = cfg["sources_with_disabled_downloading"]
+        if source_id in sources_list:
+            sources_list.remove(source_id)
     return redirect(url_for('auto_download'))
 @app.route("/download-cfg", methods=['POST'])
 def download_cfg():
-    cfg=get_config()
-    cfg["max_days"] = int(request.form['max_days'])
-    cfg["deliver_days"] = int(request.form['deliver_days'])
-    cfg["duplicate_detection_threshold"] = int(request.form['duplicate_detection_threshold'])
-    save_config()
+    with edit_config() as cfg:
+        cfg["max_days"] = int(request.form['max_days'])
+        cfg["deliver_days"] = int(request.form['deliver_days'])
+        cfg["duplicate_detection_threshold"] = int(request.form['duplicate_detection_threshold'])
     return redirect(url_for('auto_download'))
 
 
@@ -243,51 +244,47 @@ def auto_transcription():
 @app.route("/auto-transcription/disable", methods=['POST'])
 def disable_auto_transcription():
     source_id = request.form['source_id']
-    sources_list = get_config()["sources_with_disabled_auto_transcription"]
-    if source_id not in sources_list:
-        sources_list.append(source_id)
-        save_config()
+    with edit_config() as cfg:
+        sources_list = cfg["sources_with_disabled_auto_transcription"]
+        if source_id not in sources_list:
+            sources_list.append(source_id)
     return redirect(url_for('auto_transcription'))
 
 @app.route("/auto-transcription/enable", methods=['POST'])
 def enable_auto_transcription():
     source_id = request.form['source_id']
-    sources_list = get_config()["sources_with_disabled_auto_transcription"]
-    if source_id in sources_list:
-        sources_list.remove(source_id)
-        save_config()
+    with edit_config() as cfg:
+        sources_list = cfg["sources_with_disabled_auto_transcription"]
+        if source_id in sources_list:
+            sources_list.remove(source_id)
     return redirect(url_for('auto_transcription'))
 
 @app.route("/auto-transcription-cfg", methods=['POST'])
 def auto_transcription_cfg():
-    cfg=get_config()
-    cfg["auto_transcript_engine"] = request.form['default_engine']
-    cfg["auto_transcript_engine_rss"] = request.form['auto_transcript_engine_rss']
-    cfg["auto_transcript_hours"] = int(request.form['auto_transcript_hours'])
-    cfg["wait_for_download_hours"] = int(request.form['wait_for_download_hours'])
-    cfg["duplicate_detection_threshold_transcription"] = int(request.form['duplicate_detection_threshold_transcription'])
-    save_config()
+    with edit_config() as cfg:
+        cfg["auto_transcript_engine"] = request.form['default_engine']
+        cfg["auto_transcript_engine_rss"] = request.form['auto_transcript_engine_rss']
+        cfg["auto_transcript_hours"] = int(request.form['auto_transcript_hours'])
+        cfg["wait_for_download_hours"] = int(request.form['wait_for_download_hours'])
+        cfg["duplicate_detection_threshold_transcription"] = int(request.form['duplicate_detection_threshold_transcription'])
     return redirect(url_for('auto_transcription'))
 
 
 ### video transcription
 @app.route("/transcribe/<engine>/<filename>")
 def transcribe(engine, filename):
-    if engine not in get_engine_map().keys():
+    engines = get_engine_map()
+    if engine not in engines:
         return f"Unknown transcription engine {engine}"
-    video_list = load_source_list_from_file(f"{engine}.txt")
-    if filename not in video_list:
-        video_list.append(filename)
-        save_source_list_to_file(f"{engine}.txt", video_list)
-        log_path = f"yt-video/{filename}.log"
-        if os.path.exists(log_path):
-            os.remove(log_path)
-        transcription_path = f"yt-video/{filename}.txt"
-        if os.path.exists(transcription_path):
-            os.remove(transcription_path)
-        return f"Scheduled {get_engine_map()[engine]} for video {filename}."
+
+    def remove_old_output():
+        Path(f"yt-video/{filename}.log").unlink(missing_ok=True)
+        Path(f"yt-video/{filename}.txt").unlink(missing_ok=True)
+
+    if transcription_queues.enqueue(engine, filename, prepare=remove_old_output):
+        return f"Scheduled {engines[engine]} for video {filename}."
     else:
-        return f"{get_engine_map()[engine]} for video {filename} was already scheduled."
+        return f"{engines[engine]} for video {filename} was already scheduled."
 
 
 @app.route("/remove_transcription/<filename>")
@@ -322,19 +319,19 @@ def subscribe_rss():
     link = request.form['rss_link']
     if get_rss_name(link)=="":
         return buttons_on_top() + f"cannot parse the rss {link}"
-    sources_list = get_config()["rss_subscriptions"]
-    if link not in sources_list:
-        sources_list.append(link)
-        save_config()
+    with edit_config() as cfg:
+        sources_list = cfg["rss_subscriptions"]
+        if link not in sources_list:
+            sources_list.append(link)
     return redirect(url_for('show_rss_list'))
 
 @app.route("/unsubscribe/rss", methods=['POST'])
 def unsubscribe_rss():
     link = request.form['rss_link']
-    sources_list = get_config()["rss_subscriptions"]
-    if link in sources_list:
-        sources_list.remove(link)
-        save_config()
+    with edit_config() as cfg:
+        sources_list = cfg["rss_subscriptions"]
+        if link in sources_list:
+            sources_list.remove(link)
     return redirect(url_for('show_rss_list'))
 
 @app.route("/search/rss", methods=['POST'])

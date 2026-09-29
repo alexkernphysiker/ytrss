@@ -1,22 +1,27 @@
 import os
 import subprocess
+import sys
 from pathlib import Path
 from lxml import etree
 from repeatings_detector import find_duplicate_episode, mark_episode_as_duplicate
-from utils import *
-from config import *
+from datetime import datetime, timedelta
+from utils import secure_wait
+from config import get_config
 from lang_detect import detect_language
+from transcription_queue import AUTO_RSS, AUTO_YOUTUBE, transcription_queues
 import json
 
-def get_engine_map():
+def get_engine_map(cfg=None):
+    if cfg is None:
+        cfg = get_config()
     res = dict()
-    if get_config()["gemini_api_key"] != "":
+    if cfg["gemini_api_key"] != "":
         res["gemini_s"] = "Summarize with Gemini"
         res["gemini_t"] = "Transcribe with Gemini"
-    if get_config()["openai_api_key"] != "":
+    if cfg["openai_api_key"] != "":
         res["openai_s"] = "Summarize with OpenAI"
         res["openai_t"] = "Transcribe with OpenAI"
-    if get_config()["claude_api_key"] != "":
+    if cfg["claude_api_key"] != "":
         res["claude_s"] = "Summarize with Claude"
         res["claude_t"] = "Transcribe with Claude"
     res["srt"] = "Just download subtitles from YT"
@@ -96,28 +101,30 @@ def get_video_title_and_description(filename):
         return title,descr
 
 def make_prompt(lang, summarize = False, title = "", description = ""):
-            if lang not in get_config()["transcription-prompts"]:
-                lang = get_config()["default_language"]
+            cfg = get_config()
+            if lang not in cfg["transcription-prompts"]:
+                lang = cfg["default_language"]
             
             if summarize:
-                return get_config()["transcription-prompts"][lang][1] + \
+                return cfg["transcription-prompts"][lang][1] + \
                         "\n" + \
-                        get_config()["transcription-prompts"][lang][2] + \
+                        cfg["transcription-prompts"][lang][2] + \
                         "\n" + \
                        (f"Title: \"{title}\". " if title!="" else "") + \
                        (f"Description: \"{description}\". " if description!="" else "")
             else:
-                return get_config()["transcription-prompts"][lang][0] + \
+                return cfg["transcription-prompts"][lang][0] + \
                         "\n" + \
-                        get_config()["transcription-prompts"][lang][2] + \
+                        cfg["transcription-prompts"][lang][2] + \
                         "\n" + \
                        (f"Title: \"{title}\". " if title!="" else "") + \
                        (f"Description: \"{description}\". " if description!="" else "")
 
 def make_page_text_prompt(lang, link):
-    if lang not in get_config()["transcription-prompts"]:
-        lang = get_config()["default_language"]
-    return get_config()["transcription-prompts"][lang][3] + "\n" + \
+    cfg = get_config()
+    if lang not in cfg["transcription-prompts"]:
+        lang = cfg["default_language"]
+    return cfg["transcription-prompts"][lang][3] + "\n" + \
                       (f"Link: {link}" if link is not None else "")
 
 def convert_video_to_audio(video_file_path):
@@ -429,41 +436,36 @@ def transcribe_video(filename, engine):
         print(f"Transcription for video {filename} completed")
         title, description = get_video_title_and_description(filename)
         new_episode = {
-            "id": fn,
+            "id": filename,
             "title": title if title is not None else "",
             "description": description if description is not None else ""
         }
         duplicate_fn = find_duplicate_episode(new_episode, threshold=get_config()["duplicate_detection_threshold_transcription"])
         if duplicate_fn is not None:
-            print(f"Duplicate episode found for {fn} Duplicate ID: {duplicate_fn}")
-            mark_episode_as_duplicate(fn, duplicate_fn)
+            print(f"Duplicate episode found for {filename} Duplicate ID: {duplicate_fn}")
+            mark_episode_as_duplicate(filename, duplicate_fn)
 
 
     else:
         print(f"Transcription for video {filename} is empty, not creating transcription file.")
 
 
-if __name__ == "__main__":
+def run_transcription():
+    """Take one queue batch; slow provider calls run without queue locks."""
+    cfg = get_config()
+    engines = get_engine_map(cfg)
+    batch = transcription_queues.drain([AUTO_YOUTUBE, AUTO_RSS, *engines])
+    video_list_map = {engine: batch[engine] for engine in engines}
 
-    video_list_auto = load_source_list_from_file("transcription.txt")
-    save_source_list_to_file("transcription.txt", [])
-    audio_list_auto = load_source_list_from_file("transcription_rss.txt")
-    save_source_list_to_file("transcription_rss.txt", [])
-    
-    video_list_map = {}
-    for engine, engine_name in get_engine_map().items():
-        video_list_map[engine] = load_source_list_from_file(engine + ".txt")
-        save_source_list_to_file(engine + ".txt", [])
-
-    auto_engine = get_config()["auto_transcript_engine"]
-    if auto_engine in get_engine_map().keys():
-        video_list_map[auto_engine] += video_list_auto
+    auto_engine = cfg["auto_transcript_engine"]
+    if auto_engine in engines:
+        video_list_map[auto_engine] += batch[AUTO_YOUTUBE]
     else:
         print(f"Unknown auto transcript engine: {auto_engine}, skipping auto transcription.")
     
-    auto_engine_rss = get_config()["auto_transcript_engine_rss"]
-    if auto_engine_rss in get_engine_map().keys():
-        video_list_map[auto_engine_rss] += audio_list_auto
+    auto_engine_rss = cfg["auto_transcript_engine_rss"]
+    if auto_engine_rss in engines:
+        video_list_map[auto_engine_rss] += batch[AUTO_RSS]
     else:
         print(f"Unknown auto transcript engine for RSS: {auto_engine_rss}, skipping auto transcription for RSS.")
 
@@ -477,3 +479,7 @@ if __name__ == "__main__":
         if mp3.is_file():
             print(f"Removing temporary mp3 file: {mp3}")
             mp3.unlink()
+
+
+if __name__ == "__main__":
+    run_transcription()

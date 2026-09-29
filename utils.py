@@ -8,10 +8,11 @@ import subprocess
 from xml.etree import ElementTree
 from pathlib import Path
 from random import seed, random
-from config import *
-from ytrss_transcribe import get_engine_map
+from config import edit_config, get_config
 import html
+import json
 import pendulum
+from lxml import etree
 
 seed()
 
@@ -54,8 +55,8 @@ def remove_invalid_xml_characters(value):
 
 
 def update_names_dicts():
-    channel_names_dict = get_config()["channel_names_dict"]
-    playlist_names_dict = get_config()["playlist_names_dict"]
+    channel_names_dict = {}
+    playlist_names_dict = {}
     for description_path in Path("yt-video").glob("*.desc"):
             try:
                 parser1 = etree.XMLParser(encoding="utf-8", recover=True)
@@ -72,7 +73,9 @@ def update_names_dicts():
                         playlist_names_dict[playlist_id_element.text] = playlist_name_element.text
             except Exception as e:
                 continue
-    save_config()
+    with edit_config() as cfg:
+        cfg["channel_names_dict"].update(channel_names_dict)
+        cfg["playlist_names_dict"].update(playlist_names_dict)
 
 def get_channel_name(channel_id):
     channel_names_dict = get_config()["channel_names_dict"]
@@ -84,8 +87,8 @@ def get_channel_name(channel_id):
         if response.status_code == 200:
             channel_content = ElementTree.fromstring(response.text)
             channel_name = channel_content.find("{http://www.w3.org/2005/Atom}author/{http://www.w3.org/2005/Atom}name").text
-            channel_names_dict[channel_id] = channel_name
-            save_config()
+            with edit_config() as cfg:
+                cfg["channel_names_dict"][channel_id] = channel_name
             return channel_name
         else:
             return ""
@@ -102,8 +105,8 @@ def get_playlist_name(playlist_id):
         if response.status_code == 200:
             playlist_content = ElementTree.fromstring(response.text)
             playlist_name = playlist_content.find("{http://www.w3.org/2005/Atom}title").text
-            playlist_names_dict[playlist_id] = playlist_name
-            save_config()
+            with edit_config() as cfg:
+                cfg["playlist_names_dict"][playlist_id] = playlist_name
             return playlist_name
         else:
             return ""
@@ -120,25 +123,13 @@ def get_rss_name(link):
             rss = parse_xml_response(response)  
             channel = rss.find("channel")
             source_name = channel.find("title").text
-            rss_names_dict[link] = source_name
-            save_config()
+            with edit_config() as cfg:
+                cfg["rss_names_dict"][link] = source_name
             return source_name
         else:
             return ""
     except Exception as e:
         return ""
-
-def load_source_list_from_file(filename):
-    try:
-        with open(filename, 'r') as f:
-            return [line.strip() for line in f if line.strip()]
-    except FileNotFoundError:
-        return []
-
-def save_source_list_to_file(filename, sources):
-    with open(filename, 'w') as f:
-        for source in sources:
-            f.write(source + '\n') 
 
 def probe_media(file_path):
     try:
@@ -202,6 +193,7 @@ def detect_mimetype(media_info):
 
 def generate_atom_feed(url_link, is_public):
     from lxml import etree
+    from ytrss_transcribe import get_engine_map
     ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
     MEDIA_NS = "http://search.yahoo.com/mrss/"
     etree.register_namespace("itunes", ITUNES_NS)

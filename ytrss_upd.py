@@ -16,9 +16,10 @@ from lxml.etree import ParserError
 from lxml import html as lxml_html
 from repeatings_detector import find_duplicate_episode
 from utils import *
-from config import *
+from config import get_config
 from extract_page import *
 from ytrss_transcribe import get_enclosure_link
+from transcription_queue import AUTO_RSS, AUTO_YOUTUBE, transcription_queues
 
 def cleanup():
     now = arrow.now()
@@ -244,11 +245,8 @@ def parce_rss_item(link):
                             if time_since_insertion < timedelta(hours=get_config()["auto_transcript_hours"]):
                                 print(f"Processing auto-transcription for video {fn}")
                                 if not os.path.exists(transcription_path) and not link in get_config()["sources_with_disabled_auto_transcription"]:
-                                    video_list = load_source_list_from_file("transcription_rss.txt")
-                                    if not fn in video_list:
+                                    if transcription_queues.enqueue(AUTO_RSS, fn):
                                         print(f"Automatically scheduled video transcription_rss {fn}")
-                                        video_list.append(fn)
-                                        save_source_list_to_file("transcription_rss.txt", video_list)
                                     else:
                                         print(f"Video {fn} is already scheduled for transcription")
                                 else:
@@ -382,22 +380,19 @@ def parce_yt_item(link):
                         with open(description_path, "w") as f:
                             item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
                             f.write(item_string)
+                        modTime = mktime(insertion_date.timetuple())
+                        os.utime(description_path, (modTime, modTime))
                         if get_config()["auto_transcript_hours"] > 0:
                             if time_since_insertion < timedelta(hours=get_config()["auto_transcript_hours"]):
                                 print(f"Processing auto-transcription for video {fn}")
                                 transcription_path = "yt-video/" + fn + ".txt"
                                 if not os.path.exists(transcription_path) and not source_id in get_config()["sources_with_disabled_auto_transcription"]:
-                                    video_list = load_source_list_from_file("transcription.txt")
-                                    if not fn in video_list:
+                                    if transcription_queues.enqueue(AUTO_YOUTUBE, fn):
                                         print(f"Automatically scheduled video transcription {fn}")
-                                        video_list.append(fn)
-                                        save_source_list_to_file("transcription.txt", video_list)
                                     else:
                                         print(f"Video {fn} is already scheduled for transcription")
                             else:
                                 print(f"Video {fn} already has transcription")
-                        modTime = mktime(insertion_date.timetuple())
-                        os.utime(description_path, (modTime, modTime))
                         count_used += 1
                 print(f"Source {link}: {source_name} [{count_used} entries used, {count_all} total entries].")
             else:
@@ -407,12 +402,13 @@ def parce_yt_item(link):
 
 
 def update_channels_feed():
+    cfg = get_config()
     links=[]
-    for channel_id in get_config()["channel_subscriptions"]:
+    for channel_id in cfg["channel_subscriptions"]:
         links.append(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
-    for playlist_id in get_config()["playlist_subscriptions"]:
+    for playlist_id in cfg["playlist_subscriptions"]:
         links.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}")
-    links += get_config()["rss_subscriptions"]
+    links += cfg["rss_subscriptions"]
     shuffle(links)
     for link in links:
         if "youtube.com" in link:
@@ -421,7 +417,12 @@ def update_channels_feed():
             parce_rss_item(link)
 
 
-if __name__ == "__main__":
+def run_update():
+    """Perform the same cleanup/update/wait pass as the former script."""
     cleanup()
     update_channels_feed()
     secure_wait()
+
+
+if __name__ == "__main__":
+    run_update()

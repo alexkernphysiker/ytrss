@@ -27,7 +27,7 @@ workers:
 On Debian or Ubuntu, the system tools can be installed with:
 
 ```sh
-sudo apt install ffmpeg yt-dlp python3-venv
+pkexec /usr/bin/apt-get install ffmpeg yt-dlp python3-venv
 ```
 
 ## Installation
@@ -50,6 +50,15 @@ runtime data and are ignored by Git.
 Edit `ytrss_config.json` before starting the application. The web interface can
 change subscriptions and a subset of operational settings; other settings must
 be edited directly in the JSON file.
+
+All threads share one configuration store. `get_config()` returns a deep copy
+for reading. Code that changes settings must use `with edit_config() as cfg:`;
+the entire edit, including changes to nested lists and dictionaries, is protected
+by a lock and saved by atomically replacing the JSON file. Failed edits leave
+the previous settings intact. Keep these transactions short: perform network
+requests and other slow work outside them. Direct JSON edits are reloaded on
+the next access when the file changes; stop the application before editing it
+manually to avoid racing an application write.
 
 Important settings include:
 
@@ -114,29 +123,29 @@ the relevant RSS sources, or set `auto_transcript_hours` to `0`.
 Start the server and workers from the repository root:
 
 ```sh
-./start.sh
+.venv/bin/python start.py
 ```
 
-The launcher uses `.venv/bin/python` when it exists, otherwise `python3`. It
-starts the Flask server once, runs the feed updater every 5 minutes, and runs the
-transcription worker every minute. Worker output is written to
-`ytrss_upd.log` and `ytrss_transcribe.log`.
+Use `python3 start.py` if the dependencies are installed for the system Python.
+The launcher runs one process with three independent worker threads: the Flask
+web server, feed updater, and transcriber. Both periodic workers run immediately
+and wait 60 seconds after each completed or failed pass, matching the former
+`start.sh`. HTTP requests can use additional server request threads. Worker
+output is written separately to `ytrss_upd.log` and `ytrss_transcribe.log`; each
+pass replaces that worker's previous log.
 
 Open [http://127.0.0.1:5000/subscription](http://127.0.0.1:5000/subscription)
 with the default configuration.
 
-`start.sh` launches background processes but does not install a service or
-provide process supervision. For a permanent deployment, run the three Python
-programs under your preferred service manager and reproduce the polling
-intervals there.
-
-Each program can also be run once on its own:
-
-```sh
-.venv/bin/python ytrss.py             # web server (long-running)
-.venv/bin/python ytrss_upd.py         # one update and cleanup pass
-.venv/bin/python ytrss_transcribe.py  # drain the current transcription queues
-```
+The launcher remains in the foreground. Ctrl+C or SIGTERM stops the web server,
+interrupts interval waits, and joins both background workers after their current
+passes finish. An active download or API call can delay shutdown until it returns
+or times out. An exception in a periodic pass is logged; the next pass still runs.
+For a permanent deployment, run this single launcher under a service manager.
+Do not launch the three modules as separate services or run multiple application
+processes: in-memory queues and configuration locks are shared only inside one
+process. The `run_update()` and `run_transcription()` functions remain available
+for calling individual passes within that process.
 
 ## Web interface and endpoints
 
@@ -189,11 +198,34 @@ Episode metadata is stored as `yt-video/*.desc`; downloads, subtitles,
 transcriptions, and error details use the same episode ID with other extensions.
 YouTube IDs are derived from the video URL. RSS episode IDs are SHA-256 hashes
 of the source feed URL plus the entry link and/or enclosure URL, keeping IDs
-stable while avoiding collisions between feeds. Text files in the repository
-root are transient queues: `transcription.txt` and `transcription_rss.txt` hold
-automatic jobs, while `<engine>.txt` files hold manual jobs. The transcription
-worker clears a queue before processing it, and removes temporary MP3 files
-after a pass.
+stable while avoiding collisions between feeds. Automatic YouTube jobs,
+automatic RSS jobs, and manual jobs for each engine are held in separate
+in-memory queues. Adding a pending job is atomic and suppresses duplicates
+within that queue. The worker takes all relevant queues in one atomic batch,
+then processes it without holding the queue lock. Jobs added during processing
+remain for the next pass. Engine order, manual-before-automatic order, skipping
+existing transcripts, and cleanup of temporary MP3 files are preserved. As
+before, automatic jobs configured for an unavailable engine are consumed and
+skipped; manual jobs for a disabled engine remain pending until it is enabled.
+
+Queues are intentionally not persistent: stopping the process loses pending
+jobs. Eligible automatic jobs are rediscovered on subsequent feed updates;
+manual jobs must be scheduled again. Legacy `transcription.txt`,
+`transcription_rss.txt`, and `<engine>.txt` queue files are no longer read or
+written. Before switching an existing deployment, let the old workers finish
+their queues and stop all three old processes. Saved media, metadata, subtitles,
+and transcript files under `yt-video/` retain their existing format.
+
+## Tests
+
+Run the offline regression and concurrency tests with the dependencies installed:
+
+```sh
+.venv/bin/python -m unittest discover -s tests -v
+```
+
+Tests use temporary runtime directories, local HTTP requests, and fixture feeds;
+they do not download real media or call paid transcription APIs.
 
 ## Security notes
 

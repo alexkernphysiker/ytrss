@@ -1,5 +1,10 @@
 import json
 import os
+from contextlib import contextmanager
+from copy import deepcopy
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+from threading import RLock
 
 def default_config():
     return {
@@ -63,24 +68,89 @@ def default_config():
         "title": "YTRSS feed",
         "temporary_block_yt_download": False
     }
-config=default_config()
+
+class ConfigStore:
+    """One shared configuration, with isolated reads and serialized edits."""
+
+    def __init__(self, path="ytrss_config.json"):
+        self.path = Path(path)
+        self._lock = RLock()
+        self._config = default_config()
+        self._signature = None
+
+    @staticmethod
+    def _signature_for(stat):
+        return stat.st_ino, stat.st_size, stat.st_mtime_ns
+
+    def _reload(self):
+        # Keep support for edits made directly in the JSON file. Unchanged
+        # settings are served from memory rather than parsed on every access.
+        try:
+            signature = self._signature_for(self.path.stat())
+        except FileNotFoundError:
+            self._signature = None
+            return
+        if signature != self._signature:
+            with self.path.open(encoding="utf-8") as stream:
+                signature = self._signature_for(os.fstat(stream.fileno()))
+                settings = json.load(stream)
+            self._config.update(settings)
+            self._signature = signature
+
+    def _write(self, settings):
+        temporary_path = None
+        try:
+            with NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=self.path.parent,
+                prefix=f".{self.path.name}.", suffix=".tmp", delete=False,
+            ) as stream:
+                temporary_path = Path(stream.name)
+                json.dump(settings, stream, indent=2, ensure_ascii=False)
+                stream.flush()
+                os.fsync(stream.fileno())
+                signature = self._signature_for(os.fstat(stream.fileno()))
+            os.replace(temporary_path, self.path)
+            self._signature = signature
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+
+    def snapshot(self):
+        with self._lock:
+            self._reload()
+            return deepcopy(self._config)
+
+    @contextmanager
+    def edit(self):
+        """Commit a short read/modify/write transaction, or roll it back."""
+        with self._lock:
+            self._reload()
+            settings = deepcopy(self._config)
+            yield settings
+            if settings != self._config:
+                self._write(settings)
+                # Do not let a caller retain a mutable reference to our state.
+                self._config = deepcopy(settings)
+
+    def save(self):
+        with self._lock:
+            self._reload()
+            self._write(self._config)
+
+
+_store = ConfigStore()
+
 
 def get_config():
-    global config
-    config_file="ytrss_config.json"
-    if os.path.exists(config_file):
-        with open(config_file, "r", encoding="utf-8") as f:
-            config.update(json.load(f))
-    return config
+    """Return an independent snapshot; use edit_config() to change settings."""
+    return _store.snapshot()
+
+
+def edit_config():
+    """Lock, edit and persist settings together, including nested containers."""
+    return _store.edit()
+
 
 def save_config():
-    config_file="ytrss_config.json"
-    global config
-    output = {}
-    if os.path.exists(config_file):
-        with open(config_file, "r", encoding="utf-8") as f:
-            output.update(json.load(f))
-    output.update(config)
-    with open(config_file, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
-
+    """Persist the shared settings (also creates the initial config file)."""
+    _store.save()

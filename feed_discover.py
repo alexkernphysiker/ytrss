@@ -3,7 +3,7 @@ import feedparser
 
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
-from config import *
+from config import get_config
 
 
 def discover_rss_feeds(site_url: str) -> list[tuple[str, str, str, str]]:
