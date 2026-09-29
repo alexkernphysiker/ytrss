@@ -54,8 +54,6 @@ def show_channel_list():
     chanlist_str += "<a> Subscribed channels </a><br/>"
     for channel_id in get_config()["channel_subscriptions"]:
         chanlist_str += f"<li> <form action='/unsubscribe/channel' method='post'>[{get_channel_name(channel_id)}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{channel_id}'><input type='submit' value='Unsubscribe'></form></li>"
-    chanlist_str += "<a>Add channel by ID</a> <br/>" + \
-              "<form action='/subscribe/channel' method='post'><input type='text' name='source_id'><input type='submit' value='Subscribe'></form>"
     return buttons_on_top() + f"<ul>{chanlist_str}</ul>"
 
 @app.route("/get_chan_info", methods=['POST'])
@@ -125,8 +123,6 @@ def show_playlist_list():
     playlistlist_str += "<a> Subscribed playlists </a><br/>"
     for playlist_id in get_config()["playlist_subscriptions"]:
         playlistlist_str += f"<li><form action='/unsubscribe/playlist' method='post'>[{get_playlist_name(playlist_id)}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{playlist_id}'><input type='submit' value='Unsubscribe'></form></li>"
-    playlistlist_str += "<a>Subscribe playlist by ID</a> <br/>" + \
-              "<form action='/subscribe/playlist' method='post'><input type='text' name='source_id'><input type='submit' value='Subscribe'></form>"
     return buttons_on_top() + f"<ul>{playlistlist_str}</ul><br />"
 
 @app.route("/subscribe/playlist", methods=['POST'])
@@ -308,6 +304,8 @@ def show_rss_list():
               "<form action='/search/rss2' method='post'><input type='text' name='rss_search_query' class='form-control' id='rss_search_query'><input type='submit' value='Search'></form>"
     list_str +="<a>Discover RSS by site URL</a> <br/>" + \
               "<form action='/search/rss3' method='post'><input type='text' name='site_url' class='form-control' id='site_url'><input type='submit' value='Search'></form>"
+    list_str +="<a>Add direct RSS link</a> <br/>" + \
+              "<form action='/subscribe/rss' method='post'><input type='text' name='rss_link' class='form-control' id='rss_link'><input type='submit' value='Add'></form>"
 
     list_str += "<a> Subscribed RSS podcasts </a><br/>"
     for link in get_config()["rss_subscriptions"]:
