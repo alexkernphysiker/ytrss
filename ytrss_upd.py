@@ -262,13 +262,11 @@ def parce_rss_item(link):
                                     print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
                                     continue
 
-                            article = fetch_readable_article(
-                                link_element.text,
-                                headers=get_config()["headers"],
-                                proxies=get_config().get("proxies-rss"),
-                            ) if link_element is not None and link_element.text is not None and source_enclosure is None else None
-                        else:
-                            article = None
+                        article = fetch_readable_article(
+                            link_element.text,
+                            headers=get_config()["headers"],
+                            proxies=get_config().get("proxies-rss"),
+                        ) if link_element is not None and link_element.text is not None and source_enclosure is None else None
 
                         description_element = ElementTree.SubElement(entry_element, "summary")
                         description_element.text = ""
@@ -294,7 +292,7 @@ def parce_rss_item(link):
                         transcription_path = "yt-video/" + fn + ".txt"
                         if source_enclosure is not None:
                             enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url=source_enclosure.get("url"), type=source_enclosure.get("type"), length = source_enclosure.get("length"))
-                        elif not os.path.exists(transcription_path):
+                        else:
                             if looks_like_full_article(description_element.text):
                                 with open(transcription_path, "w") as f:
                                     f.write(extract_plain_text(description_element.text))
