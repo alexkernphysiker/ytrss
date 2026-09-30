@@ -154,6 +154,9 @@ def find_largest_image_in_html(html_text, base_url):
 
     image_urls = list(dict.fromkeys(image_urls))
 
+    best_url = None
+    best_area = 0
+
     for image_url in image_urls:
         try:
             response = requests.get(
@@ -168,8 +171,9 @@ def find_largest_image_in_html(html_text, base_url):
 
             area = width * height
 
-            if area > 1000:
-                return image_url
+            if area > best_area:
+                best_area = area
+                best_url = image_url
 
         except (
             requests.RequestException,
@@ -178,7 +182,7 @@ def find_largest_image_in_html(html_text, base_url):
         ):
             continue
 
-    return None
+    return best_url if best_area > 500 else None
 
 def parce_rss_item(link):
         from lxml import etree
