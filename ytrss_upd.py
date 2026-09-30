@@ -159,7 +159,6 @@ def find_largest_image_in_html(html_text, base_url):
 
     for image_url in image_urls:
         try:
-            secure_wait()
             response = requests.get(
                 image_url,
                 timeout=60,
