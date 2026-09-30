@@ -110,6 +110,22 @@ def find_first_image_in_html(html_text, base_url):
 
     return None
 
+def _get_dimension(img, name):
+    value = img.get(name)
+    if value:
+        match = re.match(r"^\s*(\d+(?:\.\d+)?)", value)
+        if match:
+            return float(match.group(1))
+    style = img.get("style") or ""
+    match = re.search(
+        rf"(?:^|;)\s*{name}\s*:\s*(\d+(?:\.\d+)?)px",
+        style,
+        re.IGNORECASE,
+    )
+    if match:
+        return float(match.group(1))
+    return None
+
 def find_largest_image_in_html(html_text, base_url):
     if not html_text or not html_text.strip():
         return None
@@ -157,30 +173,38 @@ def find_largest_image_in_html(html_text, base_url):
     best_url = None
     best_area = 0
 
-    for image_url in image_urls:
-        try:
-            response = requests.get(
-                image_url,
-                timeout=60,
-                headers=get_config()["headers"], proxies=get_config().get("proxies-rss")
-            )
-            response.raise_for_status()
+    for img in root.iter("img"):
+            image_url = None
 
-            with Image.open(BytesIO(response.content)) as image:
-                width, height = image.size
+            for attribute in ("data-src", "src"):
+                src = (img.get(attribute) or "").strip()
+                if not src:
+                    continue
 
-            area = width * height
+                try:
+                    url = urljoin(base_url, src)
+                    parsed = urlsplit(url)
+                except ValueError:
+                    continue
+
+                if parsed.scheme in ("http", "https") and parsed.netloc:
+                    image_url = url
+                    break
+
+            if not image_url:
+                continue
+
+            width = _get_dimension(img, "width")
+            height = _get_dimension(img, "height")
+
+            if width is not None and height is not None:
+                area = width * height
+            else:
+                area = 0
 
             if area > best_area:
                 best_area = area
                 best_url = image_url
-
-        except (
-            requests.RequestException,
-            OSError,
-            ValueError,
-        ):
-            continue
 
     return best_url if best_area > 500 else None
 
