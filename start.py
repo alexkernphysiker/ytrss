@@ -14,8 +14,8 @@ from werkzeug.serving import make_server
 from config import get_config, save_config
 
 
-UPDATE_INTERVAL = 60
-TRANSCRIPTION_INTERVAL = 60
+UPDATE_INTERVAL = 1
+TRANSCRIPTION_INTERVAL = 1
 LOG_MAX_LINES = 20_000
 _worker_output = local()
 

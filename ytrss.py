@@ -41,6 +41,23 @@ def subscription():
 def config_page():
     return buttons_on_top()
 
+@app.route("/logs/transcription")
+def logs_transcription():
+    full_command = "cat ytrss_transcribe.log | tail -n 200"
+    proc = subprocess.run(full_command, shell=True, capture_output=True, timeout=20)
+    output = "" 
+    for line in proc.stdout.decode().strip().split('\n'):
+        output += f"<br/> {line}"
+    return buttons_on_top() + output
+@app.route("/logs/download")
+def logs_download():
+    full_command = "cat ytrss_upd.log | tail -n 200"
+    proc = subprocess.run(full_command, shell=True, capture_output=True, timeout=20)
+    output = "" 
+    for line in proc.stdout.decode().strip().split('\n'):
+        output += f"<br/> {line}"
+    return buttons_on_top() + output
+
 ##### channel subscriptions
 
 @app.route("/show_channel_list")
@@ -180,6 +197,7 @@ def auto_download():
            f"<label for='deliver_days'>RSS contains items from (days):</label><input type='number' id='deliver_days' name='deliver_days' min='1' max='90' value='{get_config()["deliver_days"]}' /><br />" + \
            f"<label for='duplicate_detection_threshold'>Duplicate Detection Threshold:</label><input type='number' id='duplicate_detection_threshold' name='duplicate_detection_threshold' min='0' max='100' value='{get_config()["duplicate_detection_threshold"]}' /><br />" + \
             "<input type='submit' value='Save config'></form>" + \
+            "<form action='/logs/download'><input type='submit' value='View logs'></form>" + \
            f"{downloading_str}</ul><br />"
 
 @app.route("/downloading/disable", methods=['POST'])
@@ -235,6 +253,7 @@ def auto_transcription():
            f"<label for='wait_for_download_hours'>wait for subtitles (Hr):</label><input type='number' id='wait_for_download_hours' name='wait_for_download_hours' min='0' max='6' value='{get_config()["wait_for_download_hours"]}' /><br />" + \
            f"<label for='duplicate_detection_threshold_transcription'>Duplicate Detection Threshold for Transcription:</label><input type='number' id='duplicate_detection_threshold_transcription' name='duplicate_detection_threshold_transcription' min='0' max='100' value='{get_config()["duplicate_detection_threshold_transcription"]}' /><br />" + \
             "<input type='submit' value='Save config'></form>" + \
+            "<form action='/logs/transcription'><input type='submit' value='View logs'></form>" + \
            f"{auto_transcription_str}</ul><br />"
 
 @app.route("/auto-transcription/disable", methods=['POST'])

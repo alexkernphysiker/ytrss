@@ -451,7 +451,7 @@ def transcribe_video(filename, engine):
 
 
 def run_transcription():
-    """Take one queue batch; slow provider calls run without queue locks."""
+    secure_wait()
     cfg = get_config()
     engines = get_engine_map(cfg)
     batch = transcription_queues.drain([AUTO_YOUTUBE, AUTO_RSS, *engines])
