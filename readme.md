@@ -16,6 +16,24 @@ workers:
 - `ytrss_transcribe.py` processes automatic and manual transcription jobs from
   local queues and provider-specific engines.
 
+## Firefox extension
+
+[ytrss — RSS і YouTube on Mozilla Add-ons](https://addons.mozilla.org/firefox/addon/ytrss-rss-youtube/)
+is the companion extension for desktop Firefox 140+ and Firefox for Android 142+.
+Version 1.2.1 was submitted for public distribution on September 30, 2026 and is
+awaiting Mozilla review; installation from this page becomes available after
+approval.
+
+Its button sends the current site's root URL, YouTube channel ID/name, or
+playlist ID to the corresponding ytrss search page in a new tab. When no search
+target is available, it opens `/config` instead.
+
+Set the ytrss server address in the extension's options. The default is
+`http://127.0.0.1`; for the server's default port, use `http://127.0.0.1:5000`.
+On Android, use a server address reachable from the phone, since `127.0.0.1`
+refers to the phone itself. Optional HTTP Basic credentials can be included in
+the server URL; they are stored locally without encryption.
+
 ## Requirements
 
 - Python 3.12 or newer (the source uses Python 3.12 f-string syntax)
