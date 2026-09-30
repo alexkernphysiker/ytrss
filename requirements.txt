@@ -13,3 +13,4 @@ feedparser
 beautifulsoup4
 trafilatura
 pendulum
+pillow

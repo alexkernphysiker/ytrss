@@ -4,6 +4,7 @@ import yt_dlp
 import string
 import re
 import requests
+from io import BytesIO
 from xml.etree import ElementTree
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -11,6 +12,7 @@ from time import mktime
 from pathlib import Path
 import arrow
 from random import shuffle
+from PIL import Image
 from urllib.parse import urljoin, urlsplit
 from lxml.etree import ParserError
 from lxml import html as lxml_html
@@ -79,7 +81,7 @@ def get_duration(file_path):
         print("duration estimation error")
         return None
 
-def find_image_in_html(html_text, base_url):
+def find_first_image_in_html(html_text, base_url):
     if not html_text or not html_text.strip():
         return None
 
@@ -107,6 +109,81 @@ def find_image_in_html(html_text, base_url):
                 return image_url
 
     return None
+
+def find_largest_image_in_html(html_text, base_url):
+    if not html_text or not html_text.strip():
+        return None
+
+    try:
+        root = lxml_html.fragment_fromstring(
+            html_text,
+            create_parent="div",
+        )
+    except (ParserError, ValueError):
+        return None
+
+    image_urls = []
+
+    def add_url(src):
+        src = (src or "").strip()
+        if not src:
+            return
+
+        try:
+            image_url = urljoin(base_url, src)
+            parsed = urlsplit(image_url)
+        except ValueError:
+            return
+
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            image_urls.append(image_url)
+
+    for img in root.iter("img"):
+        for attribute in ("data-src", "src"):
+            add_url(img.get(attribute))
+
+        for attribute in ("data-srcset", "srcset"):
+            srcset = (img.get(attribute) or "").strip()
+
+            if not srcset:
+                continue
+
+            for candidate in srcset.split(","):
+                src = candidate.strip().split()[0]
+                add_url(src)
+
+    image_urls = list(dict.fromkeys(image_urls))
+
+    best_url = None
+    best_area = 0
+
+    for image_url in image_urls:
+        try:
+            secure_wait()
+            response = requests.get(
+                image_url,
+                timeout=60,
+                headers=get_config()["headers"], proxies=get_config().get("proxies-rss")
+            )
+            response.raise_for_status()
+
+            with Image.open(BytesIO(response.content)) as image:
+                width, height = image.size
+
+            area = width * height
+
+            if area > best_area:
+                best_area = area
+                best_url = image_url
+
+        except (
+            requests.RequestException,
+            OSError,
+            ValueError,
+        ):
+            continue
+
+    return best_url
 
 def parce_rss_item(link):
         from lxml import etree
@@ -205,12 +282,15 @@ def parce_rss_item(link):
                             description_element.text = content_element.text
                         else:
                             content_element = entry.find("content:encoded", NS)
+                            img_url = None
                             if content_element is not None:
                                 description_element.text = content_element.text
                                 if media_thumbnail is None and link_element is not None and link_element.text is not None:
-                                    img_url = find_image_in_html(content_element.text, link_element.text)
-                                    if img_url is not None:
-                                        thumbnail_element = ElementTree.SubElement(entry_element, "image", href=img_url)
+                                    img_url = find_first_image_in_html(content_element.text, link_element.text)
+                            if img_url is None and article is not None and looks_like_full_article(article["html"]):
+                                img_url = find_largest_image_in_html(article["html"], link_element.text)
+                            if img_url is not None:
+                                thumbnail_element = ElementTree.SubElement(entry_element, "image", href=img_url)
 
                         transcription_path = "yt-video/" + fn + ".txt"
                         if source_enclosure is not None:
