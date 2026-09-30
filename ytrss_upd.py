@@ -182,7 +182,7 @@ def find_largest_image_in_html(html_text, base_url):
         ):
             continue
 
-    return best_url
+    return best_url if best_area > 500 else None
 
 def parce_rss_item(link):
         from lxml import etree
