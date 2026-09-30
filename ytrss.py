@@ -43,7 +43,7 @@ def config_page():
 
 @app.route("/logs/transcription")
 def logs_transcription():
-    full_command = "cat ytrss_transcribe.log | tail -n 200"
+    full_command = "cat ytrss_transcribe.log | tail -n 100"
     proc = subprocess.run(full_command, shell=True, capture_output=True, timeout=20)
     output = "" 
     for line in proc.stdout.decode().strip().split('\n'):
@@ -51,7 +51,7 @@ def logs_transcription():
     return buttons_on_top() + output
 @app.route("/logs/download")
 def logs_download():
-    full_command = "cat ytrss_upd.log | tail -n 200"
+    full_command = "cat ytrss_upd.log | tail -n 300"
     proc = subprocess.run(full_command, shell=True, capture_output=True, timeout=20)
     output = "" 
     for line in proc.stdout.decode().strip().split('\n'):
