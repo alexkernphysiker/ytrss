@@ -37,6 +37,10 @@ def get_known_episodes(directory="yt-video"):
     return episodes
 
 def get_episode_transcription(episode_id):
+    srt_path = Path(f"yt-video/{episode_id}.srt")
+    if srt_path.exists():
+        with open(srt_path, "r", encoding="utf-8") as f:
+            return f.read()
     transcription_path = Path(f"yt-video/{episode_id}.txt")
     if transcription_path.exists():
         with open(transcription_path, "r", encoding="utf-8") as f:
