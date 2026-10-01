@@ -192,7 +192,6 @@ def detect_mimetype(media_info):
 
 def generate_atom_feed(url_link, is_public):
     from lxml import etree
-    from ytrss_transcribe import get_engine_map
     ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
     MEDIA_NS = "http://search.yahoo.com/mrss/"
     etree.register_namespace("itunes", ITUNES_NS)
@@ -248,6 +247,7 @@ def generate_atom_feed(url_link, is_public):
                     description_element.text += "<p>"+line+"</p> <br/>"
                 if get_config()["re-transcription"]:
                     transcribe_link = f"<br/> <a>Get new text version</a> <a>|</a> "
+                    from ytrss_transcribe import get_engine_map
                     for engine, engine_name in get_engine_map().items():
                         transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine_name}</a> <a>|</a> "
                     description_element.text += f"<br/> {transcribe_link}<br/>"

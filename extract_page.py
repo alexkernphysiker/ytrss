@@ -1,4 +1,5 @@
 import re
+import json
 import requests
 from lxml import html as lxml_html
 from lxml.etree import ParserError
@@ -264,7 +265,7 @@ def _parse_dimension(value, reference_size=None):
 
     return None
 
-def find_largest_image_in_html(html_text, base_url):
+def find_largest_image_in_html(html_text, base_url, check_actual_size=True):
     if not html_text or not html_text.strip():
         return None
 
@@ -341,7 +342,7 @@ def find_largest_image_in_html(html_text, base_url):
                 if w is not None and h is not None:
                     score = w * h 
 
-            if score == 0:
+            if score == 0 and check_actual_size:
                 try:
                     response = requests.get(image_url, timeout=10, headers=get_config()["headers"], proxies=get_config().get("proxies-rss"))
                     if response.status_code == 200:
@@ -357,3 +358,117 @@ def find_largest_image_in_html(html_text, base_url):
                 best_url = image_url
 
     return best_url if best_score > 500 else None
+
+def _find_jsonld_article_image(data):
+    if isinstance(data, list):
+        for item in data:
+            result = _find_jsonld_article_image(item)
+            if result:
+                return result
+
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    graph = data.get("@graph")
+
+    if graph:
+        result = _find_jsonld_article_image(graph)
+        if result:
+            return result
+
+    object_type = data.get("@type", [])
+
+    if isinstance(object_type, str):
+        object_types = {object_type}
+    else:
+        object_types = set(object_type)
+
+    if object_types & {
+        "Article",
+        "NewsArticle",
+        "BlogPosting",
+        "Report",
+    }:
+        image = data.get("image")
+
+        if isinstance(image, str):
+            return image
+
+        if isinstance(image, list):
+            for item in image:
+                if isinstance(item, str):
+                    return item
+
+                if isinstance(item, dict):
+                    url = item.get("url") or item.get("contentUrl")
+                    if url:
+                        return url
+
+        if isinstance(image, dict):
+            return image.get("url") or image.get("contentUrl")
+
+    return None
+
+def find_metadata_image(html_text, base_url):
+    if not html_text:
+        return None
+
+    try:
+        document = lxml_html.fromstring(html_text)
+    except (ValueError, TypeError, ParserError):
+        return None
+
+    # 1. OpenGraph
+    for xpath in (
+        '//meta[@property="og:image"]/@content',
+        '//meta[@property="og:image:secure_url"]/@content',
+        '//meta[@name="twitter:image"]/@content',
+        '//meta[@name="twitter:image:src"]/@content',
+    ):
+        values = document.xpath(xpath)
+
+        for value in values:
+            url = _normalize_image_url(value, base_url)
+            if url:
+                return url
+
+    # 2. JSON-LD
+    for script in document.xpath(
+        '//script[@type="application/ld+json"]/text()'
+    ):
+        try:
+            data = json.loads(script)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        image = _find_jsonld_article_image(data)
+
+        if image:
+            url = _normalize_image_url(image, base_url)
+            if url:
+                return url
+
+    return find_largest_image_in_html(html_text, base_url, check_actual_size=False)
+
+
+def _normalize_image_url(src, base_url):
+    if not isinstance(src, str):
+        return None
+
+    src = src.strip()
+
+    if not src:
+        return None
+
+    try:
+        url = urljoin(base_url, src)
+        parsed = urlsplit(url)
+    except ValueError:
+        return None
+
+    if parsed.scheme in ("http", "https") and parsed.netloc:
+        return url
+
+    return None

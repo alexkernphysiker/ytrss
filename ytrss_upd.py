@@ -178,24 +178,24 @@ def parce_rss_item(link):
                                 if media_thumbnail is None and link_element is not None and link_element.text is not None:
                                     img_url = find_largest_image_in_html(content_element.text, link_element.text)
                             if img_url is None and article is not None and looks_like_full_article(article["html"]):
-                                img_url = find_largest_image_in_html(article["full_content"], link_element.text)
+                                img_url = find_metadata_image(article["full_content"], link_element.text)
                             if img_url is not None:
                                 thumbnail_element = ElementTree.SubElement(entry_element, "image", href=img_url)
 
-                        transcription_path = "yt-video/" + fn + ".txt"
+                        srt_path = "yt-video/" + fn + ".srt"
                         if source_enclosure is not None:
                             enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url=source_enclosure.get("url"), type=source_enclosure.get("type"), length = source_enclosure.get("length"))
                         else:
                             if looks_like_full_article(description_element.text):
-                                with open(transcription_path, "w") as f:
+                                with open(srt_path, "w") as f:
                                     f.write(extract_plain_text(description_element.text))
-                                    print("Description seems to be long enough to be considered as full text. No need to transcript")
+                                    print("Description seems to be long enough to be considered as full text.")
                             if article is not None:
                                 if html_text_length(article["html"]) > html_text_length(description_element.text) \
                                     and looks_like_full_article(article["html"]):
-                                    with open(transcription_path, "w") as f:
+                                    with open(srt_path, "w") as f:
                                         f.write(extract_plain_text(article["html"]))
-                                        print("Extracted page text is longer than description. It is considered as full text. No need to transcript")
+                                        print("Extracted page text is longer than description. It is considered as full text.")
 
                         duration = get_duration(source_enclosure.get("url")) if source_enclosure is not None else None
                         if duration is not None:
@@ -209,6 +209,9 @@ def parce_rss_item(link):
                             f.write(item_string)
                         modTime = mktime(insertion_date.timetuple())
                         os.utime(description_path, (modTime, modTime))
+                        if os.path.exists(srt_path):
+                            os.utime(srt_path, (modTime, modTime))
+                        transcription_path = "yt-video/" + fn + ".txt"
                         if os.path.exists(transcription_path):
                             os.utime(transcription_path, (modTime, modTime))
                         if get_config()["auto_transcript_hours"] > 0:
