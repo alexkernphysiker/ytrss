@@ -4,7 +4,6 @@ import yt_dlp
 import string
 import re
 import requests
-from io import BytesIO
 from xml.etree import ElementTree
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -12,8 +11,6 @@ from time import mktime
 from pathlib import Path
 import arrow
 from random import shuffle
-from PIL import Image
-from urllib.parse import urljoin, urlsplit
 from lxml.etree import ParserError
 from lxml import html as lxml_html
 from repeatings_detector import find_duplicate_episode
@@ -80,168 +77,6 @@ def get_duration(file_path):
     except (subprocess.CalledProcessError, ValueError):
         print("duration estimation error")
         return None
-
-def find_first_image_in_html(html_text, base_url):
-    if not html_text or not html_text.strip():
-        return None
-
-    try:
-        root = lxml_html.fragment_fromstring(
-            html_text,
-            create_parent="div",
-        )
-    except (ParserError, ValueError):
-        return None
-
-    for img in root.iter("img"):
-        for attribute in ("data-src", "src"):
-            src = (img.get(attribute) or "").strip()
-            if not src:
-                continue
-
-            try:
-                image_url = urljoin(base_url, src)
-                parsed = urlsplit(image_url)
-            except ValueError:
-                continue
-
-            if parsed.scheme in ("http", "https") and parsed.netloc:
-                return image_url
-
-    return None
-
-def _get_dimension(img, name):
-    value = img.get(name)
-    if value:
-        match = re.match(r"^\s*(\d+(?:\.\d+)?)", value)
-        if match:
-            return float(match.group(1))
-    style = img.get("style") or ""
-    match = re.search(
-        rf"(?:^|;)\s*{name}\s*:\s*(\d+(?:\.\d+)?)px",
-        style,
-        re.IGNORECASE,
-    )
-    if match:
-        return float(match.group(1))
-    return None
-
-def _parse_dimension(value, reference_size=None):
-    if not value:
-        return None
-
-    value = value.strip().lower()
-
-    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*px", value)
-    if match:
-        return float(match.group(1))
-
-    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*%", value)
-    if match and reference_size is not None:
-        return reference_size * float(match.group(1)) / 100
-
-    match = re.fullmatch(r"(\d+(?:\.\d+)?)", value)
-    if match:
-        return float(match.group(1))
-
-    return None
-
-def find_largest_image_in_html(html_text, base_url):
-    if not html_text or not html_text.strip():
-        return None
-
-    try:
-        root = lxml_html.fragment_fromstring(
-            html_text,
-            create_parent="div"
-        )
-    except (ParserError, ValueError):
-        return None
-
-    image_urls = []
-
-    def add_url(src):
-        src = (src or "").strip()
-        if not src:
-            return
-
-        try:
-            image_url = urljoin(base_url, src)
-            parsed = urlsplit(image_url)
-        except ValueError:
-            return
-
-        if parsed.scheme in ("http", "https") and parsed.netloc:
-            image_urls.append(image_url)
-
-    for img in root.iter("img"):
-        for attribute in ("data-src", "src"):
-            add_url(img.get(attribute))
-
-        for attribute in ("data-srcset", "srcset"):
-            srcset = (img.get(attribute) or "").strip()
-
-            if not srcset:
-                continue
-
-            for candidate in srcset.split(","):
-                src = candidate.strip().split()[0]
-                add_url(src)
-
-    image_urls = list(dict.fromkeys(image_urls))
-
-    bes10t_url = None
-    best_score = 0
-
-    for img in root.iter("img"):
-            image_url = None
-
-            for attribute in ("data-src", "src"):
-                src = (img.get(attribute) or "").strip()
-                if not src:
-                    continue
-
-                try:
-                    url = urljoin(base_url, src)
-                    parsed = urlsplit(url)
-                except ValueError:
-                    continue
-
-                if parsed.scheme in ("http", "https") and parsed.netloc:
-                    image_url = url
-                    break
-
-            if not image_url:
-                continue
-
-            width = _get_dimension(img, "width")
-            height = _get_dimension(img, "height")
-            score = 0
-            if width is not None:
-                score = _parse_dimension(width, 1000)
-            elif height is not None:
-                hscore = _parse_dimension(height, 1000) if height is not None else 0
-                if hscore < 50:
-                    continue
-
-            if score == 0:
-                try:
-                    response = requests.get(image_url, timeout=10, headers=get_config()["headers"], proxies=get_config().get("proxies-rss"))
-                    if response.status_code == 200:
-                        image_data = BytesIO(response.content)
-                        with Image.open(image_data) as img_obj:
-                            width, height = img_obj.size
-                            score = width
-                            if height < 50:
-                                continue
-                except Exception:
-                    continue
-
-            if score > best_score:
-                best_score = score
-                best_url = image_url
-
-    return best_url if best_score > 0 else None
 
 def parce_rss_item(link):
         from lxml import etree
@@ -342,9 +177,9 @@ def parce_rss_item(link):
                             if content_element is not None:
                                 description_element.text = content_element.text
                                 if media_thumbnail is None and link_element is not None and link_element.text is not None:
-                                    img_url = find_first_image_in_html(content_element.text, link_element.text)
+                                    img_url = find_largest_image_in_html(content_element.text, link_element.text)
                             if img_url is None and article is not None and looks_like_full_article(article["html"]):
-                                img_url = find_largest_image_in_html(article["html"], link_element.text)
+                                img_url = find_largest_image_in_html(article["full_content"], link_element.text)
                             if img_url is not None:
                                 thumbnail_element = ElementTree.SubElement(entry_element, "image", href=img_url)
 
