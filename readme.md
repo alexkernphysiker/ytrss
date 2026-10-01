@@ -159,6 +159,16 @@ The transcriber's `subprocess.call` commands send both stdout and stderr to its
 log. Commands whose captured output is parsed by the application keep their
 existing output handling.
 
+When launched with `start.py`, application and web-server messages are also
+appended to `ytrss.log` in the working directory, while remaining visible in the
+terminal. This includes stdout, stderr, HTTP request logs, Flask exception
+tracebacks, and unhandled startup errors. Previous application runs are preserved.
+At startup and before every updater or transcriber pass (including empty passes),
+`ytrss.log` is trimmed to its last 20,000 lines if necessary. Between these checks
+it can temporarily exceed the limit. Pending output is flushed before trimming,
+and trimming shares the same lock as writes from all server threads. Updater and
+transcriber output continues to use the two worker logs described above.
+
 Open [http://127.0.0.1:5000/subscription](http://127.0.0.1:5000/subscription)
 with the default configuration.
 

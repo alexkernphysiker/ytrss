@@ -70,6 +70,11 @@ class LauncherTests(unittest.TestCase):
             stack.enter_context(patch.object(config, "_store", store))
             Path("ytrss_upd.log").write_text("update history\n" * start.LOG_MAX_LINES)
             Path("ytrss_transcribe.log").write_text("transcribe history\n" * start.LOG_MAX_LINES)
+            before_pass = stack.enter_context(start.application_log())
+            # Grow the application log after startup to exercise periodic trimming.
+            Path("ytrss.log").write_text("".join(
+                f"application history {number}\n" for number in range(start.LOG_MAX_LINES + 3)
+            ))
             stop = Event()
             release = Event()
             ready = Barrier(3)
@@ -86,6 +91,8 @@ class LauncherTests(unittest.TestCase):
 
             def app(environ, respond):
                 worker_names.put("web-server-request")
+                print("web request stdout")
+                print("web request stderr", file=sys.stderr)
                 respond("200 OK", [("Content-Type", "text/plain")])
                 return [b"ready"]
 
@@ -102,7 +109,7 @@ class LauncherTests(unittest.TestCase):
                     raise TimeoutError("worker was not released")
 
             launcher = Thread(target=start.run_application, args=(
-                app, lambda: action("update"), lambda: action("transcribe"), stop,
+                app, lambda: action("update"), lambda: action("transcribe"), stop, before_pass,
             ))
             launcher.start()
             try:
@@ -121,11 +128,22 @@ class LauncherTests(unittest.TestCase):
             })
             update_log = Path("ytrss_upd.log").read_text()
             transcription_log = Path("ytrss_transcribe.log").read_text()
+            application_log = Path("ytrss.log").read_text()
             for suffix in ("stdout", "stderr", "subprocess"):
                 self.assertIn(f"update {suffix}", update_log)
                 self.assertIn(f"transcribe {suffix}", transcription_log)
             self.assertNotIn("transcribe", update_log)
             self.assertNotIn("update", transcription_log)
+            self.assertIn("web request stdout", application_log)
+            self.assertIn("web request stderr", application_log)
+            self.assertIn('"GET / HTTP/1.1" 200', application_log)
+            self.assertNotIn("web request", update_log)
+            self.assertNotIn("web request", transcription_log)
+            self.assertNotIn("update stdout", application_log)
+            self.assertNotIn("transcribe stdout", application_log)
+            self.assertNotIn("application history 0\n", application_log)
+            self.assertIn(f"application history {start.LOG_MAX_LINES + 2}\n", application_log)
+            self.assertEqual(len(application_log.splitlines()), start.LOG_MAX_LINES + 3)
             self.assertIn("update history", update_log)
             self.assertIn("transcribe history", transcription_log)
             self.assertEqual(len(update_log.splitlines()), start.LOG_MAX_LINES + 3)
@@ -165,6 +183,9 @@ class LauncherTests(unittest.TestCase):
                     self.assertTrue(Path(directory, "yt-video").is_dir())
                     self.assertTrue(Path(directory, "ytrss_upd.log").exists())
                     self.assertTrue(Path(directory, "ytrss_transcribe.log").exists())
+                    application_log = Path(directory, "ytrss.log").read_text()
+                    self.assertIn('"GET /subscription HTTP/1.1" 200', application_log)
+                    self.assertIn('"GET /subscription HTTP/1.1" 200', err)
                     self.assertFalse(list(Path(directory).glob("*.txt")))
                 finally:
                     if process.poll() is None:
