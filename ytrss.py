@@ -43,6 +43,14 @@ def subscription():
 def config_page():
     return buttons_on_top()
 
+@app.route("/logs/server")
+def logs_server():
+    full_command = "cat ytrss.log | tail -n 100"
+    proc = subprocess.run(full_command, shell=True, capture_output=True, timeout=20)
+    output = "" 
+    for line in proc.stdout.decode().strip().split('\n'):
+        output += f"<br/> {line}"
+    return buttons_on_top(True) + output
 @app.route("/logs/transcription")
 def logs_transcription():
     full_command = "cat ytrss_transcribe.log | tail -n 100"
@@ -200,7 +208,8 @@ def auto_download():
            f"<label for='duplicate_detection_threshold'>Duplicate Detection Threshold:</label><input type='number' id='duplicate_detection_threshold' name='duplicate_detection_threshold' min='0' max='100' value='{get_config()["duplicate_detection_threshold"]}' /><br />" + \
            f"<label for='delay-between-fetches'>Typical delay between fetches:</label><input type='number' id='delay-between-fetches' name='delay-between-fetches' min='0' max='90' value='{get_config()["delay-between-fetches"]}' /><br />" + \
             "<input type='submit' value='Save config'></form>" + \
-            "<form action='/logs/download'><input type='submit' value='View logs'></form>" + \
+            "<form action='/logs/download'><input type='submit' value='View download logs'></form>" + \
+            "<form action='/logs/server'><input type='submit' value='View server logs'></form>" + \
            f"{downloading_str}</ul><br />"
 
 @app.route("/downloading/disable", methods=['POST'])
