@@ -126,6 +126,26 @@ def _get_dimension(img, name):
         return float(match.group(1))
     return None
 
+def _parse_dimension(value, reference_size=None):
+    if not value:
+        return None
+
+    value = value.strip().lower()
+
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*px", value)
+    if match:
+        return float(match.group(1))
+
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*%", value)
+    if match and reference_size is not None:
+        return reference_size * float(match.group(1)) / 100
+
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)", value)
+    if match:
+        return float(match.group(1))
+
+    return None
+
 def find_largest_image_in_html(html_text, base_url):
     if not html_text or not html_text.strip():
         return None
@@ -133,7 +153,7 @@ def find_largest_image_in_html(html_text, base_url):
     try:
         root = lxml_html.fragment_fromstring(
             html_text,
-            create_parent="div",
+            create_parent="div"
         )
     except (ParserError, ValueError):
         return None
@@ -170,8 +190,8 @@ def find_largest_image_in_html(html_text, base_url):
 
     image_urls = list(dict.fromkeys(image_urls))
 
-    best_url = None
-    best_area = 0
+    bes10t_url = None
+    best_score = 0
 
     for img in root.iter("img"):
             image_url = None
@@ -196,17 +216,29 @@ def find_largest_image_in_html(html_text, base_url):
 
             width = _get_dimension(img, "width")
             height = _get_dimension(img, "height")
+            score = 0
+            if width is not None:
+                score = _parse_dimension(width, 1000)
+            elif height is not None:
+                hscore = _parse_dimension(height, 1000) if height is not None else 0
+                score = hscore if hscore > score else score
 
-            if width is not None and height is not None:
-                area = width * height
-            else:
-                area = 0
+            if score == 0:
+                try:
+                    response = requests.get(image_url, timeout=10, headers=get_config()["headers"], proxies=get_config().get("proxies-rss"))
+                    if response.status_code == 200:
+                        image_data = BytesIO(response.content)
+                        with Image.open(image_data) as img_obj:
+                            width, height = img_obj.size
+                            score = width  if width > height else height
+                except Exception:
+                    continue
 
-            if area > best_area:
-                best_area = area
+            if score > best_score:
+                best_score = score
                 best_url = image_url
 
-    return best_url if best_area > 500 else None
+    return best_url if best_score > 0 else None
 
 def parce_rss_item(link):
         from lxml import etree
