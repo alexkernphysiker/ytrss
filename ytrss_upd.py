@@ -11,7 +11,6 @@ from time import mktime
 from pathlib import Path
 import arrow
 from random import shuffle
-from lxml.etree import ParserError
 from lxml import html as lxml_html
 from repeatings_detector import find_duplicate_episode
 from utils import *

@@ -1,6 +1,7 @@
 import re
 import requests
 from lxml import html as lxml_html
+from lxml.etree import ParserError
 from PIL import Image
 from io import BytesIO
 from urllib.parse import urljoin, urlsplit
@@ -307,7 +308,7 @@ def find_largest_image_in_html(html_text, base_url):
 
     image_urls = list(dict.fromkeys(image_urls))
 
-    bes10t_url = None
+    best_url = None
     best_score = 0
 
     for img in root.iter("img"):
@@ -334,12 +335,11 @@ def find_largest_image_in_html(html_text, base_url):
             width = _get_dimension(img, "width")
             height = _get_dimension(img, "height")
             score = 0
-            if width is not None:
-                score = _parse_dimension(width, 1000)
-            elif height is not None:
-                hscore = _parse_dimension(height, 1000) if height is not None else 0
-                if hscore < 50:
-                    continue
+            if width is not None and height is not None:
+                w = _parse_dimension(width, 1000)
+                h = _parse_dimension(height, 1000)
+                if w is not None and h is not None:
+                    score = w * h 
 
             if score == 0:
                 try:
@@ -348,9 +348,7 @@ def find_largest_image_in_html(html_text, base_url):
                         image_data = BytesIO(response.content)
                         with Image.open(image_data) as img_obj:
                             width, height = img_obj.size
-                            score = width
-                            if height < 50:
-                                continue
+                            score = width * height
                 except Exception:
                     continue
 
@@ -358,4 +356,4 @@ def find_largest_image_in_html(html_text, base_url):
                 best_score = score
                 best_url = image_url
 
-    return best_url if best_score > 0 else None
+    return best_url if best_score > 500 else None
