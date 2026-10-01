@@ -231,7 +231,9 @@ def find_largest_image_in_html(html_text, base_url):
                         image_data = BytesIO(response.content)
                         with Image.open(image_data) as img_obj:
                             width, height = img_obj.size
-                            score = width  if width > height else height
+                            score = width
+                            if height < 50:
+                                continue
                 except Exception:
                     continue
 
