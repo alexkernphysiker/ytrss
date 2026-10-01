@@ -19,8 +19,10 @@ url_link=get_config().get("url_link")
 app = Flask(__name__)
 
 
-def buttons_on_top():
-    return f"<head><title>{get_config()["title"]}</title></head>" + \
+def buttons_on_top(auto_refresh=False):
+    return f"<head><title>{get_config()["title"]}</title>" + \
+           (f"<meta http-equiv=\"refresh\" content=\"{get_config()["delay-between-fetches"]}\">" if auto_refresh else "") + \
+           "</head>" + \
            "<form action='/subscription' method='post'>" + \
            "<input type='submit' name='show_channel_list' value='YT channels'>" + \
            "<input type='submit' name='show_playlist_list' value='YT playlists'>" + \
@@ -48,7 +50,7 @@ def logs_transcription():
     output = "" 
     for line in proc.stdout.decode().strip().split('\n'):
         output += f"<br/> {line}"
-    return buttons_on_top() + output
+    return buttons_on_top(True) + output
 @app.route("/logs/download")
 def logs_download():
     full_command = "cat ytrss_upd.log | tail -n 300"
@@ -56,7 +58,7 @@ def logs_download():
     output = "" 
     for line in proc.stdout.decode().strip().split('\n'):
         output += f"<br/> {line}"
-    return buttons_on_top() + output
+    return buttons_on_top(True) + output
 
 ##### channel subscriptions
 

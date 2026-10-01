@@ -247,7 +247,7 @@ def _parse_dimension(value, reference_size=None):
     if not value:
         return None
 
-    value = value.strip().lower()
+    value = str(value).strip().lower()
 
     match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*px", value)
     if match:
