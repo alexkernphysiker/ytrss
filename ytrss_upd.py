@@ -221,7 +221,8 @@ def find_largest_image_in_html(html_text, base_url):
                 score = _parse_dimension(width, 1000)
             elif height is not None:
                 hscore = _parse_dimension(height, 1000) if height is not None else 0
-                score = hscore if hscore > score else score
+                if hscore < 50:
+                    continue
 
             if score == 0:
                 try:
