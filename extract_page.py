@@ -40,6 +40,98 @@ def extract_plain_text(article_html):
 
     return "\n".join(paragraphs)
 
+AD_MARKERS = {
+    "ad",
+    "ads",
+    "advert",
+    "advertisement",
+    "advertising",
+    "sponsored",
+    "sponsor",
+    "adsbygoogle",
+    "ad-container",
+    "ad-wrapper",
+    "ad-banner",
+    "ad-slot",
+    "ad-unit",
+}
+
+
+def _is_ad_element(element):
+    # Явні атрибути рекламних систем.
+    for attribute in (
+        "data-ad-client",
+        "data-ad-slot",
+        "data-ad-unit",
+        "data-ad-format",
+    ):
+        if element.get(attribute) is not None:
+            return True
+
+    # class / id
+    for attribute in ("class", "id"):
+        value = (element.get(attribute) or "").lower()
+
+        if not value:
+            continue
+
+        tokens = {
+            token
+            for token in re.split(r"\s+", value)
+            if token
+        }
+
+        for token in tokens:
+            if token in AD_MARKERS:
+                return True
+
+            # article-ad
+            # sidebar_ads
+            # google-ad-container
+            if re.search(
+                r"(^|[-_])(ad|ads|advert|advertisement|advertising|sponsored)([-_]|$)",
+                token,
+            ):
+                return True
+
+    # Доступність часто явно позначає рекламний блок.
+    aria_label = (element.get("aria-label") or "").strip().lower()
+
+    if aria_label in {
+        "advertisement",
+        "advertising",
+        "sponsored",
+        "sponsored content",
+    }:
+        return True
+
+    return False
+
+
+def remove_ad_blocks(page_html):
+    if not page_html:
+        return page_html
+
+    try:
+        document = lxml_html.fromstring(page_html)
+    except (ValueError, TypeError):
+        return page_html
+
+    # Йдемо знизу вгору, щоб безпечно видаляти вкладені елементи.
+    for element in reversed(document.xpath("//*")):
+        if _is_ad_element(element):
+            parent = element.getparent()
+
+            # Кореневий елемент не чіпаємо.
+            if parent is not None:
+                element.drop_tree()
+
+    return lxml_html.tostring(
+        document,
+        encoding="unicode",
+        method="html",
+    )
+
 
 def extract_readable_article(page_html, page_url):
     article_html = extract(
@@ -67,6 +159,7 @@ def extract_readable_article(page_html, page_url):
 
 def fetch_readable_article(url, headers=None, proxies=None):
     from config import get_config
+
     try:
         secure_wait()
         response = requests.get(
@@ -77,6 +170,7 @@ def fetch_readable_article(url, headers=None, proxies=None):
             allow_redirects=True,
         )
         response.raise_for_status()
+
     except requests.RequestException as error:
         print(f"Cannot fetch article {url}: {error}")
         return None
@@ -93,8 +187,10 @@ def fetch_readable_article(url, headers=None, proxies=None):
         )
         return None
 
+    page_html = remove_ad_blocks(response.content)
+
     return extract_readable_article(
-        page_html=response.content,
+        page_html=page_html,
         page_url=response.url,
     )
 
