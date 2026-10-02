@@ -183,15 +183,7 @@ def parce_rss_item(link):
                                     print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
                                     continue
 
-                        if not os.path.exists("yt-video/" + fn + ".srt"):
-                            article = fetch_readable_article(
-                                link_element.text,
-                                headers=get_config()["headers"],
-                                proxies=get_config().get("proxies-rss"),
-                            ) if link_element is not None and link_element.text is not None and source_enclosure is None else None
-                        else:
-                            article = None
-
+                        article = None
                         description_element = ElementTree.SubElement(entry_element, "summary")
                         description_element.text = ""
                         if media_description is not None and media_description.text is not None:
@@ -208,8 +200,16 @@ def parce_rss_item(link):
                                 description_element.text = content_element.text
                                 if media_thumbnail is None and link_element is not None and link_element.text is not None:
                                     img_url = find_largest_image_in_html(content_element.text, link_element.text)
-                            if img_url is None and article is not None and looks_like_full_article(article["html"]):
-                                img_url = find_metadata_image(article["full_content"], link_element.text)
+                            if img_url is None:
+                                if article is None:
+                                    article = fetch_readable_article(
+                                        link_element.text,
+                                        headers=get_config()["headers"],
+                                        proxies=get_config().get("proxies-rss"),
+                                    ) if link_element is not None and link_element.text is not None and source_enclosure is None else None
+
+                                if article is not None and looks_like_full_article(article["html"]):
+                                    img_url = find_metadata_image(article["full_content"], link_element.text)
                             if img_url is not None:
                                 thumbnail_element = ElementTree.SubElement(entry_element, "image", href=img_url)
 
@@ -221,12 +221,19 @@ def parce_rss_item(link):
                                 with open(srt_path, "w") as f:
                                     f.write(extract_plain_text(description_element.text))
                                     print("Description seems to be long enough to be considered as full text.")
-                            if article is not None:
-                                if html_text_length(article["html"]) > html_text_length(description_element.text) \
-                                    and looks_like_full_article(article["html"]):
-                                    with open(srt_path, "w") as f:
-                                        f.write(extract_plain_text(article["html"]))
-                                        print("Extracted page text is longer than description. It is considered as full text.")
+                            if not os.path.exists("yt-video/" + fn + ".srt"):
+                                if article is None:
+                                    article = fetch_readable_article(
+                                        link_element.text,
+                                        headers=get_config()["headers"],
+                                        proxies=get_config().get("proxies-rss"),
+                                    ) if link_element is not None and link_element.text is not None and source_enclosure is None else None
+                                if article is not None:
+                                    if html_text_length(article["html"]) > html_text_length(description_element.text) \
+                                        and looks_like_full_article(article["html"]):
+                                        with open(srt_path, "w") as f:
+                                            f.write(extract_plain_text(article["html"]))
+                                            print("Extracted page text is longer than description. It is considered as full text.")
 
                         duration = get_duration(source_enclosure.get("url")) if source_enclosure is not None else None
                         if duration is not None:
