@@ -88,6 +88,8 @@ def get_previous_image_url(fn):
     for ns_name in NS.keys():
         etree.register_namespace(ns_name, NS[ns_name])
     description_path = "yt-video/" + fn + ".desc"
+    if not os.path.exists(description_path):
+        return None
     parser1 = etree.XMLParser(encoding="utf-8", recover=True)
     entry = etree.parse(description_path, parser1)
     image_thumbnail = entry.find("image", NS)
