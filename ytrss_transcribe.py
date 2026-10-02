@@ -11,7 +11,7 @@ from lang_detect import detect_language
 from transcription_queue import AUTO_RSS, AUTO_YOUTUBE, transcription_queues
 import json
 
-MIN_SUMMARIZE_LENGTH = 9216
+MIN_SUMMARIZE_LENGTH = 10240
 
 def get_engine_map(cfg=None):
     if cfg is None:
@@ -34,7 +34,7 @@ def download_subtitles(filename):
         link = get_video_link(description_path)
         srt_path = "yt-video/" + filename + ".srt"
         if os.path.exists(srt_path):
-            print(f"Subtitles for video {filename} already exist, skipping download.")
+            print(f"Subtitles for {filename} already exist, skipping download.")
             with open(srt_path, "r", encoding="utf-8") as f:
                 return f.read()
         if link is None:
@@ -406,7 +406,7 @@ def transcribe_video(filename, engine):
     transcription_path = "yt-video/" + filename + ".txt"
 
     if os.path.exists(transcription_path):
-        print(f"Transcription for video {filename} already exists, skipping transcription.")
+        print(f"Transcription for {filename} already exists, skipping transcription.")
         return
     
     text = ""
@@ -429,7 +429,7 @@ def transcribe_video(filename, engine):
             print(f"Unknown transcript engine: {engine}, skipping transcription.")
 
     except Exception as e:
-        print(f"An error occurred during transcription of video {filename}: {str(e)}")
+        print(f"An error occurred during transcription of {filename}: {str(e)}")
         write_log(filename, f"Transcription error: {str(e)}")
         return
 
@@ -438,7 +438,7 @@ def transcribe_video(filename, engine):
             f.write(text)
         modTime = os.path.getmtime(description_path)
         os.utime(transcription_path, (modTime, modTime))
-        print(f"Transcription for video {filename} completed")
+        print(f"Transcription for {filename} completed")
         title, description = get_video_title_and_description(filename)
         new_episode = {
             "id": filename,
@@ -452,7 +452,7 @@ def transcribe_video(filename, engine):
 
 
     else:
-        print(f"Transcription for video {filename} is empty, not creating transcription file.")
+        print(f"Transcription for {filename} is empty, not creating transcription file.")
 
 
 def run_transcription():
