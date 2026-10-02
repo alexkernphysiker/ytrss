@@ -450,7 +450,7 @@ def find_metadata_image(html_text, base_url):
             if url:
                 return url
 
-    return find_largest_image_in_html(html_text, base_url, check_actual_size=False)
+    return find_largest_image_in_html(html_text, base_url)
 
 
 def _normalize_image_url(src, base_url):

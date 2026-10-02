@@ -77,6 +77,32 @@ def get_duration(file_path):
         print("duration estimation error")
         return None
 
+def get_previous_image_url(fn):
+    NS = {
+        "itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd",
+        "media": "http://search.yahoo.com/mrss/",
+        "content": "http://purl.org/rss/1.0/modules/content/",
+        "atom": "http://www.w3.org/2005/Atom",
+        "podcast": "https://podcastindex.org/namespace/1.0",
+    }
+    for ns_name in NS.keys():
+        etree.register_namespace(ns_name, NS[ns_name])
+    description_path = "yt-video/" + fn + ".desc"
+    parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+    entry = etree.parse(description_path, parser1)
+    image_thumbnail = entry.find("image", NS)
+    if image_thumbnail is not None:
+        return image_thumbnail.get("href")
+    media_thumbnail = entry.find("itunes:image", NS)
+    if media_thumbnail is not None:
+        return media_thumbnail.get("href")
+    media_group = entry.find("media:group", NS)
+    if media_group is not None:
+        media_thumbnail = media_group.find("media:thumbnail", NS)
+        if media_thumbnail is not None:
+            return media_thumbnail.get("url")
+    return None
+
 def parce_rss_item(link):
         from lxml import etree
         NS = {
@@ -155,11 +181,14 @@ def parce_rss_item(link):
                                     print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
                                     continue
 
-                        article = fetch_readable_article(
-                            link_element.text,
-                            headers=get_config()["headers"],
-                            proxies=get_config().get("proxies-rss"),
-                        ) if link_element is not None and link_element.text is not None and source_enclosure is None else None
+                        if not os.path.exists("yt-video/" + fn + ".srt"):
+                            article = fetch_readable_article(
+                                link_element.text,
+                                headers=get_config()["headers"],
+                                proxies=get_config().get("proxies-rss"),
+                            ) if link_element is not None and link_element.text is not None and source_enclosure is None else None
+                        else:
+                            article = None
 
                         description_element = ElementTree.SubElement(entry_element, "summary")
                         description_element.text = ""
@@ -172,8 +201,8 @@ def parce_rss_item(link):
                             description_element.text = content_element.text
                         else:
                             content_element = entry.find("content:encoded", NS)
-                            img_url = None
-                            if content_element is not None:
+                            img_url = get_previous_image_url(fn)
+                            if img_url is None and content_element is not None:
                                 description_element.text = content_element.text
                                 if media_thumbnail is None and link_element is not None and link_element.text is not None:
                                     img_url = find_largest_image_in_html(content_element.text, link_element.text)
