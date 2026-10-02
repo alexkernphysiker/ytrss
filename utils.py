@@ -21,7 +21,9 @@ def secure_wait():
     n=8
     for i in range(n):
         delay += random()
-    delay = 1.0 + delay *  get_config().get("delay-between-fetches") * 2.0 / float(n)
+    T = float(get_config().get("delay-between-fetches"))
+    minT = 3.0
+    delay = minT + delay *  (T-minT) * 2.0 / float(n)
     sleep(delay)
 
 def convert_date_to_iso_with_pendulum(date):
