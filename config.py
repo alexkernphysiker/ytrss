@@ -63,7 +63,8 @@ def default_config():
             "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*;q=0.8"
         },
         "title": "YTRSS feed",
-        "temporary_block_yt_download": False
+        "temporary_block_yt_download": False,
+        "summarize_min_length": 7168
     }
 
 class ConfigStore:

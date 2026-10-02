@@ -11,8 +11,6 @@ from lang_detect import detect_language
 from transcription_queue import AUTO_RSS, AUTO_YOUTUBE, transcription_queues
 import json
 
-MIN_SUMMARIZE_LENGTH = 10240
-
 def get_engine_map(cfg=None):
     if cfg is None:
         cfg = get_config()
@@ -263,7 +261,7 @@ def run_openai(filename, summarize):
         for chunk in filter_subs(text):
                 response = client.responses.create(
                     model=get_config()["open_ai_text_model"],
-                    input= make_prompt(lang, summarize and len(text) > MIN_SUMMARIZE_LENGTH, title=title, description=descr) + ":\n\n" + text
+                    input= make_prompt(lang, summarize and len(text) > get_config()["summarize_min_length"], title=title, description=descr) + ":\n\n" + text
                 )
                 for output_item in response.output:
                     for content_item in output_item.content:
@@ -341,14 +339,14 @@ def run_gemini(filename, summarize):
             return ""
         save_subtitles(filename=filename, text= "Transcribed from video link by Gemini:\n"+ srt)
 
-    if len(srt) <= MIN_SUMMARIZE_LENGTH:
+    if len(srt) <= get_config()["summarize_min_length"]:
         return srt
     text = ""
     for chunk in filter_subs(srt):
             response = client.models.generate_content(
                 model=gemini_model,
                 contents=[
-                    make_prompt(lang, summarize=summarize and len(chunk) > MIN_SUMMARIZE_LENGTH, title=title, description=description),
+                    make_prompt(lang, summarize=summarize and len(chunk) > get_config()["summarize_min_length"], title=title, description=description),
                     "Title:\n" + title,
                     "Description:\n" + description,
                     "Subtitles:\n" + chunk,
@@ -380,7 +378,7 @@ def run_claude(filename, summarize=False):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": make_prompt(lang, summarize=summarize and len(chunk_srt) > MIN_SUMMARIZE_LENGTH, title=title, description=description)},
+                        {"type": "text", "text": make_prompt(lang, summarize=summarize and len(chunk_srt) > get_config()["summarize_min_length"], title=title, description=description)},
                         {"type": "text", "text": "Video title:\n"+title},
                         {"type": "text", "text": "Video description:\n"+description},
                         {"type": "text", "text": "Subtitles:\n"+chunk_srt},

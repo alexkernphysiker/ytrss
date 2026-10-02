@@ -265,6 +265,7 @@ def auto_transcription():
            f"<label for='auto_transcript_hours'>auto-transcript items not older than (Hr):</label><input type='number' id='auto_transcript_hours' name='auto_transcript_hours' min='3' max='96' value='{get_config()["auto_transcript_hours"]}' /><br />" + \
            f"<label for='wait_for_download_hours'>wait for subtitles (Hr):</label><input type='number' id='wait_for_download_hours' name='wait_for_download_hours' min='0' max='6' value='{get_config()["wait_for_download_hours"]}' /><br />" + \
            f"<label for='duplicate_detection_threshold_transcription'>Duplicate Detection Threshold for Transcription:</label><input type='number' id='duplicate_detection_threshold_transcription' name='duplicate_detection_threshold_transcription' min='0' max='100' value='{get_config()["duplicate_detection_threshold_transcription"]}' /><br />" + \
+           f"<label for='summarize_min_length'>Minimum text length for summarization:</label><input type='number' id='summarize_min_length' name='summarize_min_length' min='0' max='100000' value='{get_config()["summarize_min_length"]}' /><br />" + \
             "<input type='submit' value='Save config'></form>" + \
             "<form action='/logs/transcription'><input type='submit' value='View logs'></form>" + \
            f"{auto_transcription_str}</ul><br />"
@@ -295,6 +296,7 @@ def auto_transcription_cfg():
         cfg["auto_transcript_hours"] = int(request.form['auto_transcript_hours'])
         cfg["wait_for_download_hours"] = int(request.form['wait_for_download_hours'])
         cfg["duplicate_detection_threshold_transcription"] = int(request.form['duplicate_detection_threshold_transcription'])
+        cfg["summarize_min_length"] = int(request.form['summarize_min_length'])
     return redirect(url_for('auto_transcription'))
 
 
