@@ -69,7 +69,6 @@ def compare_episodes(episode1, episode2):
     return score
 
 def find_duplicate_episode(new_episode, threshold):
-
     best_match_fn = None
     highest_score = 0
     transcription = True if get_episode_transcription(new_episode.get("id")) else False
@@ -80,10 +79,6 @@ def find_duplicate_episode(new_episode, threshold):
             if not get_episode_transcription(known.get("id")):
                 continue
         description_path = Path(f"yt-video/{known.get("id")}.desc")
-        modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
-        age = datetime.now() - modified_time
-        if age > timedelta(days=get_config()["deliver_days"]):
-            continue
         score = compare_episodes(new_episode, known)
         if score > highest_score:
             highest_score = score
@@ -117,6 +112,8 @@ if __name__ == "__main__":
         for transcription_path in Path("yt-video").glob("*.txt"):
             fn = os.path.basename(transcription_path).replace(".txt", "")
             description_path = "yt-video/" + fn + ".desc"
+            if not Path(description_path).exists():
+                continue
             parser1 = etree.XMLParser(encoding="utf-8", recover=True)
             input_entry = etree.parse(description_path, parser1)
             title_element = input_entry.find("title")
@@ -138,6 +135,9 @@ if __name__ == "__main__":
     output = sorted(results, key=lambda d: d['probability'])
     with open("output.json", "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
+
+    duplicate_fn = find_duplicate_episode(test_episode, threshold=90)
+    print(f"Test episode {test_episode} Duplicate found: {duplicate_fn}" if duplicate_fn else "No duplicate found.")
 
 
 
