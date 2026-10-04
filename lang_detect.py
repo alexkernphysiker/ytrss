@@ -83,7 +83,12 @@ def detect_language(description_path) -> str:
                 return detected_languages[0].language
     return ""
 
-
+def detect_language_from_text(text: str) -> str:
+    detected_languages = detect_languages(text)
+    if detected_languages:
+        if len(detected_languages) > 0 and detected_languages[0].probability > 0.6:
+            return detected_languages[0].language
+    return ""
 
 if __name__ == "__main__":
     perform_test_language_detection()

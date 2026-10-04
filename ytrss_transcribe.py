@@ -7,7 +7,7 @@ from repeatings_detector import find_duplicate_episode, mark_episode_as_duplicat
 from datetime import datetime, timedelta
 from utils import secure_wait
 from config import get_config
-from lang_detect import detect_language
+from lang_detect import *
 from transcription_queue import AUTO_RSS, AUTO_YOUTUBE, transcription_queues
 import json
 
@@ -257,12 +257,22 @@ def run_openai(filename, summarize):
                 text += ".\n"
             save_subtitles(filename=filename, text= "Transcribed from mp3 by OpenAI:\n"+ text)
         title, descr = get_video_title_and_description(filename)
-        text = ""
+        if detect_language_from_text(text) not in get_config()["transcription-prompts"].keys():
+                response = client.responses.create(
+                    model=get_config()["open_ai_text_model"],
+                    input= f"Please translate the following text into lang={get_config()['default_language']}\ntext:\n" + text,
+                )
+                text = ""
+                for output_item in response.output:
+                    for content_item in output_item.content:
+                        text += content_item.text
+
         for chunk in filter_subs(text):
                 response = client.responses.create(
                     model=get_config()["open_ai_text_model"],
                     input= make_prompt(lang, summarize and len(text) > get_config()["summarize_min_length"], title=title, description=descr) + ":\n\n" + text
                 )
+                text = ""
                 for output_item in response.output:
                     for content_item in output_item.content:
                         text += content_item.text
@@ -336,10 +346,22 @@ def run_gemini(filename, summarize):
 
         if srt is None:
             write_log(filename, "Transcription error: Failed to generate transcription.")
+            print(f"Transcription error: Failed to generate transcription for {filename}.")
             return ""
         save_subtitles(filename=filename, text= "Transcribed from video link by Gemini:\n"+ srt)
 
+    if detect_language_from_text(srt) not in get_config()["transcription-prompts"].keys():
+            print(f"Translating text for {filename} to default language {get_config()['default_language']}.")
+            response = client.models.generate_content(
+                model=gemini_model,
+                contents=[
+                    f"Please translate the following text into lang={get_config()['default_language']}",
+                    "Text:\n" + srt,
+                ],
+            )
+            srt = response.text
     if len(srt) <= get_config()["summarize_min_length"]:
+        print(f"Text for {filename} is too short to summarize, returning original text.")
         return srt
     text = ""
     for chunk in filter_subs(srt):
@@ -371,6 +393,7 @@ def run_claude(filename, summarize=False):
     srt = download_subtitles(filename)
     if srt == "":
         write_log(filename, "Transcription error: Claude requires subtitles.")
+        print(f"Transcription error: Claude requires subtitles for {filename}.")
         #ToDo: implement  obtaining web-pagecontent
         return ""
     for chunk_srt in filter_subs(srt):
