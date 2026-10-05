@@ -22,7 +22,7 @@ def secure_wait():
     for i in range(n):
         delay += random()
     T = float(get_config().get("delay-between-fetches"))
-    minT = 3.0
+    minT = 5.0
     delay = minT + delay *  (T-minT) * 2.0 / float(n)
     sleep(delay)
 

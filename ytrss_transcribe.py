@@ -282,6 +282,11 @@ def run_gemini(filename, summarize):
     gemini_model = get_config()["gemini_model"]
     from google import genai
     from google.genai import types
+    config = types.GenerateContentConfig(
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(
+            disable=True
+        ),
+    )
     client = genai.Client(api_key=get_config()["gemini_api_key"])
     description_path = "yt-video/" + filename + ".desc"
     lang = detect_language(description_path) or "en"
@@ -316,8 +321,9 @@ def run_gemini(filename, summarize):
                     model=gemini_model,
                     contents=[
                         audio_file, 
-                         make_prompt(lang, summarize=False)
-                    ]
+                        make_prompt(lang, summarize=False)
+                    ],
+                    config=config,
                 )
                 srt = response.text
             except Exception as e:
@@ -338,7 +344,8 @@ def run_gemini(filename, summarize):
                         ),
                         types.Part.from_text(text=make_prompt(lang, summarize=False)),
                     ]
-                )
+                ),
+                config=config,
             )
             srt = response.text
             if not summarize and srt is not None:
@@ -358,6 +365,7 @@ def run_gemini(filename, summarize):
                     f"Please translate the following text into lang={get_config()['default_language']}",
                     "Text:\n" + srt,
                 ],
+                config=config,
             )
             srt = response.text
     if len(srt) <= get_config()["summarize_min_length"]:

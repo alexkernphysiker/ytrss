@@ -206,7 +206,7 @@ def auto_download():
            f"<label for='max_days'>Keep downloaded items (days):</label><input type='number' id='max_days' name='max_days' min='7' max='90' value='{get_config()["max_days"]}' /><br />" + \
            f"<label for='deliver_days'>RSS contains items from (days):</label><input type='number' id='deliver_days' name='deliver_days' min='1' max='90' value='{get_config()["deliver_days"]}' /><br />" + \
            f"<label for='duplicate_detection_threshold'>Duplicate Detection Threshold:</label><input type='number' id='duplicate_detection_threshold' name='duplicate_detection_threshold' min='0' max='100' value='{get_config()["duplicate_detection_threshold"]}' /><br />" + \
-           f"<label for='delay-between-fetches'>Typical delay between fetches:</label><input type='number' id='delay-between-fetches' name='delay-between-fetches' min='3' max='90' value='{get_config()["delay-between-fetches"]}' /><br />" + \
+           f"<label for='delay-between-fetches'>Typical delay between fetches:</label><input type='number' id='delay-between-fetches' name='delay-between-fetches' min='10' max='90' value='{get_config()["delay-between-fetches"]}' /><br />" + \
             "<input type='submit' value='Save config'></form>" + \
             "<form action='/logs/download'><input type='submit' value='View download logs'></form>" + \
             "<form action='/logs/server'><input type='submit' value='View server logs'></form>" + \
