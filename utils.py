@@ -255,7 +255,8 @@ def generate_atom_feed(url_link, is_public):
                     description_element.text += f"<br/> {transcribe_link}<br/>"
                     description_element.text += f"<br/> <a href='{url_link}/remove_transcription/{fn}'>Remove this transcription</a><br/>"
         elif auto_transcription:
-            continue # will wait for transcription and final deduplication
+            if age < timedelta(hours=get_config()["auto_transcript_hours"]+1):
+                continue # will wait for transcription and final deduplication
         else:
                 if get_config()["re-transcription"]:
                     transcribe_link = f"<br/> <a>Transcript with</a> <a>|</a> "
