@@ -169,7 +169,8 @@ def parce_rss_item(link):
                         fn = link + fn
                         fn = hashlib.sha256(fn.encode()).hexdigest()
 
-                        if not os.path.exists("yt-video/" + fn + ".desc"):
+                        description_path = "yt-video/" + fn + ".desc"
+                        if not os.path.exists(description_path):
                             print(f"New episode detected: {fn}")
                             new_episode = {
                                 "id": fn,
@@ -182,6 +183,16 @@ def parce_rss_item(link):
                                     or source_enclosure is None:
                                     print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
                                     continue
+                        else:
+                            parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+                            entry_found = etree.parse(description_path, parser1)
+                            duplicate_element = entry_found.find("duplicate")
+                            if duplicate_element is not None:
+                                if duplicate_element.text == "true":
+                                    print(f"Episode {fn} is marked as duplicate, skipping download.")
+                                    continue
+
+
 
                         article = None
                         description_element = ElementTree.SubElement(entry_element, "summary")
@@ -333,6 +344,14 @@ def parce_yt_item(link):
                             if duplicate_fn is not None:
                                 print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
                                 continue
+                        else:
+                            parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+                            entry_found = etree.parse(description_path, parser1)
+                            duplicate_element = entry_found.find("duplicate")
+                            if duplicate_element is not None:
+                                if duplicate_element.text == "true":
+                                    print(f"Episode {fn} is marked as duplicate, skipping download.")
+                                    continue
 
                         ext = "raw"
                         if os.path.exists(file_path):
