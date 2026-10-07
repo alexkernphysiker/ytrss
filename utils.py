@@ -349,11 +349,19 @@ def generate_transcriptions_page(url_link):
         image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
         if image_url != "":
             output+=f"<br/> <img src='{image_url}' width='30%' alt='{title_element.text}'>"
+        auto_transcription = False
+        auto_transcription_element = entry.find("auto_transcription")
+        if auto_transcription_element is not None:
+            auto_transcription = auto_transcription_element.text=="true"
+
         if os.path.exists(transcription_path):
             string_list = open(transcription_path, "r").read().split('\n')
             for line in string_list:
                 if line.strip() != "":
                     output += f"<p>{line}</p>"
+        elif auto_transcription:
+            if age < timedelta(hours=get_config()["auto_transcript_hours"]+1):
+                continue # will wait for transcription and final deduplication
         elif entry.find("summary") is not None and entry.find("summary").text is not None:
             for line in entry.find("summary").text.split('\n'):
                 if line.strip() != "":
