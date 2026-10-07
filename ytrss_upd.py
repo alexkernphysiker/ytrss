@@ -159,16 +159,14 @@ def parce_rss_item(link):
                         fn = ""
                         if link_element is not None and link_element.text is not None:
                             fn += re.sub('['+chars+']', '',link_element.text)
-                            id_element.text = link_element.text
                         if source_enclosure is not None and source_enclosure.get("url") is not None:
                             fn += re.sub('['+chars+']', '',source_enclosure.get("url"))
-                            id_element.text = source_enclosure.get("url")
                         if fn == "":
                                 print(f"Skipping entry with no link and no enclosure in source {source_name}")
                                 continue
                         fn = link + fn
                         fn = hashlib.sha256(fn.encode()).hexdigest()
-
+                        id_element.text = fn
                         description_path = "yt-video/" + fn + ".desc"
                         if not os.path.exists(description_path):
                             print(f"New episode detected: {fn}")
@@ -389,7 +387,7 @@ def parce_yt_item(link):
                             for line in string_list:
                                 description_element.text += "<p>"+line+"</p> <br/>"
                         id_element = ElementTree.SubElement(entry_element, "id")
-                        id_element.text = link_element.get("href")
+                        id_element.text = fn
 
                         if "playlist_id" in link:
                             playlist_name_element = ElementTree.SubElement(entry_element, "yt:playlistname")
