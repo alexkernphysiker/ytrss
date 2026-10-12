@@ -423,9 +423,14 @@ def download(filename, extension):
     return response
 
 @app.route("/read")
-def read_transcriptions():
+def read_list_page():
     global url_link
-    return generate_transcriptions_page(url_link)
+    return generate_transcriptions_list_page(url_link)
+
+@app.route("/read/<filename>")
+def read_transcription(filename):
+    global url_link
+    return generate_transcription_page(url_link, filename)
 
 if __name__ == "__main__":
     app.run(host=host, port=port)

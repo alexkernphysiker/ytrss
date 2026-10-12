@@ -318,7 +318,7 @@ def generate_atom_feed(url_link, is_public):
 </rss>"""
     return output
 
-def generate_transcriptions_page(url_link):
+def generate_transcriptions_list_page(url_link):
     from lxml import etree
     ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
     MEDIA_NS = "http://search.yahoo.com/mrss/"
@@ -338,14 +338,46 @@ def generate_transcriptions_page(url_link):
         title_element = entry.find("title")
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
-        if age > timedelta(days=get_config()["deliver_days"]):
-            continue
+
+        auto_transcription = False
+        auto_transcription_element = entry.find("auto_transcription")
+        if auto_transcription_element is not None:
+            auto_transcription = auto_transcription_element.text=="true"
+        if not os.path.exists(transcription_path) and auto_transcription:
+            if age < timedelta(hours=get_config()["auto_transcript_hours"]+1):
+                continue # will wait for transcription and final deduplication
+
+        output = f"<br/>[{modified_time}] "
+        output += f"<a href='{url_link}/read/{fn}'>{title_element.text}</a>"
+
+        pubs[age] = (fn, title_element.text, output, modified_time)
+
+    output = ""
+    for age, (fn, title, content, modified_time) in {k: v for k, v in sorted(pubs.items(), key=lambda item: item[0])}.items():
+        output += content
+    return f"<html><body><h1>{get_config()["title"]}</h1><ul>{output}</ul></body></html>"
+
+def generate_transcription_page(url_link, fn):
+        from lxml import etree
+        ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
+        MEDIA_NS = "http://search.yahoo.com/mrss/"
+        etree.register_namespace("itunes", ITUNES_NS)
+        etree.register_namespace("media", MEDIA_NS)
+
+        transcription_path = "yt-video/"+fn+".txt"
+        description_path = "yt-video/"+fn+".desc"
+        parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+        entry = etree.parse(description_path, parser1)
+
+        title_element = entry.find("title")
+        modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
+        age = datetime.now() - modified_time
         listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
         output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
         enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""
         if enclosure_url != "":
             output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
-        output += f"<br/><a href='#{fn}-end'>[next]</a>"
+        output += f"<br/> <a href='{url_link}/read'>Back</a><br/>"
         image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
         if image_url != "":
             output+=f"<br/> <img src='{image_url}' width='30%' alt='{title_element.text}'>"
@@ -359,19 +391,12 @@ def generate_transcriptions_page(url_link):
             for line in string_list:
                 if line.strip() != "":
                     output += f"<p>{line}</p>"
-        elif auto_transcription:
-            if age < timedelta(hours=get_config()["auto_transcript_hours"]+1):
-                continue # will wait for transcription and final deduplication
         elif entry.find("summary") is not None and entry.find("summary").text is not None:
             for line in entry.find("summary").text.split('\n'):
                 if line.strip() != "":
                     output += f"<p>{line}</p>"
-        pubs[age] = (fn, title_element.text, output, modified_time)
-    asc = {k: v for k, v in sorted(pubs.items(), key=lambda item: item[0])}
-    output = ""
-    for age, (fn, title, content, modified_time) in asc.items():
-        output += f"<div id='{fn}'> <h2><li>{title} ({modified_time})</li></h2><br/>{content}<br/></div><br/><div id='{fn}-end'><a href='#{fn}'>[back]</a></div><br/>"
-    return f"<html><body><h1>{get_config()["title"]}</h1><ul>{output}</ul></body></html>"
+        output += f"<br/> <a href='{url_link}/read'>Back</a><br/>"
+        return f"<html><body><h1>{get_config()["title"]} - {title_element.text}</h1>{output}</body></html>"
 
 def return_file(filename):
     return send_file("yt-video/"+filename)
