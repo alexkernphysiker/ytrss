@@ -376,7 +376,7 @@ def generate_transcriptions_list_page(url_link):
                 continue # will wait for transcription and final deduplication
 
         output = f"<br/><div id='{fn}'> </div>[{modified_time}] "
-        output += f"<a href='{url_link}/read/{fn}'>{title_element.text}</a>"
+        output += f"<a target='_blank' href='{url_link}/read/{fn}'>{title_element.text}</a>"
 
         pubs[age] = (fn, title_element.text, output, modified_time)
 
@@ -401,11 +401,10 @@ def generate_transcription_page(url_link, fn):
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
         listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
-        output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
+        output = f"<a rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
         enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""
         if enclosure_url != "":
-            output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
-        output += f"<br/> <a href='{url_link}/read#{fn}'>Back</a><br/>"
+            output += f"<a rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
         output += f"<a href='{url_link}/read/{fn}/full'>Full text</a>"
         image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
         if image_url != "":
@@ -420,7 +419,6 @@ def generate_transcription_page(url_link, fn):
             for line in entry.find("summary").text.split('\n'):
                 if line.strip() != "":
                     output += f"<p>{line}</p>"
-        output += f"<br/> <a href='{url_link}/read#{fn}'>Back</a><br/>"
         output += f"<a href='{url_link}/read/{fn}/full'>Full text</a>"
         return f"<html><body><h1>{get_config()["title"]} - {title_element.text}</h1>{output}</body></html>"
 
@@ -440,11 +438,11 @@ def generate_full_transcription_page(url_link, fn):
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
         listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
-        output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
+        output = f"<a rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
         enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""
         if enclosure_url != "":
-            output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
-        output += f"<br/> <a href='{url_link}/read/{fn}'>Back</a><br/>"
+            output += f"<a rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
+
         image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
         if image_url != "":
             output+=f"<br/> <img src='{image_url}' width='30%' alt='{title_element.text}'>"
@@ -459,7 +457,6 @@ def generate_full_transcription_page(url_link, fn):
             for line in entry.find("summary").text.split('\n'):
                 if line.strip() != "":
                     output += f"<p>{line}</p>"
-        output += f"<br/> <a href='{url_link}/read/{fn}'>Back</a><br/>"
         return f"<html><body><h1>{get_config()["title"]} - {title_element.text}</h1>{output}</body></html>"
 
 
