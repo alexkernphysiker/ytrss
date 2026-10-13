@@ -432,5 +432,10 @@ def read_transcription(filename):
     global url_link
     return generate_transcription_page(url_link, filename)
 
+@app.route("/read/<filename>/full")
+def read_full_transcription(filename):
+    global url_link
+    return generate_full_transcription_page(url_link, filename)
+
 if __name__ == "__main__":
     app.run(host=host, port=port)

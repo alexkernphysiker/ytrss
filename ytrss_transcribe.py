@@ -5,7 +5,7 @@ from pathlib import Path
 from lxml import etree
 from repeatings_detector import find_duplicate_episode, mark_episode_as_duplicate
 from datetime import datetime, timedelta
-from utils import secure_wait
+from utils import secure_wait, filter_subs
 from config import get_config
 from lang_detect import *
 from transcription_queue import AUTO_RSS, AUTO_YOUTUBE, transcription_queues
@@ -64,32 +64,6 @@ def save_subtitles(filename, text):
     modtime = os.path.getmtime(description_path)
     os.utime(srt_path, (modtime, modtime))
 
-def filter_subs(long_text, max_length = 0):
-    output=""
-    prev_line=""
-    for line in long_text.splitlines():
-        if line.strip() == "":
-            continue
-        if "-->" in line and "align:" in line and "position:" in line:
-            continue
-        if "<c>" in line or "</c>" in line:
-            continue
-        if line.strip()==prev_line:
-            continue
-
-        prev_line = line.strip()
-        if max_length > 0:
-            if len(output) + len(line) + 1 > max_length:
-                per_sentence = output.split(".\n")
-                if len(per_sentence) > 1:
-                    yield (".\n".join(per_sentence[:-1]) + ".\n").replace("? ", "?\n").replace("! ", "!\n").replace(">> ", "\n>> ")
-                    output = per_sentence[-1]
-                else:
-                    yield output
-                    output=""
-        output += line.replace(". ", ".\n") + " "
-    if output != "":
-        yield output
 def get_video_title_and_description(filename):
     description_path = "yt-video/" + filename + ".desc"
     if os.path.exists(description_path):

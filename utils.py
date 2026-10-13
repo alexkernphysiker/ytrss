@@ -16,6 +16,34 @@ from lxml import etree
 
 seed()
 
+def filter_subs(long_text, max_length = 0):
+    output=""
+    prev_line=""
+    for line in long_text.splitlines():
+        if line.strip() == "":
+            continue
+        if "-->" in line and "align:" in line and "position:" in line:
+            continue
+        if "<c>" in line or "</c>" in line:
+            continue
+        if line.strip()==prev_line:
+            continue
+
+        prev_line = line.strip()
+        if max_length > 0:
+            if len(output) + len(line) + 1 > max_length:
+                per_sentence = output.split(".\n")
+                if len(per_sentence) > 1:
+                    yield (".\n".join(per_sentence[:-1]) + ".\n").replace("? ", "?\n").replace("! ", "!\n").replace(">> ", "\n>> ")
+                    output = per_sentence[-1]
+                else:
+                    yield output
+                    output=""
+        output += line.replace(". ", ".\n") + " "
+    if output != "":
+        yield output
+
+
 def secure_wait():
     delay = 0.0
     n=8
@@ -277,7 +305,7 @@ def generate_atom_feed(url_link, is_public):
         output_title.text = title_element.text
         output_item.append(output_title)
         output_link = etree.Element("link")
-        output_link.text = link_url
+        output_link.text = f"{url_link}/read/{fn}/full"
         output_item.append(output_link)
         output_description = etree.Element("description")
         output_description.text = etree.CDATA(
@@ -378,13 +406,10 @@ def generate_transcription_page(url_link, fn):
         if enclosure_url != "":
             output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
         output += f"<br/> <a href='{url_link}/read'>Back</a><br/>"
+        output += f"<a href='{url_link}/read/{fn}/full'>Full text</a>"
         image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
         if image_url != "":
             output+=f"<br/> <img src='{image_url}' width='30%' alt='{title_element.text}'>"
-        auto_transcription = False
-        auto_transcription_element = entry.find("auto_transcription")
-        if auto_transcription_element is not None:
-            auto_transcription = auto_transcription_element.text=="true"
 
         if os.path.exists(transcription_path):
             string_list = open(transcription_path, "r").read().split('\n')
@@ -396,7 +421,47 @@ def generate_transcription_page(url_link, fn):
                 if line.strip() != "":
                     output += f"<p>{line}</p>"
         output += f"<br/> <a href='{url_link}/read'>Back</a><br/>"
+        output += f"<a href='{url_link}/read/{fn}/full'>Full text</a>"
         return f"<html><body><h1>{get_config()["title"]} - {title_element.text}</h1>{output}</body></html>"
+
+def generate_full_transcription_page(url_link, fn):
+        from lxml import etree
+        ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
+        MEDIA_NS = "http://search.yahoo.com/mrss/"
+        etree.register_namespace("itunes", ITUNES_NS)
+        etree.register_namespace("media", MEDIA_NS)
+
+        srt_path = "yt-video/"+fn+".srt"
+        description_path = "yt-video/"+fn+".desc"
+        parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+        entry = etree.parse(description_path, parser1)
+
+        title_element = entry.find("title")
+        modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
+        age = datetime.now() - modified_time
+        listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
+        output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
+        enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""
+        if enclosure_url != "":
+            output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
+        output += f"<br/> <a href='{url_link}/read'>Back</a><br/>"
+        image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
+        if image_url != "":
+            output+=f"<br/> <img src='{image_url}' width='30%' alt='{title_element.text}'>"
+
+        if os.path.exists(srt_path):
+            string_list = filter_subs(open(srt_path, "r").read())
+            for chunk in string_list:
+              for line in chunk.splitlines():
+                if line.strip() != "":
+                    output += f"<p>{line}</p>"
+        elif entry.find("summary") is not None and entry.find("summary").text is not None:
+            for line in entry.find("summary").text.split('\n'):
+                if line.strip() != "":
+                    output += f"<p>{line}</p>"
+        output += f"<br/> <a href='{url_link}/read'>Back</a><br/>"
+        return f"<html><body><h1>{get_config()["title"]} - {title_element.text}</h1>{output}</body></html>"
+
 
 def return_file(filename):
     return send_file("yt-video/"+filename)
