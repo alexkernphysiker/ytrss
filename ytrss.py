@@ -260,8 +260,8 @@ def auto_transcription():
 
     return buttons_on_top() + "<ul>" + \
            "<form action='/auto-transcription-cfg' method='post'>" + \
-           f"<label for='default_engine'>Youtube transcription engine:</label><select id='default_engine' name='default_engine'>{engines_str}</select><br />" + \
-           f"<label for='auto_transcript_engine_rss'>RSS transcription engine:</label><select id='auto_transcript_engine_rss' name='auto_transcript_engine_rss'>{engines_rss_str}</select><br />" + \
+           f"<label for='default_engine'>Youtube summarization engine:</label><select id='default_engine' name='default_engine'>{engines_str}</select><br />" + \
+           f"<label for='auto_transcript_engine_rss'>RSS summarization engine:</label><select id='auto_transcript_engine_rss' name='auto_transcript_engine_rss'>{engines_rss_str}</select><br />" + \
            f"<label for='auto_transcript_hours'>auto-transcript items not older than (Hr):</label><input type='number' id='auto_transcript_hours' name='auto_transcript_hours' min='3' max='96' value='{get_config()["auto_transcript_hours"]}' /><br />" + \
            f"<label for='wait_for_download_hours'>wait for subtitles (Hr):</label><input type='number' id='wait_for_download_hours' name='wait_for_download_hours' min='0' max='6' value='{get_config()["wait_for_download_hours"]}' /><br />" + \
            f"<label for='duplicate_detection_threshold_transcription'>Duplicate Detection Threshold for Transcription:</label><input type='number' id='duplicate_detection_threshold_transcription' name='duplicate_detection_threshold_transcription' min='0' max='100' value='{get_config()["duplicate_detection_threshold_transcription"]}' /><br />" + \

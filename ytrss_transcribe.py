@@ -16,14 +16,11 @@ def get_engine_map(cfg=None):
         cfg = get_config()
     res = dict()
     if cfg["gemini_api_key"] != "":
-        res["gemini_s"] = "Summarize with Gemini"
-        res["gemini_t"] = "Transcribe with Gemini"
+        res["gemini_s"] = "Gemini"
     if cfg["openai_api_key"] != "":
-        res["openai_s"] = "Summarize with OpenAI"
-        res["openai_t"] = "Transcribe with OpenAI"
+        res["openai_s"] = "OpenAI"
     if cfg["claude_api_key"] != "":
-        res["claude_s"] = "Summarize with Claude"
-        res["claude_t"] = "Transcribe with Claude"
+        res["claude_s"] = "Claude"
     res["srt"] = "Just download subtitles from YT"
     return res
 
@@ -191,7 +188,7 @@ def write_log(filename, message):
     modTime = os.path.getmtime("yt-video/" + filename + ".desc")
     os.utime(log_path, (modTime, modTime))
 
-def run_openai(filename, summarize):
+def run_openai(filename, summarize = True):
         from openai import OpenAI
         client = OpenAI(api_key=get_config()["openai_api_key"])
         description_path = "yt-video/" + filename + ".desc"
@@ -252,7 +249,7 @@ def run_openai(filename, summarize):
                         text += content_item.text
         return text
 
-def run_gemini(filename, summarize):
+def run_gemini(filename, summarize = True):
     gemini_model = get_config()["gemini_model"]
     from google import genai
     from google.genai import types
@@ -360,7 +357,7 @@ def run_gemini(filename, summarize):
     return text
 
 
-def run_claude(filename, summarize=False):
+def run_claude(filename, summarize=True):
     lang = detect_language("yt-video/" + filename + ".desc") or "en"
     import anthropic
     from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
@@ -414,18 +411,12 @@ def transcribe_video(filename, engine):
     
     text = ""
     try:
-        if engine == "openai_t":
-            text = run_openai(filename, summarize=False)
-        elif engine == "gemini_t":
-            text = run_gemini(filename, summarize=False)
-        elif engine == "claude_t":
-            text = run_claude(filename, summarize=False)
-        elif engine == "openai_s":
-            text = run_openai(filename, summarize=True)
+        if engine == "openai_s":
+            text = run_openai(filename)
         elif engine == "gemini_s":
-            text = run_gemini(filename, summarize=True)
+            text = run_gemini(filename)
         elif engine == "claude_s":
-            text = run_claude(filename, summarize=True)
+            text = run_claude(filename)
         elif engine == "srt":
             text = run_srt(filename)
         else:
