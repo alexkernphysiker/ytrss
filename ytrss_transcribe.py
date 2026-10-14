@@ -197,7 +197,7 @@ def run_openai(filename, summarize = True):
         text = download_subtitles(filename)
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
-
+        title, descr = get_video_title_and_description(filename)
         if text=="":
             if age < timedelta(hours=get_config()["wait_for_download_hours"]) and get_video_link(description_path)!="":
                 return ""
@@ -226,8 +226,16 @@ def run_openai(filename, summarize = True):
                     else:
                         text += " "+segment.text
                 text += ".\n"
-            save_subtitles(filename=filename, text= "Transcribed from mp3 by OpenAI:\n"+ text)
-        title, descr = get_video_title_and_description(filename)
+            response = client.responses.create(
+                    model=get_config()["open_ai_text_model"],
+                    input= make_prompt(lang, summarize=False, title=title, description=descr) + ":\n\n" + text
+                )
+            text = ""
+            for output_item in response.output:
+                    for content_item in output_item.content:
+                        text += content_item.text
+
+            save_subtitles(filename=filename, text= text)
         if detect_language_from_text(text) not in get_config()["transcription-prompts"].keys():
                 response = client.responses.create(
                     model=get_config()["open_ai_text_model"],
@@ -326,7 +334,17 @@ def run_gemini(filename, summarize = True):
             write_log(filename, "Transcription error: Failed to generate transcription.")
             print(f"Transcription error: Failed to generate transcription for {filename}.")
             return ""
-        save_subtitles(filename=filename, text= "Transcribed from video link by Gemini:\n"+ srt)
+
+        response = client.models.generate_content(
+                model=gemini_model,
+                contents=[
+                    make_prompt(lang, summarize=False, title=title, description=description),
+                    "Title:\n" + title,
+                    "Description:\n" + description,
+                    "Subtitles:\n" + srt,
+                ],
+            )
+        save_subtitles(filename=filename, text= response.text)
 
     if detect_language_from_text(srt) not in get_config()["transcription-prompts"].keys():
             print(f"Translating text for {filename} to default language {get_config()['default_language']}.")
@@ -347,7 +365,7 @@ def run_gemini(filename, summarize = True):
             response = client.models.generate_content(
                 model=gemini_model,
                 contents=[
-                    make_prompt(lang, summarize=summarize and len(chunk) > get_config()["summarize_min_length"], title=title, description=description),
+                    make_prompt(lang, summarize=True and len(chunk) > get_config()["summarize_min_length"], title=title, description=description),
                     "Title:\n" + title,
                     "Description:\n" + description,
                     "Subtitles:\n" + chunk,
@@ -375,6 +393,32 @@ def run_claude(filename, summarize=True):
         print(f"Transcription error: Claude requires subtitles for {filename}.")
         #ToDo: implement  obtaining web-pagecontent
         return ""
+    for chunk_srt in filter_subs(srt):
+        messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": make_prompt(lang, summarize=False, title=title, description=description)},
+                        {"type": "text", "text": "Video title:\n"+title},
+                        {"type": "text", "text": "Video description:\n"+description},
+                        {"type": "text", "text": "Subtitles:\n"+chunk_srt},
+                    ],
+                }
+        ]
+
+        with client.messages.stream(
+            model=get_config()["claude_model"],
+            max_tokens=max_tokens,
+            messages=messages
+        ) as stream:
+            for text in stream.text_stream:
+                output += text
+    srt = output
+    save_subtitles(filename=filename, text= srt)
+    if len(srt) <= get_config()["summarize_min_length"]:
+        print(f"Text for {filename} is too short to summarize, returning original text.")
+        return srt
+    output=""
     for chunk_srt in filter_subs(srt):
         messages=[
                 {
