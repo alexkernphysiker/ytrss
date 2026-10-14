@@ -1,13 +1,13 @@
 # ytrss
 
-YTRSS is a self-hosted podcast and media archiver for YouTube channels,
-playlists, and RSS feeds. It combines subscribed sources into one RSS 2.0 feed,
-auto-downloads eligible video/audio items for local enclosure use, preserves
-subtitles and article text, and can queue AI-based summarization or
-transcription jobs for saved episodes.
+YTRSS is a self-hosted YouTube and RSS archiving pipeline that turns subscribed
+channels, playlists, and podcast feeds into a single local RSS 2.0 catalog.
+The current implementation combines a Flask web interface with periodic updater
+and transcription workers to fetch eligible media, keep local copies with
+metadata, preserve subtitles and readable article text, and queue AI-powered
+summaries or transcripts for saved episodes.
 
-The project currently consists of a small Flask web app plus two background
-workers:
+The project now consists of a small Flask web app plus two background workers:
 
 - `ytrss.py` manages subscriptions, source settings, and the generated feed,
   downloads, and transcription views.
@@ -62,6 +62,31 @@ mkdir -p yt-video
 The last command creates `ytrss_config.json` with the defaults from
 `config.py`. Both `ytrss_config.json` and the contents of `yt-video/` are local
 runtime data and are ignored by Git.
+
+## Minimal config example
+
+If you want the smallest useful config, keep just the values you actually need
+and leave the rest to the defaults from `default_config()` in `config.py`.
+Set `url_link` to the public base URL that feed readers and enclosure links must
+use. If the service is reachable only from your own machine, keep the default
+`http://127.0.0.1:5000`; for a public deployment, replace it with your HTTPS URL.
+
+```json
+{
+  "host": "127.0.0.1",
+  "port": 5000,
+  "url_link": "https://ytrss.example.com",
+  "title": "YTRSS feed",
+  "google_search_api_key": "",
+  "gemini_api_key": "YOUR_GEMINI_API_KEY",
+  "openai_api_key": "YOUR_OPENAI_API_KEY",
+  "claude_api_key": "YOUR_CLAUDE_API_KEY"
+}
+```
+
+Leave a provider key empty if you do not want to enable that engine. Empty keys
+hide the corresponding options from the web interface. After saving the file, run
+`start.py` and then add subscriptions from the browser UI.
 
 ## Configuration
 
