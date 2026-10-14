@@ -42,7 +42,7 @@ the server URL; they are stored locally without encryption.
 On Debian or Ubuntu, the system tools can be installed with:
 
 ```sh
-pkexec /usr/bin/apt-get install ffmpeg yt-dlp python3-venv
+sudo apt-get install ffmpeg yt-dlp python3-venv
 ```
 
 ## Installation
