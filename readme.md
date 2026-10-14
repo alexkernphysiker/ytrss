@@ -20,9 +20,6 @@ The project now consists of a small Flask web app plus two background workers:
 
 [ytrss — RSS і YouTube on Mozilla Add-ons](https://addons.mozilla.org/firefox/addon/ytrss-rss-youtube/)
 is the companion extension for desktop Firefox 140+ and Firefox for Android 142+.
-Version 1.2.1 was submitted for public distribution on September 30, 2026 and is
-awaiting Mozilla review; installation from this page becomes available after
-approval.
 
 Its button sends the current site's root URL, YouTube channel ID/name, or
 playlist ID to the corresponding ytrss search page in a new tab. When no search
