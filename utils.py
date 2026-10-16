@@ -405,7 +405,7 @@ def generate_transcription_page(url_link, fn):
         enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""
         if enclosure_url != "":
             output += f"<a rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
-        output += f"<a href='{url_link}/read/{fn}/full'>Full text</a>"
+        output += f"<br /><a href='{url_link}/read/{fn}/full'>[Full text]</a>"
         image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
         if image_url != "":
             output+=f"<br/> <img src='{image_url}' width='30%' alt='{title_element.text}'>"
@@ -419,7 +419,7 @@ def generate_transcription_page(url_link, fn):
             for line in entry.find("summary").text.split('\n'):
                 if line.strip() != "":
                     output += f"<p>{line}</p>"
-        output += f"<a href='{url_link}/read/{fn}/full'>Full text</a>"
+        output += f"<br /><a href='{url_link}/read/{fn}/full'>[Full text]</a>"
         return f"<html><body><h1>{get_config()["title"]} - {title_element.text}</h1>{output}</body></html>"
 
 def generate_full_transcription_page(url_link, fn):
@@ -442,7 +442,7 @@ def generate_full_transcription_page(url_link, fn):
         enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""
         if enclosure_url != "":
             output += f"<a rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
-
+        output += f"<br /><a href='{url_link}/read/{fn}'>[Summary]</a>"
         image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
         if image_url != "":
             output+=f"<br/> <img src='{image_url}' width='30%' alt='{title_element.text}'>"
