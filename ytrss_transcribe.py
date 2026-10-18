@@ -345,6 +345,7 @@ def run_gemini(filename, summarize = True):
                 ],
             )
         save_subtitles(filename=filename, text= response.text)
+        srt = response.text
 
     if detect_language_from_text(srt) not in get_config()["transcription-prompts"].keys():
             print(f"Translating text for {filename} to default language {get_config()['default_language']}.")
