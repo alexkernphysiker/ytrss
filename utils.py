@@ -414,13 +414,13 @@ def generate_transcription_page(url_link, fn):
             string_list = open(transcription_path, "r").read().split('\n')
             for line in string_list:
                 if line.strip() != "":
-                    output += f"<p>{line}</p>"
+                    output += f"<li><p>{line}</p></li>"
         elif entry.find("summary") is not None and entry.find("summary").text is not None:
             for line in entry.find("summary").text.split('\n'):
                 if line.strip() != "":
-                    output += f"<p>{line}</p>"
+                    output += f"<li><p>{line}</p></li>"
         output += f"<br /><a href='{url_link}/read/{fn}/full'>[Full text]</a>"
-        return f"<html><body><h1>{get_config()["title"]} - {title_element.text}</h1>{output}</body></html>"
+        return f"<html><body><h1>{get_config()["title"]} - {title_element.text}</h1><ul>{output}</ul></body></html>"
 
 def generate_full_transcription_page(url_link, fn):
         from lxml import etree
