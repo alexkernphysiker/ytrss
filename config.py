@@ -64,7 +64,8 @@ def default_config():
         },
         "title": "YTRSS feed",
         "temporary_block_yt_download": False,
-        "summarize_min_length": 7168
+        "summarize_min_length": 7168,
+        "tinyurl_key": ""
     }
 
 class ConfigStore:

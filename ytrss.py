@@ -4,6 +4,7 @@ from flask import request
 from flask import redirect
 from flask import Response
 from pathlib import PurePath
+from tinyurl import get_share_url
 from utils import *
 from ytrss_transcribe import get_engine_map
 from podcast_search import *
@@ -431,6 +432,12 @@ def read_list_page():
 def read_transcription(filename):
     global url_link
     return generate_transcription_page(url_link, filename)
+
+@app.route("/read/<filename>/share")
+def read_transcription_share(filename):
+    global url_link
+    get_share_url(filename, force=True)
+    return redirect(url_for('read_transcription', filename=filename))
 
 @app.route("/read/<filename>/full")
 def read_full_transcription(filename):

@@ -107,6 +107,7 @@ Important settings include:
 | `host`, `port` | `127.0.0.1`, `5000` | Address used by the Flask server. |
 | `url_link` | `http://127.0.0.1:5000` | Public base URL embedded in feed and download links. |
 | `title` | `YTRSS feed` | Feed and web-page title. |
+| `tinyurl_key` | empty | TinyURL API key used to create shareable links for transcription pages. |
 | `deliver_days` | `3` | Maximum item age included in the generated feed and processed from sources. |
 | `max_days` | `30` | Retention time for files under `yt-video/`. |
 | `wait_for_download_hours` | `3` | Time to wait for a new YouTube video/subtitles before continuing without them. |
@@ -133,6 +134,8 @@ Credentials are read from `ytrss_config.json`:
 
 - `google_search_api_key` enables YouTube channel and playlist search through
   YouTube Data API v3.
+- `tinyurl_key` enables creation of shareable links for transcription pages
+  through the TinyURL API. Leave it empty to disable this feature.
 - `gemini_api_key` enables `gemini_s` and `gemini_t`.
 - `openai_api_key` enables `openai_s` and `openai_t`.
 - `claude_api_key` enables `claude_s` and `claude_t`.
@@ -225,6 +228,8 @@ The main output endpoints are:
 
 - `/feed` serves the combined RSS 2.0 feed (`application/rss+xml`).
 - `/read` shows stored transcriptions or extracted episode text.
+- `/read/<episode>/share` creates a TinyURL for an episode's transcription
+  page and redirects back to that page.
 - `/file/<episode>.<extension>` serves a locally downloaded enclosure.
 - `/transcribe/<engine>/<episode>` queues a manual transcription.
 - `/remove_transcription/<episode>` removes saved transcription output.
@@ -232,6 +237,12 @@ The main output endpoints are:
 Add `http://127.0.0.1:5000/feed` (or the corresponding configured public URL)
 to a feed or podcast reader. The generated feed has been used with RSS Reader
 Offline on Android, QuiteRSS on Linux, and the Feedbro browser extension.
+
+When `tinyurl_key` is configured, transcription pages show a **Share** button
+if a short link already exists, or a **Get shareable link** link otherwise.
+Creating a link uses the public `url_link` setting; the generated TinyURL is
+saved alongside the episode under `yt-video/` and reused on later visits. The
+Share button copies the episode title and short link to the clipboard.
 
 ## How items are processed
 

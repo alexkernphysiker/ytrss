@@ -13,6 +13,60 @@ import html
 import json
 import pendulum
 from lxml import etree
+from tinyurl import get_share_url
+import json
+from html import escape
+
+def clp_copy_button(text: str) -> str:
+    payload = escape(json.dumps(text), quote=True)
+
+    return f"""
+<span class="copy-widget">
+  <button type="button" data-text="{payload}">Share</button>
+  <span role="status"></span>
+
+  <script>
+    (() => {{
+      const widget = document.currentScript.parentElement;
+      const button = widget.querySelector("button");
+      const status = widget.querySelector('[role="status"]');
+
+      button.addEventListener("click", async () => {{
+        const text = JSON.parse(button.dataset.text);
+
+        try {{
+          if (window.isSecureContext && navigator.clipboard?.writeText) {{
+            await navigator.clipboard.writeText(text);
+          }} else {{
+            const field = document.createElement("textarea");
+            field.value = text;
+            field.style.position = "fixed";
+            field.style.left = "-9999px";
+            document.body.appendChild(field);
+
+            try {{
+              field.focus();
+              field.select();
+              field.setSelectionRange(0, field.value.length);
+
+              if (!document.execCommand("copy")) {{
+                throw new Error("Cannot copy to clipboard");
+              }}
+            }} finally {{
+              field.remove();
+            }}
+          }}
+
+          status.textContent = "Copied to clipboard!";
+        }} catch {{
+          status.textContent = "Copying is not available.";
+          window.prompt("Text to copy:", text);
+        }}
+      }});
+    }})();
+  </script>
+</span>
+"""
 
 seed()
 
@@ -405,11 +459,20 @@ def generate_transcription_page(url_link, fn):
         enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""
         if enclosure_url != "":
             output += f"<a rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
+
         output += f"<br /><a href='{url_link}/read/{fn}/full'>[Full text]</a>"
         image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
         if image_url != "":
             output+=f"<br/> <img src='{image_url}' width='30%' alt='{title_element.text}'>"
 
+        if get_config()["tinyurl_key"]:
+            short_url = get_share_url(fn)
+            if short_url:
+                output += f"<br />"
+                output += clp_copy_button(f"{title_element.text}:\n{short_url}")
+            else:
+                output += f"<br /><a href='{url_link}/read/{fn}/share'>[Get shareable link]</a>"
+                
         if os.path.exists(transcription_path):
             string_list = open(transcription_path, "r").read().split('\n')
             for line in string_list:
