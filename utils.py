@@ -400,7 +400,7 @@ def generate_atom_feed(url_link, is_public):
 </rss>"""
     return output
 
-def generate_transcriptions_list_page(url_link):
+def generate_transcriptions_list_page(url_link, search_request = None):
     from lxml import etree
     ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
     MEDIA_NS = "http://search.yahoo.com/mrss/"
@@ -418,6 +418,11 @@ def generate_transcriptions_list_page(url_link):
             continue  # Skip duplicate entries
 
         title_element = entry.find("title")
+        if search_request is not None:
+            description_element = entry.find("summary")
+            if title_element is not None and search_request.lower() not in title_element.text.lower():
+                if description_element is not None and (description_element.text is None or search_request.lower() not in description_element.text.lower()):
+                    continue
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
 
@@ -429,15 +434,24 @@ def generate_transcriptions_list_page(url_link):
             if age < timedelta(hours=get_config()["auto_transcript_hours"]+1):
                 continue # will wait for transcription and final deduplication
 
-        output = f"<br/><div id='{fn}'> </div>[{modified_time}] "
-        output += f"<a target='_blank' href='{url_link}/read/{fn}'>{title_element.text}</a>"
+        output = f"<li><div id='{fn}'> </div>[{modified_time}] "
+        output += f"<a href='{url_link}/read/{fn}'>{title_element.text}</a>"
 
         pubs[age] = (fn, title_element.text, output, modified_time)
 
     output = ""
     for age, (fn, title, content, modified_time) in {k: v for k, v in sorted(pubs.items(), key=lambda item: item[0])}.items():
         output += content
-    return f"<html><body><h1>{get_config()["title"]}</h1><ul>{output}</ul></body></html>"
+    if search_request is None:
+       search = f"<li><form method='post' action='{url_link}/read/search'>" + \
+               f"<input type='text' name='search_request' placeholder='Search...' />" + \
+               f"<input type='submit' value='Search' />" + \
+               f"</form>"
+    else:
+       search = f"<li><form method='get' action='{url_link}/read'>" + \
+                f"<h2>{search_request}</h2><input type='submit' value='back' />" + \
+                f"</form>"
+    return f"<html><body><h1>{get_config()["title"]}</h1><ul>{search}{output}</ul></body></html>"
 
 def generate_transcription_page(url_link, fn):
         from lxml import etree
@@ -455,12 +469,13 @@ def generate_transcription_page(url_link, fn):
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
         listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
-        output = f"<a rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
+        output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
         enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""
         if enclosure_url != "":
-            output += f"<a rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
+            output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
 
         output += f"<br /><a href='{url_link}/read/{fn}/full'>[Full text]</a>"
+        output += f"<br /><a href='{url_link}/read#{fn}'>[Back to list]</a>"
         image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
         if image_url != "":
             output+=f"<br/> <img src='{image_url}' width='30%' alt='{title_element.text}'>"
@@ -483,6 +498,7 @@ def generate_transcription_page(url_link, fn):
                 if line.strip() != "":
                     output += f"<li><p>{line}</p></li>"
         output += f"<br /><a href='{url_link}/read/{fn}/full'>[Full text]</a>"
+        output += f"<br /><a href='{url_link}/read#{fn}'>[Back to list]</a>"
         return f"<html><body><h1>{get_config()["title"]} - {title_element.text}</h1><ul>{output}</ul></body></html>"
 
 def generate_full_transcription_page(url_link, fn):
@@ -501,11 +517,12 @@ def generate_full_transcription_page(url_link, fn):
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
         listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
-        output = f"<a rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
+        output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
         enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""
         if enclosure_url != "":
-            output += f"<a rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
+            output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
         output += f"<br /><a href='{url_link}/read/{fn}'>[Summary]</a>"
+        output += f"<br /><a href='{url_link}/read#{fn}'>[Back to list]</a>"
         image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
         if image_url != "":
             output+=f"<br/> <img src='{image_url}' width='30%' alt='{title_element.text}'>"
@@ -520,6 +537,7 @@ def generate_full_transcription_page(url_link, fn):
             for line in entry.find("summary").text.split('\n'):
                 if line.strip() != "":
                     output += f"<p>{line}</p>"
+        output += f"<br /><a href='{url_link}/read#{fn}'>[Back to list]</a>"
         return f"<html><body><h1>{get_config()["title"]} - {title_element.text}</h1>{output}</body></html>"
 
 

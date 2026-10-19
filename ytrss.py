@@ -428,6 +428,12 @@ def read_list_page():
     global url_link
     return generate_transcriptions_list_page(url_link)
 
+@app.route("/read/search", methods=['POST'])
+def read_list_page_search():
+    global url_link
+    search_request = request.form['search_request']
+    return generate_transcriptions_list_page(url_link, search_request)
+
 @app.route("/read/<filename>")
 def read_transcription(filename):
     global url_link
