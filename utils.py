@@ -16,6 +16,7 @@ from lxml import etree
 from tinyurl import get_share_url
 import json
 from html import escape
+from urllib.parse import quote
 
 def clp_copy_button(text: str) -> str:
     payload = escape(json.dumps(text), quote=True)
@@ -402,6 +403,93 @@ def generate_atom_feed(url_link, is_public):
 
 def generate_transcriptions_list_page(url_link, search_request = None):
     from lxml import etree
+    page_start = """<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+""" + \
+  f"<title>{get_config()['title']}</title>" + \
+"""
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #f4f5f7;
+      color: #1d2734;
+      font-family: system-ui, sans-serif;
+      line-height: 1.5;
+    }
+    main { max-width: 1400px; margin-inline: auto; padding: 16px; }
+    .news-search {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    .news-search input, .news-search button {
+      font: inherit;
+      padding: 10px 14px;
+      border: 1px solid #c5ced9;
+      border-radius: 8px;
+    }
+    .news-search input { flex: 1; min-width: 0; background: #fff; }
+    .news-search button { background: #fff; color: inherit; cursor: pointer; }
+    .news-search button:hover { background: #e9edf4; }
+    .news-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
+      gap: 16px;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .news-card {
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid #e1e6ed;
+      border-radius: 14px;
+      box-shadow: 0 3px 12px #17294208;
+    }
+    .news-link {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      height: 100%;
+      padding: 14px;
+      color: inherit;
+      text-decoration: none;
+    }
+    .news-link:hover { background: #f8faff; }
+    .news-link:focus-visible { outline: 3px solid #315eca; outline-offset: -3px; }
+    .news-image {
+      flex: 0 0 auto;
+      width: 112px;
+      height: 112px;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+    .news-content { flex: 1; min-width: 0; }
+    .news-title {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .news-time {
+      display: block;
+      margin-top: 10px;
+      color: #596575;
+      font-size: 0.82rem;
+    }
+    @media (max-width: 420px) {
+      .news-image { width: 84px; height: 84px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+"""
     ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
     MEDIA_NS = "http://search.yahoo.com/mrss/"
     etree.register_namespace("itunes", ITUNES_NS)
@@ -434,8 +522,29 @@ def generate_transcriptions_list_page(url_link, search_request = None):
             if age < timedelta(hours=get_config()["auto_transcript_hours"]+1):
                 continue # will wait for transcription and final deduplication
 
-        output = f"<li><div id='{fn}'> </div>[{modified_time}] "
-        output += f"<a href='{url_link}/read/{fn}'>{title_element.text}</a>"
+        news_url = f"{url_link.rstrip('/')}/read/{quote(fn, safe='')}"
+        image_element = entry.find("image")
+        image_url = (
+            (image_element.get("href") or "").replace("__URL_LINK__", url_link)
+            if image_element is not None else ""
+        )
+        image_html = ""
+        if image_url:
+            image_html = (
+                f'<img class="news-image" src="{escape(image_url, quote=True)}"'
+                ' alt="" loading="lazy" decoding="async">'
+            )
+        output = f"""<li class="news-card" id="{escape(fn, quote=True)}">
+  <a class="news-link" href="{escape(news_url, quote=True)}">
+    {image_html}
+    <div class="news-content">
+      <h2 class="news-title">{escape(title_element.text or "Без заголовка")}</h2>
+      <time class="news-time" datetime="{modified_time.isoformat(timespec='seconds')}">
+        {modified_time.strftime("%d.%m.%Y, %H:%M")}
+      </time>
+    </div>
+  </a>
+</li>"""
 
         pubs[age] = (fn, title_element.text, output, modified_time)
 
@@ -443,15 +552,24 @@ def generate_transcriptions_list_page(url_link, search_request = None):
     for age, (fn, title, content, modified_time) in {k: v for k, v in sorted(pubs.items(), key=lambda item: item[0])}.items():
         output += content
     if search_request is None:
-       search = f"<li><form method='post' action='{url_link}/read/search'>" + \
-               f"<input type='text' name='search_request' placeholder='Search...' />" + \
-               f"<input type='submit' value='Search' />" + \
-               f"</form>"
+       search = (
+           f'<form class="news-search" method="post" action="{escape(url_link, quote=True)}/read/search">'
+           '<input type="search" name="search_request" placeholder="Search news…" aria-label="Search news">'
+           '<button type="submit">Search</button></form>'
+       )
     else:
-       search = f"<li><form method='get' action='{url_link}/read'>" + \
-                f"<h2>{search_request}</h2><input type='submit' value='back' />" + \
-                f"</form>"
-    return f"<html><body><h1>{get_config()["title"]}</h1><ul>{search}{output}</ul></body></html>"
+       search = (
+           f'<h2>{escape(search_request)}</h2>'
+           f'<form class="news-search" method="get" action="{escape(url_link, quote=True)}/read">'
+           '<button type="submit">Back to list</button></form>'
+       )
+    return (
+        page_start
+        + f'<h1>{escape(get_config()["title"])}</h1>'
+        + search
+        + f'<ul class="news-grid">{output}</ul>'
+        + '</main></body></html>'
+    )
 
 def generate_transcription_page(url_link, fn):
         from lxml import etree
