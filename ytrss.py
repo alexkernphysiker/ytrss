@@ -29,7 +29,7 @@ def buttons_on_top(auto_refresh=False):
            "<input type='submit' name='show_rss_list' value='RSS'>" + \
            "<input type='submit' name='auto_transcription' value='Auto-transcription'>" + \
            "<input type='submit' name='auto_download' value='Auto-downloading'>" + \
-            "<a href='/read'>Read news</a></form>"
+            "</form>"
 
 
 def service_page(content="", title="Configuration", auto_refresh=False):
