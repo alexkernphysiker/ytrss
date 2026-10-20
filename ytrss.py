@@ -11,6 +11,8 @@ from podcast_search import *
 from feed_discover import discover_rss_feeds
 from config import edit_config, get_config
 from transcription_queue import transcription_queues
+from web_ui import page_start
+from werkzeug.exceptions import HTTPException
 
  
 host=get_config().get("host")
@@ -21,16 +23,103 @@ app = Flask(__name__)
 
 
 def buttons_on_top(auto_refresh=False):
-    return f"<head><title>{get_config()["title"]}</title>" + \
-           (f"<meta http-equiv=\"refresh\" content=\"{get_config()["delay-between-fetches"]}\">" if auto_refresh else "") + \
-           "</head>" + \
-           "<form action='/subscription' method='post'>" + \
+    return "<form action='/subscription' method='post'>" + \
            "<input type='submit' name='show_channel_list' value='YT channels'>" + \
            "<input type='submit' name='show_playlist_list' value='YT playlists'>" + \
            "<input type='submit' name='show_rss_list' value='RSS'>" + \
            "<input type='submit' name='auto_transcription' value='Auto-transcription'>" + \
            "<input type='submit' name='auto_download' value='Auto-downloading'>" + \
-            "</form>"
+            "<a href='/read'>Read news</a></form>"
+
+
+def service_page(content="", title="Configuration", auto_refresh=False):
+    cfg = get_config()
+    refresh_interval = cfg["delay-between-fetches"] if auto_refresh else None
+    return page_start(f"{cfg['title']} - {title}", "service-page", refresh_interval) + f"""
+<header class="service-header">
+  <p class="service-brand">{escape(cfg['title'])}</p>
+  <h1 class="service-title">{escape(title)}</h1>
+</header>
+<nav class="service-nav" aria-label="Service navigation">{buttons_on_top()}</nav>
+<div class="service-content">{content}</div>
+</main></body></html>"""
+
+
+def _service_message(message, title="Status"):
+    return service_page(
+        f'<section class="service-panel"><p class="service-message">{escape(message)}</p></section>',
+        title,
+    )
+
+
+def _search_panel(title, action, field, button="Search"):
+    return f"""<section class="service-panel">
+<h2><label for="{field}">{escape(title)}</label></h2>
+<form class="service-search" action="{action}" method="post">
+  <input type="text" name="{field}" id="{field}">
+  <input type="submit" value="{escape(button, quote=True)}">
+</form></section>"""
+
+
+def _source_item(label, action, field=None, value=None, button=None, link=None,
+                 description=None, status=""):
+    label_html = f'[{escape(str(label))}]'
+    if link is not None:
+        label_html = f'<a href="{escape(link, quote=True)}" target="_blank">{label_html}</a>'
+    controls = ""
+    if field is not None:
+        controls += (
+            f'<input type="hidden" name="{field}" class="form-control" id="{field}"'
+            f' value="{escape(str(value), quote=True)}">'
+        )
+    if button is not None:
+        controls += f'<input type="submit" value="{escape(button, quote=True)}">'
+    details = f'<div class="service-description">{description}</div>' if description is not None else ""
+    return (
+        '<li class="service-item">'
+        f'<form action="{escape(action, quote=True)}" method="post">'
+        f'<span class="service-item-title">{label_html}{escape(status)}</span>{controls}</form>'
+        f'{details}</li>'
+    )
+
+
+def _source_section(title, items):
+    return (
+        f'<section><h2 class="service-section-title">{escape(title)}</h2>'
+        f'<ul class="service-list">{items}</ul></section>'
+    )
+
+
+def _back_form(action):
+    return f'<form class="service-back" action="{action}" method="get"><input type="submit" value="Back"></form>'
+
+
+def _number_field(name, label, value, minimum, maximum):
+    return (
+        f'<div class="service-field"><label for="{name}">{escape(label)}</label>'
+        f'<input type="number" id="{name}" name="{name}" min="{minimum}" max="{maximum}"'
+        f' value="{escape(str(value), quote=True)}"></div>'
+    )
+
+
+def _select_field(name, label, options):
+    return (
+        f'<div class="service-field"><label for="{name}">{escape(label)}</label>'
+        f'<select id="{name}" name="{name}">{options}</select></div>'
+    )
+
+
+def _log_page(command, title):
+    proc = subprocess.run(command, shell=True, capture_output=True, timeout=20)
+    content = f'<section class="service-panel"><pre class="service-log">{escape(proc.stdout.decode().strip())}</pre></section>'
+    return service_page(content, title, auto_refresh=True)
+
+
+@app.errorhandler(HTTPException)
+def service_error(error):
+    response = error.get_response()
+    response.set_data(_service_message(error.description, f"{error.code} {error.name}"))
+    return response
 
 @app.route("/subscription", methods=['GET','POST'])
 def subscription():
@@ -38,69 +127,51 @@ def subscription():
         for action in request.form.keys():
             return redirect(url_for(action))
     else:
-        return buttons_on_top()
+        return service_page(title="Subscriptions")
 
 @app.route("/config")
 def config_page():
-    return buttons_on_top()
+    return service_page(title="Configuration")
 
 @app.route("/logs/server")
 def logs_server():
-    full_command = "cat ytrss.log | tail -n 50"
-    proc = subprocess.run(full_command, shell=True, capture_output=True, timeout=20)
-    output = "" 
-    for line in proc.stdout.decode().strip().split('\n'):
-        output += f"<br/> {line}"
-    return buttons_on_top(True) + output
+    return _log_page("cat ytrss.log | tail -n 50", "Server logs")
 @app.route("/logs/transcription")
 def logs_transcription():
-    full_command = "cat ytrss_transcribe.log | tail -n 50"
-    proc = subprocess.run(full_command, shell=True, capture_output=True, timeout=20)
-    output = "" 
-    for line in proc.stdout.decode().strip().split('\n'):
-        output += f"<br/> {line}"
-    return buttons_on_top(True) + output
+    return _log_page("cat ytrss_transcribe.log | tail -n 50", "Transcription logs")
 @app.route("/logs/download")
 def logs_download():
-    full_command = "cat ytrss_upd.log | tail -n 100"
-    proc = subprocess.run(full_command, shell=True, capture_output=True, timeout=20)
-    output = "" 
-    for line in proc.stdout.decode().strip().split('\n'):
-        output += f"<br/> {line}"
-    return buttons_on_top(True) + output
+    return _log_page("cat ytrss_upd.log | tail -n 100", "Download logs")
 
 ##### channel subscriptions
 
 @app.route("/show_channel_list")
 def show_channel_list():
-    chanlist_str = ""
-    google_api_key = get_config().get("google_search_api_key")
-    if google_api_key != "":
-        chanlist_str += "<a>Search channels</a> <br/>" + \
-                  "<form action='/search/channel' method='post'><input type='text' name='channel_search_query'><input type='submit' value='Search'></form>"
-
-    chanlist_str += "<a> Subscribed channels </a><br/>"
-    for channel_id in get_config()["channel_subscriptions"]:
-        chanlist_str += f"<li> <form action='/unsubscribe/channel' method='post'>[{get_channel_name(channel_id)}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{channel_id}'><input type='submit' value='Unsubscribe'></form></li>"
-    return buttons_on_top() + f"<ul>{chanlist_str}</ul>"
+    cfg = get_config()
+    search = _search_panel("Search channels", "/search/channel", "channel_search_query") if cfg.get("google_search_api_key") != "" else ""
+    items = "".join(
+        _source_item(get_channel_name(channel_id), "/unsubscribe/channel", "source_id", channel_id, "Unsubscribe")
+        for channel_id in cfg["channel_subscriptions"]
+    )
+    return service_page(search + _source_section("Subscribed channels", items), "YT channels")
 
 @app.route("/get_chan_info", methods=['POST'])
 def get_chan_info():
     channel_id = request.form['channel_id']
-    if channel_id:
-        sources_list = get_config()["channel_subscriptions"]
-        subscribed = channel_id in sources_list
-        channel_name = get_channel_name(channel_id)
-        if not subscribed:
-            return f"Channel '{channel_name}' is not subscribed."+ \
-                    "<form action='/subscribe/channel/"+channel_id+"' method='post'><input type='submit' value='Subscribe'></form>" + \
-                    "<form action='/show_channel_list' method='get'><input type='submit' value='Back'></form>"
-        else:
-            return f"Channel '{channel_name}' is subscribed."+ \
-                    "<form action='/unsubscribe/channel/"+channel_id+"' method='post'><input type='submit' value='Unsubscribe'></form>" + \
-                    "<form action='/show_channel_list' method='get'><input type='submit' value='Back'></form>"
-    else:
-        return "No channel ID provided."
+    if not channel_id:
+        return _service_message("No channel ID provided.", "Channel information")
+    subscribed = channel_id in get_config()["channel_subscriptions"]
+    channel_name = get_channel_name(channel_id)
+    state = "is subscribed" if subscribed else "is not subscribed"
+    action = "unsubscribe" if subscribed else "subscribe"
+    button = "Unsubscribe" if subscribed else "Subscribe"
+    content = (
+        f'<section class="service-panel"><p>Channel {escape(repr(channel_name))} {state}.</p>'
+        f'<form action="/{action}/channel/{escape(channel_id, quote=True)}" method="post">'
+        f'<input type="submit" value="{button}"></form></section>'
+        + _back_form("/show_channel_list")
+    )
+    return service_page(content, "Channel information")
 
 @app.route("/subscribe/channel", methods=['POST'])
 def subscribe_channel():
@@ -125,33 +196,27 @@ def unsubscribe_channel():
 @app.route("/search/channel", methods=['POST'])
 def search_channel():
     query = request.form['channel_search_query']
-    list_str = "<a> Search results </a><br/>"
-    google_api_key = get_config().get("google_search_api_key")
-    for title, channel_id, descr in search_youtube_channel_api(query, google_api_key):
-        if channel_id not in get_config()["channel_subscriptions"]:
-            channel_link = f"https://www.youtube.com/channel/{channel_id}" if channel_id else ""
-            list_str += f"<li> <form action='/subscribe/channel' method='post'><a href='{channel_link}' target='_blank'>[{title}]</a><input type='hidden' name='source_id' class='form-control' id='source_id' value='{channel_id}'><input type='submit' value='Subscribe'></form></li>" + \
-                        f"<br /> {descr}"
+    cfg = get_config()
+    items = ""
+    for title, channel_id, descr in search_youtube_channel_api(query, cfg.get("google_search_api_key")):
+        channel_link = f"https://www.youtube.com/channel/{channel_id}" if channel_id else ""
+        if channel_id not in cfg["channel_subscriptions"]:
+            items += _source_item(title, "/subscribe/channel", "source_id", channel_id, "Subscribe", channel_link, descr)
         else:
-            channel_link = f"https://www.youtube.com/channel/{channel_id}" if channel_id else ""
-            list_str += f"<li> <form action='/subscribe/channel' method='post'><a href='{channel_link}' target='_blank'>[{title}]</a> (is subscribed)</li>"
-
-    return buttons_on_top() + f"<ul>{list_str}</ul><br /> <form action='/show_channel_list' method='get'><input type='submit' value='Back'></form>" 
+            items += _source_item(title, "/subscribe/channel", link=channel_link, status=" (is subscribed)")
+    return service_page(_source_section("Search results", items) + _back_form("/show_channel_list"), "Channel search")
 
 
 #### playlist subscriptions
 @app.route("/show_playlist_list")
 def show_playlist_list():
-    google_api_key = get_config().get("google_search_api_key")
-    playlistlist_str = ""
-    if google_api_key != "":
-        playlistlist_str += "<a>Search playlists</a> <br/>" + \
-                  "<form action='/search/playlist' method='post'><input type='text' name='playlist_search_query'><input type='submit' value='Search'></form>"
-
-    playlistlist_str += "<a> Subscribed playlists </a><br/>"
-    for playlist_id in get_config()["playlist_subscriptions"]:
-        playlistlist_str += f"<li><form action='/unsubscribe/playlist' method='post'>[{get_playlist_name(playlist_id)}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{playlist_id}'><input type='submit' value='Unsubscribe'></form></li>"
-    return buttons_on_top() + f"<ul>{playlistlist_str}</ul><br />"
+    cfg = get_config()
+    search = _search_panel("Search playlists", "/search/playlist", "playlist_search_query") if cfg.get("google_search_api_key") != "" else ""
+    items = "".join(
+        _source_item(get_playlist_name(playlist_id), "/unsubscribe/playlist", "source_id", playlist_id, "Unsubscribe")
+        for playlist_id in cfg["playlist_subscriptions"]
+    )
+    return service_page(search + _source_section("Subscribed playlists", items), "YT playlists")
 
 @app.route("/subscribe/playlist", methods=['POST'])
 def subscribe_playlist():
@@ -176,42 +241,50 @@ def unsubscribe_playlist():
 @app.route("/search/playlist", methods=['POST'])
 def search_playlist():
     query = request.form['playlist_search_query']
-    list_str = "<a> Search results </a><br/>"
-    google_api_key = get_config().get("google_search_api_key")
-    for title, playlist_id, descr in search_youtube_playlist_api(query, google_api_key):
+    cfg = get_config()
+    items = ""
+    for title, playlist_id, descr in search_youtube_playlist_api(query, cfg.get("google_search_api_key")):
         playlist_link = f"https://www.youtube.com/playlist?list={playlist_id}" if playlist_id else ""
-        if playlist_id not in get_config()["playlist_subscriptions"]:
-            list_str += f"<li> <form action='/subscribe/playlist' method='post'><a href='{playlist_link}' target='_blank'>[{title}]</a><input type='hidden' name='source_id' class='form-control' id='source_id' value='{playlist_id}'><input type='submit' value='Subscribe'></form></li>" + \
-                        f"<br /> {descr}"
+        if playlist_id not in cfg["playlist_subscriptions"]:
+            items += _source_item(title, "/subscribe/playlist", "source_id", playlist_id, "Subscribe", playlist_link, descr)
         else:
-            list_str += f"<li> <form action='/subscribe/playlist' method='post'><a href='{playlist_link}' target='_blank'>[{title}]</a>(Subscribed)</li>"
-    
-    return buttons_on_top() + f"<ul>{list_str}</ul><br /> <form action='/show_playlist_list' method='get'><input type='submit' value='Back'></form>"
+            items += _source_item(title, "/subscribe/playlist", link=playlist_link, status="(Subscribed)")
+    return service_page(_source_section("Search results", items) + _back_form("/show_playlist_list"), "Playlist search")
 
 
 #auto-downloading management for channels and playlists
 @app.route("/auto_download")
 def auto_download():
-    downloading_str = "<a> Subscribed channels and playlists with enabled auto-downloading </a><br/>"
-    for source_id in get_config()["channel_subscriptions"] + get_config()["playlist_subscriptions"]:
-        source_name = get_channel_name(source_id) if source_id in get_config()["channel_subscriptions"] else get_playlist_name(source_id)
-        if source_id not in get_config()["sources_with_disabled_downloading"]:
-            downloading_str+=f"<li><form action='/downloading/disable' method='post'>[{source_name}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{source_id}'><input type='submit' value='Disable'></form></li>"
-    downloading_str += "<br/><a> Subscribed channels and playlists with disabled auto-downloading </a><br/>"
-    for source_id in get_config()["channel_subscriptions"] + get_config()["playlist_subscriptions"]:
-        source_name = get_channel_name(source_id) if source_id in get_config()["channel_subscriptions"] else get_playlist_name(source_id)
-        if source_id in get_config()["sources_with_disabled_downloading"]:
-             downloading_str+=f"<li><form action='/downloading/enable' method='post'>[{source_name}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{source_id}'><input type='submit' value='Enable'></form></li>"
-    return buttons_on_top() + f"<ul>" + \
-           "<form action='/download-cfg' method='post'>" + \
-           f"<label for='max_days'>Keep downloaded items (days):</label><input type='number' id='max_days' name='max_days' min='7' max='90' value='{get_config()["max_days"]}' /><br />" + \
-           f"<label for='deliver_days'>RSS contains items from (days):</label><input type='number' id='deliver_days' name='deliver_days' min='1' max='90' value='{get_config()["deliver_days"]}' /><br />" + \
-           f"<label for='duplicate_detection_threshold'>Duplicate Detection Threshold:</label><input type='number' id='duplicate_detection_threshold' name='duplicate_detection_threshold' min='0' max='100' value='{get_config()["duplicate_detection_threshold"]}' /><br />" + \
-           f"<label for='delay-between-fetches'>Typical delay between fetches:</label><input type='number' id='delay-between-fetches' name='delay-between-fetches' min='10' max='90' value='{get_config()["delay-between-fetches"]}' /><br />" + \
-            "<input type='submit' value='Save config'></form>" + \
-            "<form action='/logs/download'><input type='submit' value='View download logs'></form>" + \
-            "<form action='/logs/server'><input type='submit' value='View server logs'></form>" + \
-           f"{downloading_str}</ul><br />"
+    cfg = get_config()
+    enabled, disabled = "", ""
+    for source_id in cfg["channel_subscriptions"] + cfg["playlist_subscriptions"]:
+        source_name = get_channel_name(source_id) if source_id in cfg["channel_subscriptions"] else get_playlist_name(source_id)
+        if source_id in cfg["sources_with_disabled_downloading"]:
+            disabled += _source_item(source_name, "/downloading/enable", "source_id", source_id, "Enable")
+        else:
+            enabled += _source_item(source_name, "/downloading/disable", "source_id", source_id, "Disable")
+    fields = "".join(_number_field(name, label, cfg[name], minimum, maximum) for name, label, minimum, maximum in (
+        ("max_days", "Keep downloaded items (days):", 7, 90),
+        ("deliver_days", "RSS contains items from (days):", 1, 90),
+        ("duplicate_detection_threshold", "Duplicate Detection Threshold:", 0, 100),
+        ("delay-between-fetches", "Typical delay between fetches:", 10, 90),
+    ))
+    settings = (
+        '<section class="service-panel"><h2>Download settings</h2>'
+        f'<form class="service-settings" action="/download-cfg" method="post">{fields}'
+        '<input type="submit" value="Save config"></form></section>'
+    )
+    logs = (
+        '<div class="service-log-actions">'
+        '<form action="/logs/download"><input type="submit" value="View download logs"></form>'
+        '<form action="/logs/server"><input type="submit" value="View server logs"></form></div>'
+    )
+    return service_page(
+        settings + logs
+        + _source_section("Subscribed channels and playlists with enabled auto-downloading", enabled)
+        + _source_section("Subscribed channels and playlists with disabled auto-downloading", disabled),
+        "Auto-downloading",
+    )
 
 @app.route("/downloading/disable", methods=['POST'])
 def disable_downloading():
@@ -243,33 +316,42 @@ def download_cfg():
 #auto-transcription management for channels and playlists
 @app.route("/auto_transcription")
 def auto_transcription():
-    auto_transcription_str = "<a> Subscribed sources with enabled auto-transcription </a><br/>"
-    for source_id in get_config()["channel_subscriptions"] + get_config()["playlist_subscriptions"] + get_config()["rss_subscriptions"]:
-        source_name = get_channel_name(source_id) if source_id in get_config()["channel_subscriptions"] else get_playlist_name(source_id) if source_id in get_config()["playlist_subscriptions"] else get_rss_name(source_id)
-        if source_id not in get_config()["sources_with_disabled_auto_transcription"]:
-            auto_transcription_str+=f"<li><form action='/auto-transcription/disable' method='post'>[{source_name}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{source_id}'> <input type='submit' value='Disable'></form></li>"
-    auto_transcription_str += "<br/><a> Subscribed sources with disabled auto-transcription </a><br/>"
-    for source_id in get_config()["channel_subscriptions"] + get_config()["playlist_subscriptions"] + get_config()["rss_subscriptions"]:
-        source_name = get_channel_name(source_id) if source_id in get_config()["channel_subscriptions"] else get_playlist_name(source_id) if source_id in get_config()["playlist_subscriptions"] else get_rss_name(source_id)
-        if source_id in get_config()["sources_with_disabled_auto_transcription"]:
-             auto_transcription_str+=f"<li><form action='/auto-transcription/enable' method='post'>[{source_name}]<input type='hidden' name='source_id' class='form-control' id='source_id' value='{source_id}'> <input type='submit' value='Enable'></form></li>"
-    engines_str = ""
-    engines_rss_str = ""
-    for engine,engine_text in get_engine_map().items():
-        engines_str += f"<option value='{engine}' {"selected" if engine==get_config()["auto_transcript_engine"] else ""}>{engine_text}</option>"
-        engines_rss_str += f"<option value='{engine}' {"selected" if engine==get_config()["auto_transcript_engine_rss"] else ""}>{engine_text}</option>"
-
-    return buttons_on_top() + "<ul>" + \
-           "<form action='/auto-transcription-cfg' method='post'>" + \
-           f"<label for='default_engine'>Youtube summarization engine:</label><select id='default_engine' name='default_engine'>{engines_str}</select><br />" + \
-           f"<label for='auto_transcript_engine_rss'>RSS summarization engine:</label><select id='auto_transcript_engine_rss' name='auto_transcript_engine_rss'>{engines_rss_str}</select><br />" + \
-           f"<label for='auto_transcript_hours'>auto-transcript items not older than (Hr):</label><input type='number' id='auto_transcript_hours' name='auto_transcript_hours' min='3' max='96' value='{get_config()["auto_transcript_hours"]}' /><br />" + \
-           f"<label for='wait_for_download_hours'>wait for subtitles (Hr):</label><input type='number' id='wait_for_download_hours' name='wait_for_download_hours' min='0' max='6' value='{get_config()["wait_for_download_hours"]}' /><br />" + \
-           f"<label for='duplicate_detection_threshold_transcription'>Duplicate Detection Threshold for Transcription:</label><input type='number' id='duplicate_detection_threshold_transcription' name='duplicate_detection_threshold_transcription' min='0' max='100' value='{get_config()["duplicate_detection_threshold_transcription"]}' /><br />" + \
-           f"<label for='summarize_min_length'>Minimum text length for summarization:</label><input type='number' id='summarize_min_length' name='summarize_min_length' min='0' max='100000' value='{get_config()["summarize_min_length"]}' /><br />" + \
-            "<input type='submit' value='Save config'></form>" + \
-            "<form action='/logs/transcription'><input type='submit' value='View logs'></form>" + \
-           f"{auto_transcription_str}</ul><br />"
+    cfg = get_config()
+    enabled, disabled = "", ""
+    for source_id in cfg["channel_subscriptions"] + cfg["playlist_subscriptions"] + cfg["rss_subscriptions"]:
+        source_name = get_channel_name(source_id) if source_id in cfg["channel_subscriptions"] else get_playlist_name(source_id) if source_id in cfg["playlist_subscriptions"] else get_rss_name(source_id)
+        if source_id in cfg["sources_with_disabled_auto_transcription"]:
+            disabled += _source_item(source_name, "/auto-transcription/enable", "source_id", source_id, "Enable")
+        else:
+            enabled += _source_item(source_name, "/auto-transcription/disable", "source_id", source_id, "Disable")
+    engines_str, engines_rss_str = "", ""
+    for engine, engine_text in get_engine_map().items():
+        option = f'<option value="{escape(engine, quote=True)}"'
+        label = f'>{escape(engine_text)}</option>'
+        engines_str += option + (' selected' if engine == cfg["auto_transcript_engine"] else '') + label
+        engines_rss_str += option + (' selected' if engine == cfg["auto_transcript_engine_rss"] else '') + label
+    fields = (
+        _select_field("default_engine", "Youtube summarization engine:", engines_str)
+        + _select_field("auto_transcript_engine_rss", "RSS summarization engine:", engines_rss_str)
+    )
+    fields += "".join(_number_field(name, label, cfg[name], minimum, maximum) for name, label, minimum, maximum in (
+        ("auto_transcript_hours", "auto-transcript items not older than (Hr):", 3, 96),
+        ("wait_for_download_hours", "wait for subtitles (Hr):", 0, 6),
+        ("duplicate_detection_threshold_transcription", "Duplicate Detection Threshold for Transcription:", 0, 100),
+        ("summarize_min_length", "Minimum text length for summarization:", 0, 100000),
+    ))
+    settings = (
+        '<section class="service-panel"><h2>Transcription settings</h2>'
+        f'<form class="service-settings" action="/auto-transcription-cfg" method="post">{fields}'
+        '<input type="submit" value="Save config"></form></section>'
+    )
+    logs = '<form action="/logs/transcription"><input type="submit" value="View logs"></form>'
+    return service_page(
+        settings + logs
+        + _source_section("Subscribed sources with enabled auto-transcription", enabled)
+        + _source_section("Subscribed sources with disabled auto-transcription", disabled),
+        "Auto-transcription",
+    )
 
 @app.route("/auto-transcription/disable", methods=['POST'])
 def disable_auto_transcription():
@@ -306,16 +388,16 @@ def auto_transcription_cfg():
 def transcribe(engine, filename):
     engines = get_engine_map()
     if engine not in engines:
-        return f"Unknown transcription engine {engine}"
+        return _service_message(f"Unknown transcription engine {engine}", "Transcription")
 
     def remove_old_output():
         Path(f"yt-video/{filename}.log").unlink(missing_ok=True)
         Path(f"yt-video/{filename}.txt").unlink(missing_ok=True)
 
     if transcription_queues.enqueue(engine, filename, prepare=remove_old_output):
-        return f"Scheduled {engines[engine]} for video {filename}."
+        return _service_message(f"Scheduled {engines[engine]} for video {filename}.", "Transcription")
     else:
-        return f"{engines[engine]} for video {filename} was already scheduled."
+        return _service_message(f"{engines[engine]} for video {filename} was already scheduled.", "Transcription")
 
 
 @app.route("/remove_transcription/<filename>")
@@ -326,32 +408,32 @@ def remove_transcription(filename):
         os.remove(transcription_path)
     if os.path.exists(log_path):
         os.remove(log_path)
-    return f"Transcription for video {filename} has been removed."
+    return _service_message(f"Transcription for video {filename} has been removed.", "Transcription")
 
 
 
 ##### rss subscriptions
 @app.route("/show_rss_list")
 def show_rss_list():
-    list_str ="<a>Search Podcasts with iTunes API</a> <br/>" + \
-              "<form action='/search/rss' method='post'><input type='text' name='podcast_search_query' class='form-control' id='podcast_search_query'><input type='submit' value='Search'></form>"
-    list_str +="<a>Search RSS with Feedly</a> <br/>" + \
-              "<form action='/search/rss2' method='post'><input type='text' name='rss_search_query' class='form-control' id='rss_search_query'><input type='submit' value='Search'></form>"
-    list_str +="<a>Discover RSS by site URL</a> <br/>" + \
-              "<form action='/search/rss3' method='post'><input type='text' name='site_url' class='form-control' id='site_url'><input type='submit' value='Search'></form>"
-    list_str +="<a>Add direct RSS link</a> <br/>" + \
-              "<form action='/subscribe/rss' method='post'><input type='text' name='rss_link' class='form-control' id='rss_link'><input type='submit' value='Add'></form>"
-
-    list_str += "<a> Subscribed RSS podcasts </a><br/>"
-    for link in get_config()["rss_subscriptions"]:
-        list_str += f"<li> <form action='/unsubscribe/rss' method='post'>[{get_rss_name(link)}]<input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Unsubscribe'></form></li>"
-    return buttons_on_top() + f"<ul>{list_str}</ul><br />"
+    search = '<div class="service-search-grid">' + ''.join(
+        _search_panel(title, action, field, button) for title, action, field, button in (
+            ("Search Podcasts with iTunes API", "/search/rss", "podcast_search_query", "Search"),
+            ("Search RSS with Feedly", "/search/rss2", "rss_search_query", "Search"),
+            ("Discover RSS by site URL", "/search/rss3", "site_url", "Search"),
+            ("Add direct RSS link", "/subscribe/rss", "rss_link", "Add"),
+        )
+    ) + '</div>'
+    items = ''.join(
+        _source_item(get_rss_name(link), "/unsubscribe/rss", "rss_link", link, "Unsubscribe")
+        for link in get_config()["rss_subscriptions"]
+    )
+    return service_page(search + _source_section("Subscribed RSS podcasts", items), "RSS podcasts")
 
 @app.route("/subscribe/rss", methods=['POST'])
 def subscribe_rss():
     link = request.form['rss_link']
     if get_rss_name(link)=="":
-        return buttons_on_top() + f"cannot parse the rss {link}"
+        return _service_message(f"cannot parse the rss {link}", "RSS subscription")
     with edit_config() as cfg:
         sources_list = cfg["rss_subscriptions"]
         if link not in sources_list:
@@ -369,42 +451,39 @@ def unsubscribe_rss():
 
 @app.route("/search/rss", methods=['POST'])
 def search_rss():
-    querry = request.form['podcast_search_query']
-    list_str = "<a> Search results </a><br/>"
-    for title, link, descr, url in search_podcast_itunes_api(querry):
-        if link not in get_config()["rss_subscriptions"]:
-            list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a><input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Subscribe'></form></li>" + \
-                        f"<br /> {descr}"
+    query = request.form['podcast_search_query']
+    subscriptions = get_config()["rss_subscriptions"]
+    items = ""
+    for title, link, descr, url in search_podcast_itunes_api(query):
+        if link not in subscriptions:
+            items += _source_item(title, "/subscribe/rss", "rss_link", link, "Subscribe", url, descr)
         else:
-            list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a>(Subscribed)</form></li>"
-    
-    return buttons_on_top() + f"<ul>{list_str}</ul><br /> <form action='/show_rss_list' method='get'><input type='submit' value='Back'></form>"
+            items += _source_item(title, "/subscribe/rss", link=url, status="(Subscribed)")
+    return service_page(_source_section("Search results", items) + _back_form("/show_rss_list"), "Podcast search")
 
 @app.route("/search/rss2", methods=['POST'])
 def search_rss2():
-    querry = request.form['rss_search_query']
-    list_str = "<a> Search results </a><br/>"
-    for title, link, descr, url in search_rss_feeds(querry):
-        if link not in get_config()["rss_subscriptions"]:
-            list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a><input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Subscribe'></form></li>" + \
-                        f"<br /> {descr}"
+    query = request.form['rss_search_query']
+    subscriptions = get_config()["rss_subscriptions"]
+    items = ""
+    for title, link, descr, url in search_rss_feeds(query):
+        if link not in subscriptions:
+            items += _source_item(title, "/subscribe/rss", "rss_link", link, "Subscribe", url, descr)
         else:
-            list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a>(Subscribed)</form></li>"
-    
-    return buttons_on_top() + f"<ul>{list_str}</ul><br /> <form action='/show_rss_list' method='get'><input type='submit' value='Back'></form>"
+            items += _source_item(title, "/subscribe/rss", link=url, status="(Subscribed)")
+    return service_page(_source_section("Search results", items) + _back_form("/show_rss_list"), "RSS search")
 
 @app.route("/search/rss3", methods=['POST'])
 def search_rss3():
-    querry = request.form['site_url']
-    list_str = "<a> Search results </a><br/>"
-    for title, link, descr, url in discover_rss_feeds(querry):
-        if link not in get_config()["rss_subscriptions"]:
-            list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a><input type='hidden' name='rss_link' class='form-control' id='rss_link' value='{link}'> <input type='submit' value='Subscribe'></form></li>" + \
-                        f"<br /> {descr}"
+    query = request.form['site_url']
+    subscriptions = get_config()["rss_subscriptions"]
+    items = ""
+    for title, link, descr, url in discover_rss_feeds(query):
+        if link not in subscriptions:
+            items += _source_item(title, "/subscribe/rss", "rss_link", link, "Subscribe", url, descr)
         else:
-            list_str += f"<li> <form action='/subscribe/rss' method='post'><a href='{url}' target='_blank'>[{title}]</a>(Subscribed)</form></li>"
-    
-    return buttons_on_top() + f"<ul>{list_str}</ul><br /> <form action='/show_rss_list' method='get'><input type='submit' value='Back'></form>"
+            items += _source_item(title, "/subscribe/rss", link=url, status="(Subscribed)")
+    return service_page(_source_section("Search results", items) + _back_form("/show_rss_list"), "RSS discovery")
 
 
 ### atom feed generation
