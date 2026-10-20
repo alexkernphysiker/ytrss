@@ -401,15 +401,14 @@ def generate_atom_feed(url_link, is_public):
 </rss>"""
     return output
 
-def generate_transcriptions_list_page(url_link, search_request = None):
-    from lxml import etree
-    page_start = """<!doctype html>
+def _read_page_start(title, main_class=""):
+    return """<!doctype html>
 <html lang="uk">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 """ + \
-  f"<title>{get_config()['title']}</title>" + \
+  f"<title>{escape(title)}</title>" + \
 """
   <style>
     * { box-sizing: border-box; }
@@ -482,14 +481,98 @@ def generate_transcriptions_list_page(url_link, search_request = None):
       color: #596575;
       font-size: 0.82rem;
     }
+    main.reader-page { max-width: 1040px; padding-block: 24px; }
+    .reader-card {
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid #e1e6ed;
+      border-radius: 14px;
+      box-shadow: 0 3px 12px #17294208;
+    }
+    .reader-header {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 28px;
+    }
+    .reader-image {
+      flex: 0 0 auto;
+      width: 180px;
+      max-width: 100%;
+      max-height: 240px;
+      object-fit: contain;
+      border-radius: 10px;
+    }
+    .reader-heading { flex: 1; min-width: 0; }
+    .reader-site { margin: 0 0 8px; color: #596575; overflow-wrap: anywhere; }
+    .reader-title {
+      margin: 0;
+      font-size: clamp(1.4rem, 3vw, 2rem);
+      line-height: 1.3;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .reader-actions, .reader-footer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 18px 28px;
+      border-top: 1px solid #e1e6ed;
+    }
+    .reader-actions { border-bottom: 1px solid #e1e6ed; background: #f8faff; }
+    .reader-actions a, .reader-footer a, .reader-share a, .copy-widget button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      max-width: 100%;
+      padding: 9px 14px;
+      border: 1px solid #c5ced9;
+      border-radius: 8px;
+      background: #fff;
+      color: #1d2734;
+      font: inherit;
+      line-height: 1.4;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+      cursor: pointer;
+    }
+    .reader-actions a:hover, .reader-footer a:hover,
+    .reader-share a:hover, .copy-widget button:hover { background: #e9edf4; }
+    .reader-actions a:focus-visible, .reader-footer a:focus-visible,
+    .reader-share a:focus-visible, .copy-widget button:focus-visible {
+      outline: 3px solid #315eca;
+      outline-offset: 2px;
+    }
+    .reader-share { padding: 18px 28px; border-bottom: 1px solid #e1e6ed; }
+    .copy-widget { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .copy-widget [role="status"] { color: #596575; overflow-wrap: anywhere; }
+    .reader-text { padding: 28px; font-size: 1.05rem; line-height: 1.75; }
+    .reader-text > * { max-width: 75ch; margin-inline: auto; }
+    .reader-text p { margin-top: 0; margin-bottom: 1em; overflow-wrap: anywhere; }
+    .reader-text > :last-child { margin-bottom: 0; }
+    .reader-text img, .reader-text video, .reader-text iframe { max-width: 100%; }
+    .reader-text img, .reader-text video { height: auto; }
+    .reader-text pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    @media (max-width: 640px) {
+      main.reader-page { padding: 12px; }
+      .reader-header { flex-direction: column; align-items: flex-start; gap: 16px; padding: 20px; }
+      .reader-image { width: 128px; max-height: 180px; }
+      .reader-actions, .reader-footer, .reader-share { padding: 16px 20px; }
+      .reader-text { padding: 20px; }
+    }
     @media (max-width: 420px) {
       .news-image { width: 84px; height: 84px; }
     }
   </style>
 </head>
 <body>
-<main>
-"""
+""" + f'<main class="{escape(main_class, quote=True)}">'
+
+
+def generate_transcriptions_list_page(url_link, search_request = None):
+    from lxml import etree
+    page_start = _read_page_start(get_config()["title"])
     ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
     MEDIA_NS = "http://search.yahoo.com/mrss/"
     etree.register_namespace("itunes", ITUNES_NS)
@@ -571,6 +654,66 @@ def generate_transcriptions_list_page(url_link, search_request = None):
         + '</main></body></html>'
     )
 
+def _render_read_article(url_link, fn, entry, content, full=False, share_html=""):
+    site_title = get_config()["title"]
+    title = entry.find("title").text or "Без заголовка"
+    base_url = url_link.rstrip('/')
+    read_url = f"{base_url}/read/{quote(fn, safe='')}"
+    back_url = f"{base_url}/read#{quote(fn, safe='')}"
+    alternate_label = "Summary" if full else "Full text"
+    alternate_url = read_url if full else f"{read_url}/full"
+
+    link_element = entry.find("link")
+    listen_url = (
+        (link_element.get("href") or "").replace("__URL_LINK__", url_link)
+        if link_element is not None else ""
+    )
+    actions = (
+        f'<a target="_blank" rel="noopener noreferrer" href="{escape(listen_url, quote=True)}">'
+        'View the episode</a>'
+    )
+    enclosure_element = entry.find("enclosure")
+    enclosure_url = (
+        (enclosure_element.get("url") or "").replace("__URL_LINK__", url_link)
+        if enclosure_element is not None else ""
+    )
+    if enclosure_url:
+        actions += (
+            f'<a target="_blank" rel="noopener noreferrer" href="{escape(enclosure_url, quote=True)}">'
+            'enclosure</a>'
+        )
+    alternate_link = f'<a href="{escape(alternate_url, quote=True)}">{alternate_label}</a>'
+    back_link = f'<a href="{escape(back_url, quote=True)}">Back to list</a>'
+    actions += alternate_link + back_link
+
+    image_element = entry.find("image")
+    image_url = (
+        (image_element.get("href") or "").replace("__URL_LINK__", url_link)
+        if image_element is not None else ""
+    )
+    image_html = (
+        f'<img class="reader-image" src="{escape(image_url, quote=True)}" alt="{escape(title, quote=True)}">'
+        if image_url else ""
+    )
+    share_section = f'<div class="reader-share">{share_html}</div>' if share_html else ""
+    footer = back_link if full else alternate_link + back_link
+    return _read_page_start(f"{site_title} - {title}", "reader-page") + f"""
+<article class="reader-card">
+  <header class="reader-header">
+    {image_html}
+    <div class="reader-heading">
+      <p class="reader-site">{escape(site_title)}</p>
+      <h1 class="reader-title">{escape(title)}</h1>
+    </div>
+  </header>
+  <nav class="reader-actions" aria-label="Article actions">{actions}</nav>
+  {share_section}
+  <div class="reader-text">{content}</div>
+  <nav class="reader-footer" aria-label="Article navigation">{footer}</nav>
+</article>
+</main></body></html>"""
+
+
 def generate_transcription_page(url_link, fn):
         from lxml import etree
         ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
@@ -586,38 +729,27 @@ def generate_transcription_page(url_link, fn):
         title_element = entry.find("title")
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
-        listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
-        output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
-        enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""
-        if enclosure_url != "":
-            output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
-
-        output += f"<br /><a href='{url_link}/read/{fn}/full'>[Full text]</a>"
-        output += f"<br /><a href='{url_link}/read#{fn}'>[Back to list]</a>"
-        image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
-        if image_url != "":
-            output+=f"<br/> <img src='{image_url}' width='30%' alt='{title_element.text}'>"
-
+        share_html = ""
         if get_config()["tinyurl_key"]:
             short_url = get_share_url(fn)
             if short_url:
-                output += f"<br />"
-                output += clp_copy_button(f"{title_element.text}:\n{short_url}")
+                share_html = clp_copy_button(f"{title_element.text}:\n{short_url}")
             else:
-                output += f"<br /><a href='{url_link}/read/{fn}/share'>[Get shareable link]</a>"
-                
+                share_url = f"{url_link.rstrip('/')}/read/{quote(fn, safe='')}/share"
+                share_html = f'<a href="{escape(share_url, quote=True)}">Get shareable link</a>'
+
+        output = ""
         if os.path.exists(transcription_path):
-            string_list = open(transcription_path, "r").read().split('\n')
+            with open(transcription_path, "r") as stream:
+                string_list = stream.read().split('\n')
             for line in string_list:
                 if line.strip() != "":
-                    output += f"<li><p>{line}</p></li>"
+                    output += f"<p>{line}</p>"
         elif entry.find("summary") is not None and entry.find("summary").text is not None:
             for line in entry.find("summary").text.split('\n'):
                 if line.strip() != "":
-                    output += f"<li><p>{line}</p></li>"
-        output += f"<br /><a href='{url_link}/read/{fn}/full'>[Full text]</a>"
-        output += f"<br /><a href='{url_link}/read#{fn}'>[Back to list]</a>"
-        return f"<html><body><h1>{get_config()["title"]} - {title_element.text}</h1><ul>{output}</ul></body></html>"
+                    output += f"<p>{line}</p>"
+        return _render_read_article(url_link, fn, entry, output, share_html=share_html)
 
 def generate_full_transcription_page(url_link, fn):
         from lxml import etree
@@ -634,19 +766,10 @@ def generate_full_transcription_page(url_link, fn):
         title_element = entry.find("title")
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
-        listen_url = entry.find("link").get("href").replace("__URL_LINK__", url_link) if entry.find("link") is not None else ""
-        output = f"<a target='_blank' rel='noopener noreferrer' href='{listen_url}'>[View the episode]</a>"
-        enclosure_url = entry.find("enclosure").get("url").replace("__URL_LINK__", url_link) if entry.find("enclosure") is not None else ""
-        if enclosure_url != "":
-            output += f"<a target='_blank' rel='noopener noreferrer' href='{enclosure_url}'>[enclosure]</a>"
-        output += f"<br /><a href='{url_link}/read/{fn}'>[Summary]</a>"
-        output += f"<br /><a href='{url_link}/read#{fn}'>[Back to list]</a>"
-        image_url = entry.find("image").get("href").replace("__URL_LINK__", url_link) if entry.find("image") is not None else ""
-        if image_url != "":
-            output+=f"<br/> <img src='{image_url}' width='30%' alt='{title_element.text}'>"
-
+        output = ""
         if os.path.exists(srt_path):
-            string_list = filter_subs(open(srt_path, "r").read())
+            with open(srt_path, "r") as stream:
+                string_list = filter_subs(stream.read())
             for chunk in string_list:
               for line in chunk.splitlines():
                 if line.strip() != "":
@@ -655,8 +778,7 @@ def generate_full_transcription_page(url_link, fn):
             for line in entry.find("summary").text.split('\n'):
                 if line.strip() != "":
                     output += f"<p>{line}</p>"
-        output += f"<br /><a href='{url_link}/read#{fn}'>[Back to list]</a>"
-        return f"<html><body><h1>{get_config()["title"]} - {title_element.text}</h1>{output}</body></html>"
+        return _render_read_article(url_link, fn, entry, output, full=True)
 
 
 def return_file(filename):
