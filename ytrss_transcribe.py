@@ -31,13 +31,13 @@ def download_subtitles(filename):
         if os.path.exists(srt_path):
             print(f"Subtitles for {filename} already exist, skipping download.")
             with open(srt_path, "r", encoding="utf-8") as f:
-                return f.read()
+                return f.read(), False
         if link is None:
-            return ""
+            return "", False
         lang = detect_language(description_path) or "en"
         if not get_config().get("yt-dlp-enabled"):
             print(f"Interacting of yt-dlp with youtube is disabled globally in the configuration.")
-            return ""
+            return "", False
         additional_options = get_config().get("yt-dlp-options")
         secure_wait()
         proc = subprocess.run(f"yt-dlp {additional_options} --skip-download --write-auto-subs --write-subs --sub-lang {lang} {link}", shell=True, capture_output=True, timeout=600)
@@ -50,8 +50,8 @@ def download_subtitles(filename):
                     os.rename(srtname, srt_path)
                     modtime = os.path.getmtime(description_path)
                     os.utime(srt_path, (modtime, modtime))
-                    return content
-        return ""
+                    return content, True
+        return "", False
 
 def save_subtitles(filename, text):
     description_path = "yt-video/" + filename + ".desc"
@@ -178,7 +178,8 @@ def get_video_link(description_path):
     return None
 
 def run_srt(filename):
-    for chunk in filter_subs(download_subtitles(filename), max_length=0):
+    srt, _ = download_subtitles(filename)
+    for chunk in filter_subs(srt, max_length=0):
         return chunk
 
 def write_log(filename, message):
@@ -194,7 +195,7 @@ def run_openai(filename, summarize = True):
         description_path = "yt-video/" + filename + ".desc"
         video_path = "yt-video/" + filename
         lang = detect_language(description_path) or "en"
-        text = download_subtitles(filename)
+        text, new_srt = download_subtitles(filename)
         modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
         age = datetime.now() - modified_time
         title, descr = get_video_title_and_description(filename)
@@ -245,6 +246,16 @@ def run_openai(filename, summarize = True):
                 for output_item in response.output:
                     for content_item in output_item.content:
                         text += content_item.text
+        elif new_srt:
+                response = client.responses.create(
+                    model=get_config()["open_ai_text_model"],
+                    input= make_prompt(lang, False, title=title, description=descr) + "\nSRT:\n" + text
+                )
+                text = ""
+                for output_item in response.output:
+                    for content_item in output_item.content:
+                        text += content_item.text
+                save_subtitles(filename=filename, text= text)
 
         for chunk in filter_subs(text):
                 response = client.responses.create(
@@ -269,7 +280,7 @@ def run_gemini(filename, summarize = True):
     client = genai.Client(api_key=get_config()["gemini_api_key"])
     description_path = "yt-video/" + filename + ".desc"
     lang = detect_language(description_path) or "en"
-    srt = download_subtitles(filename)
+    srt, new_srt = download_subtitles(filename)
     modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
     age = datetime.now() - modified_time
     title, description = get_video_title_and_description(filename)
@@ -358,6 +369,18 @@ def run_gemini(filename, summarize = True):
                 config=config,
             )
             srt = response.text
+    elif new_srt:
+            response = client.models.generate_content(
+                model=gemini_model,
+                contents=[
+                    make_prompt(lang, summarize=False, title=title, description=description),
+                    "Title:\n" + title,
+                    "Description:\n" + description,
+                    "Subtitles:\n" + srt,
+                ],
+            )
+            srt = response.text
+            save_subtitles(filename=filename, text= srt)
     if len(srt) <= get_config()["summarize_min_length"]:
         print(f"Text for {filename} is too short to summarize, returning original text.")
         return srt
@@ -388,7 +411,7 @@ def run_claude(filename, summarize=True):
     age = datetime.now() - modified_time
     title, description = get_video_title_and_description(filename)
     output=""
-    srt = download_subtitles(filename)
+    srt, new_srt = download_subtitles(filename)
     if srt == "":
         write_log(filename, "Transcription error: Claude requires subtitles.")
         print(f"Transcription error: Claude requires subtitles for {filename}.")
