@@ -78,7 +78,6 @@ def find_duplicate_episode(new_episode, threshold):
         if transcription:
             if not get_episode_transcription(known.get("id")):
                 continue
-        description_path = Path(f"yt-video/{known.get("id")}.desc")
         score = compare_episodes(new_episode, known)
         if score > highest_score:
             highest_score = score
@@ -106,38 +105,3 @@ def mark_episode_as_duplicate(episode_id, other_episode_id):
         other_episode_element.text = other_episode_id
         
         entry.write(description_path, encoding="utf-8", xml_declaration=True)
-
-if __name__ == "__main__":
-    def get_first_episode():
-        for transcription_path in Path("yt-video").glob("*.txt"):
-            fn = os.path.basename(transcription_path).replace(".txt", "")
-            description_path = "yt-video/" + fn + ".desc"
-            if not Path(description_path).exists():
-                continue
-            parser1 = etree.XMLParser(encoding="utf-8", recover=True)
-            input_entry = etree.parse(description_path, parser1)
-            title_element = input_entry.find("title")
-            description_element = input_entry.find("summary")
-            return {
-                "id": fn,
-                "title": title_element.text if title_element is not None else "",
-                "description": description_element.text if description_element is not None else "",
-            }
-
-    test_episode = get_first_episode()
-    results = []
-    for other_episode in get_known_episodes():
-        prob = compare_episodes(test_episode, other_episode)
-        results.append({
-            "episode": other_episode,
-            "probability": prob
-        })
-    output = sorted(results, key=lambda d: d['probability'])
-    with open("output.json", "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
-
-    duplicate_fn = find_duplicate_episode(test_episode, threshold=90)
-    print(f"Test episode {test_episode} Duplicate found: {duplicate_fn}" if duplicate_fn else "No duplicate found.")
-
-
-
