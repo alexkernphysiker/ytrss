@@ -14,3 +14,4 @@ beautifulsoup4
 trafilatura
 pendulum
 pillow
+bleach>=6.1.0

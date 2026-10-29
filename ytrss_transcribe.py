@@ -1,5 +1,6 @@
 import os
 import subprocess
+import shlex
 import sys
 from pathlib import Path
 from lxml import etree
@@ -40,7 +41,11 @@ def download_subtitles(filename):
             return "", False
         additional_options = get_config().get("yt-dlp-options")
         secure_wait()
-        proc = subprocess.run(f"yt-dlp {additional_options} --skip-download --write-auto-subs --write-subs --sub-lang {lang} {link}", shell=True, capture_output=True, timeout=600)
+        command = [
+            "yt-dlp", *shlex.split(additional_options or ""), "--skip-download",
+            "--write-auto-subs", "--write-subs", "--sub-lang", lang, "--", link,
+        ]
+        proc = subprocess.run(command, capture_output=True, timeout=600)
         for line in proc.stdout.decode().splitlines():
             if line.strip().startswith("[download] Destination: "):
                 srtname = line.strip().split("[download] Destination: ")[-1]
@@ -103,8 +108,11 @@ def convert_video_to_audio(video_file_path):
     if os.path.exists(audio_file_path):
         print(f"Audio file {audio_file_path} already exists, skipping conversion.")
         return
-    command = "ffmpeg -i {} -vn -ar 44100 -ac 1 -b:a 48k {}".format(video_file_path, audio_file_path)
-    subprocess.call(command, shell=True, timeout=1800, stdout=sys.stdout, stderr=sys.stderr)
+    command = [
+        "ffmpeg", "-i", os.fspath(video_file_path), "-vn", "-ar", "44100",
+        "-ac", "1", "-b:a", "48k", os.fspath(audio_file_path),
+    ]
+    subprocess.call(command, timeout=1800, stdout=sys.stdout, stderr=sys.stderr)
     if os.path.exists(audio_file_path):
         modTime = os.path.getmtime(video_file_path)
         os.utime(audio_file_path, (modTime, modTime))
@@ -141,8 +149,12 @@ def split_mp3_file(mp3_file_path, chunk_length_s=1000):
         if file.is_file():
             print(f"Removing old mp3 chunk file: {file}")
             file.unlink()
-    command = "ffmpeg -i {} -f segment -segment_time {} -c copy yt-video/chunk.%05d.mp3".format(mp3_file_path, chunk_length_s)
-    subprocess.call(command, shell=True, timeout=1800, stdout=sys.stdout, stderr=sys.stderr)
+    command = [
+        "ffmpeg", "-i", os.fspath(mp3_file_path), "-f", "segment",
+        "-segment_time", str(chunk_length_s), "-c", "copy",
+        "yt-video/chunk.%05d.mp3",
+    ]
+    subprocess.call(command, timeout=1800, stdout=sys.stdout, stderr=sys.stderr)
     for file in sorted(Path("yt-video").glob("chunk.*.mp3")):
         if file.is_file():
             print(f"mp3 chunk file: {file}")
@@ -156,9 +168,12 @@ def download_audio_file(url, filename):
         print(f"Audio file {audio_file_path} already exists, skipping download.")
         return audio_file_path
     additional_options = get_config().get("yt-dlp-options-rss-podcasts")
-    command = f"yt-dlp {additional_options} -x --audio-format mp3 -o '{audio_file_path}' {url.split('?')[0]}"
+    command = [
+        "yt-dlp", *shlex.split(additional_options or ""), "-x",
+        "--audio-format", "mp3", "-o", audio_file_path, "--", url.split('?')[0],
+    ]
     secure_wait()
-    subprocess.call(command, shell=True, timeout=1800, stdout=sys.stdout, stderr=sys.stderr)
+    subprocess.call(command, timeout=1800, stdout=sys.stdout, stderr=sys.stderr)
     if os.path.exists(audio_file_path):
         modTime = os.path.getmtime("yt-video/" + filename + ".desc")
         os.utime(audio_file_path, (modTime, modTime))
@@ -188,6 +203,16 @@ def write_log(filename, message):
         f.write(message)
     modTime = os.path.getmtime("yt-video/" + filename + ".desc")
     os.utime(log_path, (modTime, modTime))
+
+def _openai_response_text(response):
+    """Read SDK text output without interpreting reasoning/tool items as text."""
+    if response.status != "completed":
+        raise ValueError(f"OpenAI response was not completed: {response.status}")
+    text = response.output_text
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("OpenAI returned no text output.")
+    return text
+
 
 def run_openai(filename, summarize = True):
         from openai import OpenAI
@@ -231,10 +256,7 @@ def run_openai(filename, summarize = True):
                     model=get_config()["open_ai_text_model"],
                     input= make_prompt(lang, summarize=False, title=title, description=descr) + ":\n\n" + text
                 )
-            text = ""
-            for output_item in response.output:
-                    for content_item in output_item.content:
-                        text += content_item.text
+            text = _openai_response_text(response)
 
             save_subtitles(filename=filename, text= text)
         if detect_language_from_text(text) not in get_config()["transcription-prompts"].keys():
@@ -242,19 +264,13 @@ def run_openai(filename, summarize = True):
                     model=get_config()["open_ai_text_model"],
                     input= f"Please translate the following text into lang={get_config()['default_language']}\ntext:\n" + text,
                 )
-                text = ""
-                for output_item in response.output:
-                    for content_item in output_item.content:
-                        text += content_item.text
+                text = _openai_response_text(response)
         elif new_srt:
                 response = client.responses.create(
                     model=get_config()["open_ai_text_model"],
                     input= make_prompt(lang, False, title=title, description=descr) + "\nSRT:\n" + text
                 )
-                text = ""
-                for output_item in response.output:
-                    for content_item in output_item.content:
-                        text += content_item.text
+                text = _openai_response_text(response)
                 save_subtitles(filename=filename, text= text)
 
         for chunk in filter_subs(text):
@@ -262,10 +278,7 @@ def run_openai(filename, summarize = True):
                     model=get_config()["open_ai_text_model"],
                     input= make_prompt(lang, summarize and len(text) > get_config()["summarize_min_length"], title=title, description=descr) + ":\n\n" + text
                 )
-                text = ""
-                for output_item in response.output:
-                    for content_item in output_item.content:
-                        text += content_item.text
+                text = _openai_response_text(response)
         return text
 
 def run_gemini(filename, summarize = True):

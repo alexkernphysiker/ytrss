@@ -65,7 +65,7 @@ def _source_item(label, action, field=None, value=None, button=None, link=None,
                  description=None, status=""):
     label_html = f'[{escape(str(label))}]'
     if link is not None:
-        label_html = f'<a href="{escape(link, quote=True)}" target="_blank">{label_html}</a>'
+        label_html = f'<a href="{escape(safe_content_url(link), quote=True)}" target="_blank">{label_html}</a>'
     controls = ""
     if field is not None:
         controls += (
@@ -74,7 +74,7 @@ def _source_item(label, action, field=None, value=None, button=None, link=None,
         )
     if button is not None:
         controls += f'<input type="submit" value="{escape(button, quote=True)}">'
-    details = f'<div class="service-description">{description}</div>' if description is not None else ""
+    details = f'<div class="service-description">{sanitize_html(description)}</div>' if description is not None else ""
     return (
         '<li class="service-item">'
         f'<form action="{escape(action, quote=True)}" method="post">'
@@ -494,13 +494,15 @@ def yt_feed():
 
 @app.route("/file/<path:filename>.<extension>")
 def download(filename, extension):
-    _,media_type = detect_mimetype(probe_media("yt-video/"+filename))
-    response = return_file(filename)
-    response.headers["Content-Type"] = media_type
-    response.headers["Content-Disposition"] = (
-        f'inline; filename="{PurePath(filename).name}.{extension}"'
+    file_path = media_file_path(filename)
+    media_info = probe_media(file_path)
+    if media_info is None:
+        raise NotFound("Media file could not be read.")
+    _, media_type = detect_mimetype(media_info)
+    return return_file(
+        file_path, mimetype=media_type,
+        download_name=f"{file_path.name}.{extension}",
     )
-    return response
 
 @app.route("/read")
 def read_list_page():

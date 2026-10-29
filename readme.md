@@ -286,14 +286,21 @@ and transcript files under `yt-video/` retain their existing format.
 
 ## Tests
 
-Run the offline regression and concurrency tests with the dependencies installed:
+All test suites, including the earlier tests, are stored outside the application
+repository in `/root/ytrss-tests/` on the server. Run them from that directory:
 
 ```sh
-.venv/bin/python -m unittest discover -s tests -v
+cd /root/ytrss-tests
+PYTHONDONTWRITEBYTECODE=1 /root/ytrss/.venv/bin/python -B run_tests.py
 ```
 
-Tests use temporary runtime directories, local HTTP requests, and fixture feeds;
-they do not download real media or call paid transcription APIs.
+To run only the review regressions, add `--pattern test_review_fixes.py`.
+Add `--summary` for compact JSON results.
+
+The runner uses disposable configuration and runtime directories, blocks network
+connections and listening sockets, and skips tests that start an application or
+HTTP server. It does not contact the running service, download real media, or
+call paid transcription APIs. Add future tests to `/root/ytrss-tests/`.
 
 ## Security notes
 
@@ -301,5 +308,10 @@ The web interface has no authentication and includes state-changing routes.
 Keep the default loopback binding unless access is protected by a trusted
 reverse proxy or another authentication layer. Treat `ytrss_config.json` as a
 secret because it can contain API credentials. Extra `yt-dlp` option fields are
-passed to shell commands, so only trusted administrators should edit the
-configuration.
+parsed into individual subprocess arguments. Only trusted administrators should
+edit them because downloader options can control external programs and local
+file access.
+
+Install the updated requirements to enable safe RSS HTML formatting with Bleach.
+Without Bleach, untrusted HTML is escaped and displayed as plain text. Ordinary
+transcript and subtitle text is always escaped.

@@ -16,8 +16,65 @@ from lxml import etree
 from tinyurl import get_share_url
 import json
 from html import escape
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
+from werkzeug.exceptions import NotFound
 from web_ui import page_start as _read_page_start
+
+try:
+    import bleach
+except ImportError:
+    bleach = None
+
+def safe_content_url(value):
+    """Allow web links and relative paths, rejecting executable URL schemes."""
+    value = (value or "").strip()
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        return ""
+    try:
+        scheme = urlsplit(value).scheme.lower()
+    except ValueError:
+        return ""
+    return value if scheme in ("", "http", "https", "mailto") else ""
+
+
+def sanitize_html(fragment):
+    """Keep supported article formatting; escape everything without Bleach."""
+    if bleach is None:
+        return escape(fragment or "")
+    # bleach.clean creates its own parser, so concurrent readers do not share it.
+    return bleach.clean(
+        fragment or "",
+        tags={
+            "a", "abbr", "b", "blockquote", "br", "code", "dd", "del", "div",
+            "dl", "dt", "em", "figcaption", "figure", "h1", "h2", "h3", "h4",
+            "h5", "h6", "hr", "i", "img", "li", "ol", "p", "pre", "s",
+            "small", "span", "strong", "sub", "sup", "table", "tbody", "td",
+            "th", "thead", "tr", "u", "ul",
+        },
+        attributes={
+            "a": ["href", "title"],
+            "abbr": ["title"],
+            "img": ["src", "alt", "title", "width", "height"],
+            "td": ["colspan", "rowspan"],
+            "th": ["colspan", "rowspan"],
+        },
+        protocols={"http", "https", "mailto"},
+        strip=True,
+        strip_comments=True,
+    )
+
+
+def media_file_path(filename):
+    """Resolve a download inside yt-video, including symlink containment."""
+    root = Path("yt-video").resolve()
+    try:
+        path = (root / filename).resolve(strict=True)
+        if not path.is_relative_to(root) or not path.is_file():
+            raise NotFound()
+    except (OSError, RuntimeError, ValueError):
+        raise NotFound() from None
+    return path
+
 
 def clp_copy_button(text: str) -> str:
     payload = escape(json.dumps(text), quote=True)
@@ -218,8 +275,12 @@ def get_rss_name(link):
 
 def probe_media(file_path):
     try:
-        command = f"ffprobe -v error -show_entries format=format_name,format_long_name,duration -of json {file_path}"
-        result = subprocess.run(command, shell=True, capture_output=True, timeout=60)
+        command = [
+            "ffprobe", "-v", "error", "-show_entries",
+            "format=format_name,format_long_name,duration", "-of", "json",
+            "-i", os.fspath(file_path),
+        ]
+        result = subprocess.run(command, capture_output=True, timeout=60, check=True)
         data = json.loads(result.stdout)
         format_info = data.get("format", {})
         duration_value = format_info.get("duration")
@@ -278,6 +339,7 @@ def detect_mimetype(media_info):
 
 def generate_atom_feed(url_link, is_public):
     from lxml import etree
+    from ytrss_transcribe import get_engine_map
     ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
     MEDIA_NS = "http://search.yahoo.com/mrss/"
     etree.register_namespace("itunes", ITUNES_NS)
@@ -318,11 +380,11 @@ def generate_atom_feed(url_link, is_public):
         age = datetime.now() - modified_time
         if age > timedelta(days=get_config()["deliver_days"]):
             continue
-        descr = description_element.text if description_element.text is not None else ""
+        descr = sanitize_html(description_element.text or "")
         description_element.text = ""
         if os.path.exists(log_path) and not os.path.exists(transcription_path) and not is_public:
             log_content = open(log_path, "r").read()
-            description_element.text += "<p>[LOG]</p> <br/>" + log_content + "<br/>"
+            description_element.text += "<p>[LOG]</p> <br/>" + escape(log_content) + "<br/>"
         auto_transcription = False
         auto_transcription_element = input_entry.find("auto_transcription")
         if auto_transcription_element is not None:
@@ -330,10 +392,9 @@ def generate_atom_feed(url_link, is_public):
         if os.path.exists(transcription_path):
                 string_list = open(transcription_path, "r").read().split('\n')
                 for line in string_list:
-                    description_element.text += "<p>"+line+"</p> <br/>"
+                    description_element.text += "<p>"+escape(line)+"</p> <br/>"
                 if get_config()["re-transcription"]:
                     transcribe_link = f"<br/> <a>Get new text version</a> <a>|</a> "
-                    from ytrss_transcribe import get_engine_map
                     for engine, engine_name in get_engine_map().items():
                         transcribe_link += f"<a href='{url_link}/transcribe/{engine}/{fn}'>{engine_name}</a> <a>|</a> "
                     description_element.text += f"<br/> {transcribe_link}<br/>"
@@ -365,7 +426,7 @@ def generate_atom_feed(url_link, is_public):
         output_item.append(output_link)
         output_description = etree.Element("description")
         output_description.text = etree.CDATA(
-            remove_invalid_xml_characters(html.unescape(description_element.text or ""))
+            remove_invalid_xml_characters(sanitize_html(description_element.text or ""))
         )
         output_item.append(output_description)
         output_pubDate = etree.Element("pubDate")
@@ -446,7 +507,7 @@ def generate_transcriptions_list_page(url_link, search_request = None):
         image_html = ""
         if image_url:
             image_html = (
-                f'<img class="news-image" src="{escape(image_url, quote=True)}"'
+                f'<img class="news-image" src="{escape(safe_content_url(image_url), quote=True)}"'
                 ' alt="" loading="lazy" decoding="async">'
             )
         output = f"""<li class="news-card" id="{escape(fn, quote=True)}">
@@ -501,7 +562,7 @@ def _render_read_article(url_link, fn, entry, content, full=False, share_html=""
         if link_element is not None else ""
     )
     actions = (
-        f'<a target="_blank" rel="noopener noreferrer" href="{escape(listen_url, quote=True)}">'
+        f'<a target="_blank" rel="noopener noreferrer" href="{escape(safe_content_url(listen_url), quote=True)}">'
         'View the episode</a>'
     )
     enclosure_element = entry.find("enclosure")
@@ -511,7 +572,7 @@ def _render_read_article(url_link, fn, entry, content, full=False, share_html=""
     )
     if enclosure_url:
         actions += (
-            f'<a target="_blank" rel="noopener noreferrer" href="{escape(enclosure_url, quote=True)}">'
+            f'<a target="_blank" rel="noopener noreferrer" href="{escape(safe_content_url(enclosure_url), quote=True)}">'
             'enclosure</a>'
         )
     alternate_link = f'<a href="{escape(alternate_url, quote=True)}">{alternate_label}</a>'
@@ -524,7 +585,7 @@ def _render_read_article(url_link, fn, entry, content, full=False, share_html=""
         if image_element is not None else ""
     )
     image_html = (
-        f'<img class="reader-image" src="{escape(image_url, quote=True)}" alt="{escape(title, quote=True)}">'
+        f'<img class="reader-image" src="{escape(safe_content_url(image_url), quote=True)}" alt="{escape(title, quote=True)}">'
         if image_url else ""
     )
     share_section = f'<div class="reader-share">{share_html}</div>' if share_html else ""
@@ -576,11 +637,9 @@ def generate_transcription_page(url_link, fn):
                 string_list = stream.read().split('\n')
             for line in string_list:
                 if line.strip() != "":
-                    output += f"<p>{line}</p>"
+                    output += f"<p>{escape(line)}</p>"
         elif entry.find("summary") is not None and entry.find("summary").text is not None:
-            for line in entry.find("summary").text.split('\n'):
-                if line.strip() != "":
-                    output += f"<p>{line}</p>"
+            output = sanitize_html(entry.find("summary").text)
         return _render_read_article(url_link, fn, entry, output, share_html=share_html)
 
 def generate_full_transcription_page(url_link, fn):
@@ -605,13 +664,11 @@ def generate_full_transcription_page(url_link, fn):
             for chunk in string_list:
               for line in chunk.splitlines():
                 if line.strip() != "":
-                    output += f"<p>{line}</p>"
+                    output += f"<p>{escape(line)}</p>"
         elif entry.find("summary") is not None and entry.find("summary").text is not None:
-            for line in entry.find("summary").text.split('\n'):
-                if line.strip() != "":
-                    output += f"<p>{line}</p>"
+            output = sanitize_html(entry.find("summary").text)
         return _render_read_article(url_link, fn, entry, output, full=True)
 
 
-def return_file(filename):
-    return send_file("yt-video/"+filename)
+def return_file(filename, **options):
+    return send_file(media_file_path(filename), **options)

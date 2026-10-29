@@ -7,6 +7,9 @@ from thefuzz import fuzz
 import json
 from datetime import datetime, timedelta
 from config import get_config
+from threading import RLock
+
+_duplicate_lock = RLock()
 
 def get_known_episodes(directory="yt-video"):
     episodes = []
@@ -16,11 +19,14 @@ def get_known_episodes(directory="yt-video"):
     etree.register_namespace("itunes", ITUNES_NS)
     etree.register_namespace("media", MEDIA_NS)
 
-    for description_path in Path("yt-video").glob("*.desc"):
+    for description_path in sorted(Path(directory).glob("*.desc")):
         try:
             fn = os.path.basename(description_path).replace(".desc", "")
             parser1 = etree.XMLParser(encoding="utf-8", recover=True)
             input_entry = etree.parse(description_path, parser1)
+            duplicate_element = input_entry.find("duplicate")
+            if duplicate_element is not None and duplicate_element.text == "true":
+                continue
             title_element = input_entry.find("title")
             description_element = input_entry.find("summary")
             id_element = input_entry.find("id")
@@ -69,39 +75,50 @@ def compare_episodes(episode1, episode2):
     return score
 
 def find_duplicate_episode(new_episode, threshold):
-    best_match_fn = None
-    highest_score = 0
-    transcription = True if get_episode_transcription(new_episode.get("id")) else False
-    for known in get_known_episodes():
-        if known.get("id") == new_episode.get("id"):
-            continue
-        if transcription:
-            if not get_episode_transcription(known.get("id")):
+    with _duplicate_lock:
+        best_match_fn = None
+        highest_score = 0
+        transcription = True if get_episode_transcription(new_episode.get("id")) else False
+        for known in get_known_episodes():
+            if known.get("id") == new_episode.get("id"):
                 continue
-        score = compare_episodes(new_episode, known)
-        if score > highest_score:
-            highest_score = score
-            best_match_fn = known.get("id")
+            if transcription:
+                if not get_episode_transcription(known.get("id")):
+                    continue
+            score = compare_episodes(new_episode, known)
+            if score > highest_score:
+                highest_score = score
+                best_match_fn = known.get("id")
             
-    if highest_score >= threshold:
-        return best_match_fn
+        if highest_score >= threshold:
+            return best_match_fn
         
-    return None
+        return None
 
 def mark_episode_as_duplicate(episode_id, other_episode_id):
-    description_path = Path(f"yt-video/{episode_id}.desc")
-    if description_path.exists():
-        parser1 = etree.XMLParser(encoding="utf-8", recover=True)
-        entry = etree.parse(description_path, parser1)
+    with _duplicate_lock:
+        if episode_id == other_episode_id:
+            return False
+        target_path = Path(f"yt-video/{other_episode_id}.desc")
+        if not target_path.is_file():
+            return False
+        target = etree.parse(target_path, etree.XMLParser(encoding="utf-8", recover=True))
+        target_duplicate = target.find("duplicate")
+        if target_duplicate is not None and target_duplicate.text == "true":
+            return False
+        description_path = Path(f"yt-video/{episode_id}.desc")
+        if description_path.exists():
+            parser1 = etree.XMLParser(encoding="utf-8", recover=True)
+            entry = etree.parse(description_path, parser1)
         
-        duplicate_element = entry.find("duplicate")
-        if duplicate_element is None:
-            duplicate_element = etree.SubElement(entry.getroot(), "duplicate")
-        duplicate_element.text = "true"
+            duplicate_element = entry.find("duplicate")
+            if duplicate_element is None:
+                duplicate_element = etree.SubElement(entry.getroot(), "duplicate")
+            duplicate_element.text = "true"
 
-        other_episode_element = entry.find("duplicate_of")
-        if other_episode_element is None:
-            other_episode_element = etree.SubElement(entry.getroot(), "duplicate_of")
-        other_episode_element.text = other_episode_id
+            other_episode_element = entry.find("duplicate_of")
+            if other_episode_element is None:
+                other_episode_element = etree.SubElement(entry.getroot(), "duplicate_of")
+            other_episode_element.text = other_episode_id
         
-        entry.write(description_path, encoding="utf-8", xml_declaration=True)
+            entry.write(description_path, encoding="utf-8", xml_declaration=True)
