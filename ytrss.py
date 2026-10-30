@@ -12,7 +12,7 @@ from feed_discover import discover_rss_feeds
 from config import edit_config, get_config
 from transcription_queue import transcription_queues
 from web_ui import page_start
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import BadRequest, HTTPException
 
  
 host=get_config().get("host")
@@ -305,11 +305,15 @@ def enable_downloading():
     return redirect(url_for('auto_download'))
 @app.route("/download-cfg", methods=['POST'])
 def download_cfg():
+    try:
+        delay = int(request.form['delay-between-fetches'])
+    except ValueError as error:
+        raise BadRequest("Delay between fetches must be a whole number.") from error
     with edit_config() as cfg:
         cfg["max_days"] = int(request.form['max_days'])
         cfg["deliver_days"] = int(request.form['deliver_days'])
         cfg["duplicate_detection_threshold"] = int(request.form['duplicate_detection_threshold'])
-        cfg["delay-between-fetches"] = int(request.form['delay-between-fetches'])
+        cfg["delay-between-fetches"] = delay
     return redirect(url_for('auto_download'))
 
 

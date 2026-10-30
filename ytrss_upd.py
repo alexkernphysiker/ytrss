@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 from time import mktime
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import arrow
 from random import shuffle
 from lxml import html as lxml_html
@@ -53,26 +54,50 @@ def download_video(link, filename):
     if not get_config().get("yt-dlp-enabled"):
         print(f"Interacting of yt-dlp with youtube is disabled globally in the configuration.")
         return False
+    download_path = Path(f"{filename}.dl")
+    completed_name = re.compile(re.escape(download_path.name) + r"(?:\.[a-zA-Z0-9]+)?")
     for params in get_config().get("yt-dlp-formats"):
         secure_wait()
         additional_options = get_config().get("yt-dlp-options")
-        full_command = [
-            "yt-dlp", *shlex.split(additional_options or ""), *shlex.split(params),
-            "-o", f"{filename}.dl", "--", link,
-        ]
-        print(shlex.join(full_command))
-        proc = subprocess.run(full_command, capture_output=True, timeout=1800)
-        for file in Path(".").glob(filename + ".dl*"):
-            ext,_ = detect_mimetype(probe_media(file))
-            if ext!="raw":
-                if os.path.exists(filename):
-                    os.remove(filename)
-                os.rename(file, filename)
+        with TemporaryDirectory(prefix="ytrss-download-") as temporary:
+            completed_files = Path(temporary, "completed.txt")
+            full_command = [
+                "yt-dlp", *shlex.split(additional_options or ""), *shlex.split(params),
+                "-o", str(download_path),
+                "--print-to-file", "after_move:filepath", str(completed_files), "--", link,
+            ]
+            print(shlex.join(full_command))
+            try:
+                proc = subprocess.run(full_command, capture_output=True, timeout=1800)
+            except (subprocess.TimeoutExpired, OSError) as error:
+                print(f"Failed to download video {filename}: {error}")
+                continue
+            if proc.returncode != 0:
+                print(f"Failed to download video {filename}. yt-dlp output: {proc.stderr.decode(errors='replace')}")
+                continue
+            if not completed_files.is_file():
+                print(f"yt-dlp did not report a completed media file for {filename}.")
+                continue
+            # Only accept files reported after all download/post-processing steps.
+            # Keep .part files untouched so a later update can resume the download.
+            for name in completed_files.read_text(encoding="utf-8").splitlines():
+                file = Path(name)
+                if (
+                    not completed_name.fullmatch(file.name)
+                    or file.suffix.lower() in {".part", ".ytdl", ".temp"}
+                    or file.parent.resolve() != download_path.parent.resolve()
+                    or file.is_symlink()
+                    or not file.is_file()
+                ):
+                    continue
+                media_info = probe_media(file)
+                if media_info is None or detect_mimetype(media_info)[0] == "raw":
+                    print("What has been downloaded, is not a valid media file")
+                    continue
+                os.replace(file, filename)
                 print(f"Successfully downloaded video {filename}.")
                 return True
-            else:
-                print("What has been downloaded, is not a valid media file")
-        print(f"Failed to download video {filename}. yt-dlp output: {proc.stderr.decode()}")
+            print(f"No valid completed media file was found for {filename}.")
     print(f"Failed to download video {filename} with all attempted resolutions.")
     return False
 

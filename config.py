@@ -39,7 +39,7 @@ def default_config():
         "yt-dlp-formats": ["-S res:480", "-S res:360", "-S res:240", "-x"],
         "proxies-youtube": {},
         "proxies-rss": {},
-        "delay-between-fetches": 1,
+        "delay-between-fetches": 10,
         "re-transcription": False,
         "transcription-prompts": {
             "en": [
@@ -81,6 +81,14 @@ class ConfigStore:
     def _signature_for(stat):
         return stat.st_ino, stat.st_size, stat.st_mtime_ns
 
+    @staticmethod
+    def _normalize(settings):
+        try:
+            delay = int(settings.get("delay-between-fetches", 10))
+        except (TypeError, ValueError, OverflowError):
+            delay = 10
+        settings["delay-between-fetches"] = max(10, delay)
+
     def _reload(self):
         # Keep support for edits made directly in the JSON file. Unchanged
         # settings are served from memory rather than parsed on every access.
@@ -94,6 +102,7 @@ class ConfigStore:
                 signature = self._signature_for(os.fstat(stream.fileno()))
                 settings = json.load(stream)
             self._config.update(settings)
+            self._normalize(self._config)
             self._signature = signature
 
     def _write(self, settings):
@@ -126,6 +135,7 @@ class ConfigStore:
             self._reload()
             settings = deepcopy(self._config)
             yield settings
+            self._normalize(settings)
             if settings != self._config:
                 self._write(settings)
                 # Do not let a caller retain a mutable reference to our state.
