@@ -101,9 +101,22 @@ def page_start(title, main_class="", refresh_interval=None):
       gap: 24px;
       padding: 28px;
     }
+    .image-toggle {
+      display: block;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: zoom-in;
+    }
+    .image-toggle[aria-expanded="true"] { cursor: zoom-out; }
+    .image-toggle:focus-visible { outline: 3px solid #315eca; outline-offset: 3px; }
+    .image-toggle img { display: block; }
+    .reader-image-toggle { flex: 0 0 auto; width: 180px; max-width: 100%; }
+    .reader-header.image-expanded { flex-direction: column; align-items: stretch; }
+    .reader-header.image-expanded .reader-image-toggle { width: 100%; }
+    .reader-header.image-expanded .reader-image { width: 100%; height: auto; max-height: none; }
     .reader-image {
-      flex: 0 0 auto;
-      width: 180px;
+      width: 100%;
       max-width: 100%;
       max-height: 240px;
       object-fit: contain;
@@ -193,7 +206,8 @@ def page_start(title, main_class="", refresh_interval=None):
     @media (max-width: 640px) {
       main.reader-page { padding: 12px; }
       .reader-header { flex-direction: column; align-items: flex-start; gap: 16px; padding: 20px; }
-      .reader-image { width: 128px; max-height: 180px; }
+      .reader-image-toggle { width: 128px; }
+      .reader-image { max-height: 180px; }
       .reader-actions, .reader-footer, .reader-share { padding: 16px 20px; }
       .reader-text { padding: 20px; }
     }
@@ -262,6 +276,19 @@ def page_start(title, main_class="", refresh_interval=None):
       .service-search input[type="text"] { flex-basis: 100%; }
     }
   </style>
+  <script>
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-image-toggle]");
+      if (!button) return;
+      const container = button.closest(".reader-header");
+      if (!container) return;
+      const expanded = container.classList.toggle("image-expanded");
+      const label = expanded ? "Зменшити зображення" : "Збільшити зображення";
+      button.setAttribute("aria-expanded", String(expanded));
+      button.setAttribute("aria-label", label);
+      button.title = label;
+    });
+  </script>
 </head>
 <body>
 """ + f'<main class="{escape(main_class, quote=True)}">'

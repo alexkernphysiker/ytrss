@@ -602,7 +602,10 @@ def _render_read_article(url_link, fn, entry, content, full=False, share_html=""
         if image_element is not None else ""
     )
     image_html = (
+        '<button type="button" class="image-toggle reader-image-toggle" data-image-toggle'
+        ' aria-expanded="false" aria-label="Збільшити зображення" title="Збільшити зображення">'
         f'<img class="reader-image" src="{escape(safe_content_url(image_url), quote=True)}" alt="{escape(title, quote=True)}">'
+        '</button>'
         if image_url else ""
     )
     share_section = f'<div class="reader-share">{share_html}</div>' if share_html else ""
