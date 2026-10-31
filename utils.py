@@ -405,9 +405,8 @@ def generate_atom_feed(url_link, is_public):
         if auto_transcription_element is not None:
             auto_transcription = auto_transcription_element.text=="true"
         if os.path.exists(transcription_path):
-                string_list = open(transcription_path, "r").read().split('\n')
-                for line in string_list:
-                    description_element.text += "<p>"+escape(line)+"</p> <br/>"
+                with open(transcription_path, "r", encoding="utf-8") as stream:
+                    description_element.text = render_markdown(stream.read())
                 if get_config()["re-transcription"]:
                     transcribe_link = f"<br/> <a>Get new text version</a> <a>|</a> "
                     for engine, engine_name in get_engine_map().items():
@@ -572,14 +571,16 @@ def _render_read_article(url_link, fn, entry, content, full=False, share_html=""
     alternate_url = read_url if full else f"{read_url}/full"
 
     link_element = entry.find("link")
-    listen_url = (
+    listen_url = safe_content_url(
         (link_element.get("href") or "").replace("__URL_LINK__", url_link)
         if link_element is not None else ""
     )
-    actions = (
-        f'<a target="_blank" rel="noopener noreferrer" href="{escape(safe_content_url(listen_url), quote=True)}">'
-        'View the episode</a>'
-    )
+    actions = ""
+    if listen_url:
+        actions = (
+            f'<a target="_blank" rel="noopener noreferrer" href="{escape(listen_url, quote=True)}">'
+            'View the original page</a>'
+        )
     enclosure_element = entry.find("enclosure")
     enclosure_url = (
         (enclosure_element.get("url") or "").replace("__URL_LINK__", url_link)
