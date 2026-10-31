@@ -64,7 +64,7 @@ AD_MARKERS = {
 
 
 def _is_ad_element(element):
-    # Явні атрибути рекламних систем.
+    # Explicit attributes used by advertising systems.
     for attribute in (
         "data-ad-client",
         "data-ad-slot",
@@ -100,7 +100,7 @@ def _is_ad_element(element):
             ):
                 return True
 
-    # Доступність часто явно позначає рекламний блок.
+    # Accessibility labels often explicitly identify advertising blocks.
     aria_label = (element.get("aria-label") or "").strip().lower()
 
     if aria_label in {
@@ -123,12 +123,12 @@ def remove_ad_blocks(page_html):
     except (ValueError, TypeError):
         return page_html
 
-    # Йдемо знизу вгору, щоб безпечно видаляти вкладені елементи.
+    # Process elements from the bottom up to safely remove nested elements.
     for element in reversed(document.xpath("//*")):
         if _is_ad_element(element):
             parent = element.getparent()
 
-            # Кореневий елемент не чіпаємо.
+            # Keep the root element.
             if parent is not None:
                 element.drop_tree()
 

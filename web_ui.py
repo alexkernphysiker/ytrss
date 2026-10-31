@@ -9,7 +9,7 @@ def page_start(title, main_class="", refresh_interval=None):
         if refresh_interval is not None else ""
     )
     return """<!doctype html>
-<html lang="uk">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -41,6 +41,39 @@ def page_start(title, main_class="", refresh_interval=None):
     .news-search input { flex: 1; min-width: 0; background: #fff; }
     .news-search button { background: #fff; color: inherit; cursor: pointer; }
     .news-search button:hover { background: #e9edf4; }
+    .news-categories {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 16px;
+    }
+    .news-categories button, .news-categories a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      max-width: 100%;
+      min-height: 42px;
+      padding: 8px 14px;
+      border: 1px solid #c5ced9;
+      border-radius: 999px;
+      background: #fff;
+      color: inherit;
+      font: inherit;
+      font-size: 0.88rem;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+      cursor: pointer;
+    }
+    .news-categories button:hover, .news-categories a:hover { background: #e9edf4; }
+    .news-categories button[aria-pressed="true"], .news-categories a[aria-current="page"] {
+      border-color: #315eca;
+      background: #315eca;
+      color: #fff;
+    }
+    .news-categories button:focus-visible, .news-categories a:focus-visible {
+      outline: 3px solid #315eca;
+      outline-offset: 2px;
+    }
     .news-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
@@ -81,11 +114,26 @@ def page_start(title, main_class="", refresh_interval=None):
       font-weight: 600;
       overflow-wrap: anywhere;
     }
-    .news-time {
-      display: block;
+    .news-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
       margin-top: 10px;
+    }
+    .news-time {
       color: #596575;
       font-size: 0.82rem;
+    }
+    .news-category {
+      max-width: 100%;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #e8f0ff;
+      color: #28456a;
+      font-size: 0.75rem;
+      font-weight: 600;
+      overflow-wrap: anywhere;
     }
     main.reader-page { max-width: 1040px; padding-block: 24px; }
     .reader-card {
@@ -283,7 +331,7 @@ def page_start(title, main_class="", refresh_interval=None):
       const container = button.closest(".reader-header");
       if (!container) return;
       const expanded = container.classList.toggle("image-expanded");
-      const label = expanded ? "Зменшити зображення" : "Збільшити зображення";
+      const label = expanded ? "Collapse image" : "Enlarge image";
       button.setAttribute("aria-expanded", String(expanded));
       button.setAttribute("aria-label", label);
       button.title = label;

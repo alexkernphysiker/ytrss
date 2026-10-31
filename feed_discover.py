@@ -51,7 +51,7 @@ def discover_rss_feeds(site_url: str) -> list[tuple[str, str, str, str]]:
                     urljoin(base_url, link["href"])
                 )
 
-    # Перевіряємо типові адреси.
+    # Check common feed URLs.
     origin = (
         f"{urlparse(page_url).scheme}://"
         f"{urlparse(page_url).netloc}"
@@ -81,7 +81,7 @@ def discover_rss_feeds(site_url: str) -> list[tuple[str, str, str, str]]:
 
             parsed = feedparser.parse(response.content)
 
-            # Відкидаємо відповіді, які не є RSS/Atom.
+            # Ignore responses that are not RSS or Atom feeds.
             if not parsed.version:
                 continue
 

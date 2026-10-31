@@ -65,7 +65,8 @@ def default_config():
         "title": "YTRSS feed",
         "temporary_block_yt_download": False,
         "summarize_min_length": 7168,
-        "tinyurl_key": ""
+        "tinyurl_key": "",
+        "topics": {},
     }
 
 class ConfigStore:
@@ -123,10 +124,10 @@ class ConfigStore:
             if temporary_path is not None:
                 temporary_path.unlink(missing_ok=True)
 
-    def snapshot(self):
+    def snapshot(self, key=None):
         with self._lock:
             self._reload()
-            return deepcopy(self._config)
+            return deepcopy(self._config if key is None else self._config[key])
 
     @contextmanager
     def edit(self):
@@ -150,9 +151,9 @@ class ConfigStore:
 _store = ConfigStore()
 
 
-def get_config():
-    """Return an independent snapshot; use edit_config() to change settings."""
-    return _store.snapshot()
+def get_config(key=None):
+    """Return an independent snapshot of all settings or one selected setting."""
+    return _store.snapshot(key)
 
 
 def edit_config():

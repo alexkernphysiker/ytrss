@@ -4,8 +4,8 @@ YTRSS is a self-hosted YouTube and RSS archiving pipeline that turns subscribed
 channels, playlists, and podcast feeds into a single local RSS 2.0 catalog.
 The current implementation combines a Flask web interface with periodic updater
 and transcription workers to fetch eligible media, keep local copies with
-metadata, preserve subtitles and readable article text, and queue AI-powered
-summaries or transcripts for saved episodes.
+metadata, preserve subtitles and readable article text, queue AI-powered
+summaries or transcripts, and classify saved news into configurable topics.
 
 The project now consists of a small Flask web app plus two background workers:
 
@@ -16,9 +16,13 @@ The project now consists of a small Flask web app plus two background workers:
 - `ytrss_transcribe.py` processes automatic and manual transcription jobs from
   local queues and provider-specific engines.
 
+The supporting `classify_news.py` module computes local multilingual embeddings
+and resolves categories for the news list. See [Topic categories](#topic-categories)
+for configuration and backfilling existing episodes.
+
 ## Firefox extension
 
-[ytrss — RSS і YouTube on Mozilla Add-ons](https://addons.mozilla.org/firefox/addon/ytrss-rss-youtube/)
+[ytrss — RSS and YouTube on Mozilla Add-ons](https://addons.mozilla.org/firefox/addon/ytrss-rss-youtube/)
 is the companion extension for desktop Firefox 140+ and Firefox for Android 142+.
 
 Its button sends the current site's root URL, YouTube channel ID/name, or
@@ -91,14 +95,6 @@ Edit `ytrss_config.json` before starting the application. The web interface can
 change subscriptions and a subset of operational settings; other settings must
 be edited directly in the JSON file.
 
-All threads share one configuration store. `get_config()` returns a deep copy
-for reading. Code that changes settings must use `with edit_config() as cfg:`;
-the entire edit, including changes to nested lists and dictionaries, is protected
-by a lock and saved by atomically replacing the JSON file. Failed edits leave
-the previous settings intact. Keep these transactions short: perform network
-requests and other slow work outside them. Direct JSON edits are reloaded on
-the next access when the file changes; stop the application before editing it
-manually to avoid racing an application write.
 
 Important settings include:
 
@@ -119,10 +115,11 @@ Important settings include:
 | `yt-dlp-options` | empty | Extra `yt-dlp` arguments for YouTube downloads and subtitles. |
 | `yt-dlp-options-rss-podcasts` | empty | Extra `yt-dlp` arguments used when downloading podcast audio. |
 | `proxies-youtube`, `proxies-rss` | `{}` | Proxy dictionaries passed to `requests`. |
-| `delay-between-fetches` | `1` | Delay in seconds between source requests. |
+| `delay-between-fetches` | `10` | Delay in seconds between source requests; values below 10 are clamped to 10. |
 | `duplicate_detection_threshold` | `100` | Fuzzy-match threshold used before downloading new items. |
 | `duplicate_detection_threshold_transcription` | `100` | Fuzzy-match threshold used after transcription. |
 | `re-transcription` | `false` | Show manual transcription/removal links in feed entries. |
+| `topics` | `{}` | Category names and multilingual prototype descriptions; see [Topic categories](#topic-categories). |
 
 Subscriptions, disabled-source lists, cached source names, request headers,
 language prompts, and model names are also stored in this file. See
@@ -160,6 +157,151 @@ Engine capabilities currently differ:
 The default RSS engine is `gemini_s`; configure `gemini_api_key`, select another
 provider that can process podcast media, disable automatic transcription for
 the relevant RSS sources, or set `auto_transcript_hours` to `0`.
+
+## Topic categories
+
+News is classified locally with `intfloat/multilingual-e5-small` through
+Sentence Transformers. Its multilingual embeddings allow texts in different
+languages to share a category. Classification uses each episode's content;
+there are no channel-specific category overrides or paid embedding API calls.
+
+### Configuring topics
+
+The `topics` object in `ytrss_config.json` maps category names to lists of
+prototypes. Each prototype is a list of one or more descriptions of the same
+subject, optionally in different languages. The default is `{}`, which
+disables category assignment.
+
+For example, merge a fragment like this into the existing configuration:
+
+```json
+{
+  "topics": {
+    "culture": [
+      [
+        "Cinema, theatre, music, literature, fashion and design."
+      ],
+      [
+        "Sports, competitions, football and athletes."
+      ]
+    ],
+    "humanities": [
+      [
+        "History, linguistics, etymology and language learning."
+      ]
+    ],
+    "IT": [
+      [
+        "The IT industry, computers, programming and mobile technology."
+      ],
+      [
+        "Artificial intelligence, machine learning, drones and autonomous systems."
+      ]
+    ]
+  }
+}
+```
+
+The model embeds the descriptions, averages and normalizes the vectors within
+each prototype, and compares the news vector with those prototypes using cosine
+similarity. A category's score is its best prototype score; the category with
+the highest score wins. Names are display labels, so describe all the subjects
+that belong together. For example, sport needs a prototype under culture if it
+should share that category with cinema and music.
+
+There is no minimum similarity threshold: any item with a compatible embedding
+and a valid, nonempty topic configuration receives one category. Missing,
+invalid, or incompatible embeddings leave the item uncategorized. Changing the
+topic names or descriptions updates classification on the next lookup without
+recomputing news embeddings.
+
+### Computing and storing embeddings
+
+The input is the episode title, with a leading bracketed source name removed,
+plus the saved annotation or transcript in `yt-video/<fn>.txt`. If that file is
+missing, empty, or unreadable, the classifier uses the `<summary>` from
+`yt-video/<fn>.desc`. It removes HTML markup and reads up to 50,000 characters
+of the body. The encoder then uses only the first **512 tokens** of the combined
+input, including its prefix and title; longer annotations are truncated.
+The classifier does not read the separate full-subtitle `.srt` file.
+
+Each news embedding contains 384 normalized floating-point coordinates and is
+independent of the configured categories. It is stored in an `<embedding>`
+element inside the episode's `.desc` XML, together with the model signature
+and a hash of the input text. Metadata refreshes in the updater preserve that
+element.
+
+To populate or refresh embeddings for existing episodes, run from the repository
+root:
+
+```sh
+.venv/bin/python classify_news.py
+```
+
+The script scans `yt-video/*.desc`, reuses embeddings whose model signature
+and input hash still match, and writes updated embeddings atomically while
+preserving other metadata and file modification times. The available options
+are `--data-dir` and `--batch-size` (default: `8`):
+
+```sh
+.venv/bin/python classify_news.py --data-dir /path/to/yt-video --batch-size 8
+```
+
+The same module provides two functions. Pass an episode ID without a directory
+or extension:
+
+```python
+from classify_news import get_news_category, save_news_vector
+
+save_news_vector("episode-id")
+category = get_news_category("episode-id")
+```
+
+`save_news_vector(fn)` creates or refreshes the saved embedding and returns its
+coordinates. `get_news_category(fn)` uses the existing embedding and returns a
+configured category name, or `None` if no usable embedding is available or
+`topics` is empty. Category lookup does not compute a new news embedding.
+
+After writing a nonempty annotation/transcript, `transcribe_video()` calls
+`save_news_vector()` automatically. Episodes whose text already exists,
+including articles extracted by the RSS updater, may need the backfill command
+above. Manually editing a `.txt` file also requires calling
+`save_news_vector(fn)` or rerunning the script to refresh its embedding.
+
+Prototype vectors and category results are cached in memory. The result cache
+holds up to 8,192 entries and checks XML file metadata, the topic configuration,
+and the encoder identity/signature before reuse. Files changed within the last
+second are not added to the result cache, avoiding stale results after rapid
+writes with identical filesystem timestamps. These caches are rebuilt after a
+process restart.
+
+### Model download and runtime
+
+The model is loaded once when `classify_news` is imported and shared by the
+application workers. Inference runs on the CPU with one PyTorch thread; a GPU
+is not required. The CPU PyTorch build, Sentence Transformers, and Transformers
+are included in `requirements.txt` and must be installed in the interpreter
+environment used by the service.
+
+On first use, the library downloads the weights automatically. The weights
+occupy about 471 MB, in addition to tokenizer/configuration files and the Python
+dependencies. They normally live in `~/.cache/huggingface/hub/` for the account
+running the application; on the current root-run service this is
+`/root/.cache/huggingface/hub/`. Keep the model cache outside the repository.
+
+Startup can take longer while the model is downloaded or initialized. Subsequent
+runs reuse the cached files. To fill the cache before starting the application:
+
+```sh
+.venv/bin/python -c 'import classify_news'
+```
+
+Once all model files are cached, the application can run without Hugging Face
+network access:
+
+```sh
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 .venv/bin/python start.py
+```
 
 ## Running
 
@@ -227,8 +369,15 @@ The subscription pages provide navigation between:
 The main output endpoints are:
 
 - `/feed` serves the combined RSS 2.0 feed (`application/rss+xml`).
-- `/read` shows stored transcriptions or extracted episode text.
-- `/read/<episode>/share` creates a TinyURL for an episode's transcription
+- `/read` lists saved news with category badges, category buttons, and text search.
+- `/read/category` accepts POST form field `category` and lists only that
+  category. Buttons above the search box use names from `topics`; **All news**
+  returns to the complete list.
+- `/read/search` accepts POST form field `search_request` and searches titles
+  and descriptions.
+- `/read/<episode>` shows the saved annotation/transcript or extracted text.
+- `/read/<episode>/full` shows the full subtitle text when available.
+- `/read_ext/<episode>/share` creates a TinyURL for an episode's transcription
   page and redirects back to that page.
 - `/file/<episode>.<extension>` serves a locally downloaded enclosure.
 - `/transcribe/<engine>/<episode>` queues a manual transcription.
@@ -295,12 +444,18 @@ PYTHONDONTWRITEBYTECODE=1 /root/ytrss/.venv/bin/python -B run_tests.py
 ```
 
 To run only the review regressions, add `--pattern test_review_fixes.py`.
-Add `--summary` for compact JSON results.
+Add `--summary` for compact JSON results. Category-related suites can be selected
+with `--pattern test_topic_classification.py`, `--pattern test_category_cache.py`,
+`--pattern test_news_categories.py`, `--pattern test_category_buttons.py`, or
+`--pattern test_embedding_preservation.py`.
 
 The runner uses disposable configuration and runtime directories, blocks network
 connections and listening sockets, and skips tests that start an application or
 HTTP server. It does not contact the running service, download real media, or
-call paid transcription APIs. Add future tests to `/root/ytrss-tests/`.
+call paid transcription APIs. The runner enables offline model loading; the
+service's Python dependencies and an already populated Hugging Face model cache
+are required because the classifier initializes on import. Add future tests to
+`/root/ytrss-tests/`.
 
 ## Security notes
 

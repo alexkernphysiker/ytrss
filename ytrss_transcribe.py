@@ -11,6 +11,7 @@ from config import get_config
 from lang_detect import *
 from transcription_queue import AUTO_RSS, AUTO_YOUTUBE, transcription_queues
 import json
+from classify_news import save_news_vector
 
 def get_engine_map(cfg=None):
     if cfg is None:
@@ -524,6 +525,7 @@ def transcribe_video(filename, engine):
         if duplicate_fn is not None:
             print(f"Duplicate episode found for {filename} Duplicate ID: {duplicate_fn}")
             mark_episode_as_duplicate(filename, duplicate_fn)
+        save_news_vector(filename)
 
 
     else:

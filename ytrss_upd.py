@@ -14,7 +14,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import arrow
 from random import shuffle
-from lxml import html as lxml_html
+from lxml import etree, html as lxml_html
 from repeatings_detector import find_duplicate_episode
 from utils import *
 from config import get_config
@@ -141,6 +141,28 @@ def get_previous_image_url(fn):
         if media_thumbnail is not None:
             return media_thumbnail.get("url")
     return None
+
+def write_description(entry, description_path):
+    try:
+        with open(description_path, "rb") as stream:
+            source = stream.read()
+    except FileNotFoundError:
+        source = None
+    if source is not None:
+        parser = etree.XMLParser(encoding="utf-8", recover=True,
+                                 resolve_entities=False, no_network=True)
+        previous = etree.fromstring(source, parser)
+        if previous is None:
+            raise ValueError("Existing metadata has no XML root.")
+        for element in previous:
+            if isinstance(element.tag, str) and element.tag.rsplit("}", 1)[-1] == "embedding":
+                entry.append(ElementTree.fromstring(
+                    etree.tostring(element, encoding="utf-8", with_tail=False),
+                ))
+    item_string = ElementTree.tostring(entry, encoding="utf-8", method="xml").decode("utf-8") + "\n"
+    with open(description_path, "w", encoding="utf-8") as stream:
+        stream.write(item_string)
+
 
 def parce_rss_item(link):
         from lxml import etree
@@ -291,9 +313,7 @@ def parce_rss_item(link):
                             auto_transcription_element = ElementTree.SubElement(entry_element, "auto_transcription")
                             auto_transcription_element.text = "true" if link not in get_config()["sources_with_disabled_auto_transcription"] else "false"
                             description_path = "yt-video/" + fn + ".desc"
-                            with open(description_path, "w") as f:
-                                item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
-                                f.write(item_string)
+                            write_description(entry_element, description_path)
                             modTime = mktime(insertion_date.timetuple())
                             os.utime(description_path, (modTime, modTime))
                             if os.path.exists(srt_path):
@@ -453,9 +473,7 @@ def parce_yt_item(link):
                                     media_content_element = ElementTree.SubElement(entry_element, "media:content", url=media_content.get("url"), type=media_content.get("type"))
                             auto_transcription_element = ElementTree.SubElement(entry_element, "auto_transcription")
                             auto_transcription_element.text = "true" if source_id not in get_config()["sources_with_disabled_auto_transcription"] else "false"
-                            with open(description_path, "w") as f:
-                                item_string=ElementTree.tostring(entry_element, encoding='utf-8', method='xml').decode('utf-8')+"\n"
-                                f.write(item_string)
+                            write_description(entry_element, description_path)
                             modTime = mktime(insertion_date.timetuple())
                             os.utime(description_path, (modTime, modTime))
                             if get_config()["auto_transcript_hours"] > 0:

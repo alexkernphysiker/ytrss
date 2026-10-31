@@ -20,6 +20,7 @@ from markdown import Markdown
 from urllib.parse import quote, urlsplit
 from werkzeug.exceptions import NotFound
 from web_ui import page_start as _read_page_start
+from classify_news import get_news_category
 
 try:
     import bleach
@@ -477,7 +478,7 @@ def generate_atom_feed(url_link, is_public):
 </rss>"""
     return output
 
-def generate_transcriptions_list_page(url_link, search_request = None):
+def generate_transcriptions_list_page(url_link, category_request=None, search_request = None):
     from lxml import etree
     page_start = _read_page_start(get_config()["title"])
     ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
@@ -512,6 +513,9 @@ def generate_transcriptions_list_page(url_link, search_request = None):
             if age < timedelta(hours=get_config()["auto_transcript_hours"]+1):
                 continue # will wait for transcription and final deduplication
 
+        category = get_news_category(fn)
+        if category_request is not None and category != category_request:
+            continue
         news_url = f"{url_link.rstrip('/')}/read/{quote(fn, safe='')}"
         image_element = entry.find("image")
         image_url = (
@@ -528,10 +532,13 @@ def generate_transcriptions_list_page(url_link, search_request = None):
   <a class="news-link" href="{escape(news_url, quote=True)}">
     {image_html}
     <div class="news-content">
-      <h2 class="news-title">{escape(title_element.text or "Без заголовка")}</h2>
-      <time class="news-time" datetime="{modified_time.isoformat(timespec='seconds')}">
-        {modified_time.strftime("%d.%m.%Y, %H:%M")}
-      </time>
+      <h2 class="news-title">{escape(title_element.text or "Untitled")}</h2>
+      <div class="news-meta">
+        <time class="news-time" datetime="{modified_time.isoformat(timespec='seconds')}">
+          {modified_time.strftime("%d.%m.%Y, %H:%M")}
+        </time>
+        <span class="news-category">{escape(category or "Uncategorized")}</span>
+      </div>
     </div>
   </a>
 </li>"""
@@ -553,9 +560,23 @@ def generate_transcriptions_list_page(url_link, search_request = None):
            f'<form class="news-search" method="get" action="{escape(url_link, quote=True)}/read">'
            '<button type="submit">Back to list</button></form>'
        )
+    category_buttons = "".join(
+        f'<button type="submit" name="category" value="{escape(name, quote=True)}"'
+        f' aria-pressed="{str(name == category_request).lower()}">{escape(name)}</button>'
+        for name in get_config()["topics"]
+    )
+    all_current = ' aria-current="page"' if category_request is None else ""
+    categories = (
+        f'<form class="news-categories" method="post" action="{escape(url_link.rstrip("/"), quote=True)}/read/category"'
+        ' aria-label="News categories">'
+        f'<a href="{escape(url_link.rstrip("/"), quote=True)}/read"{all_current}>All news</a>'
+        + category_buttons
+        + '</form>'
+    )
     return (
         page_start
         + f'<h1>{escape(get_config()["title"])}</h1>'
+        + categories
         + search
         + f'<ul class="news-grid">{output}</ul>'
         + '</main></body></html>'
@@ -563,7 +584,7 @@ def generate_transcriptions_list_page(url_link, search_request = None):
 
 def _render_read_article(url_link, fn, entry, content, full=False, share_html=""):
     site_title = get_config()["title"]
-    title = entry.find("title").text or "Без заголовка"
+    title = entry.find("title").text or "Untitled"
     base_url = url_link.rstrip('/')
     read_url = f"{base_url}/read/{quote(fn, safe='')}"
     back_url = f"{base_url}/read#{quote(fn, safe='')}"
@@ -603,7 +624,7 @@ def _render_read_article(url_link, fn, entry, content, full=False, share_html=""
     )
     image_html = (
         '<button type="button" class="image-toggle reader-image-toggle" data-image-toggle'
-        ' aria-expanded="false" aria-label="Збільшити зображення" title="Збільшити зображення">'
+        ' aria-expanded="false" aria-label="Enlarge image" title="Enlarge image">'
         f'<img class="reader-image" src="{escape(safe_content_url(image_url), quote=True)}" alt="{escape(title, quote=True)}">'
         '</button>'
         if image_url else ""
