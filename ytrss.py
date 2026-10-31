@@ -524,7 +524,7 @@ def read_transcription(filename):
     global url_link
     return generate_transcription_page(url_link, filename)
 
-@app.route("/read/<filename>/share")
+@app.route("/read_ext/<filename>/share")
 def read_transcription_share(filename):
     global url_link
     get_share_url(filename, force=True)

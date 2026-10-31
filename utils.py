@@ -16,6 +16,7 @@ from lxml import etree
 from tinyurl import get_share_url
 import json
 from html import escape
+from markdown import Markdown
 from urllib.parse import quote, urlsplit
 from werkzeug.exceptions import NotFound
 from web_ui import page_start as _read_page_start
@@ -62,6 +63,20 @@ def sanitize_html(fragment):
         strip=True,
         strip_comments=True,
     )
+
+
+def render_markdown(text):
+    """Format a transcript while keeping source HTML literal and links safe."""
+    if bleach is None:
+        return "".join(f"<p>{escape(line)}</p>" for line in text.splitlines() if line.strip())
+    # Each request gets its own parser and reference-link state.
+    parser = Markdown(
+        extensions=["fenced_code", "tables", "sane_lists", "nl2br"],
+        output_format="html",
+    )
+    parser.preprocessors.deregister("html_block")
+    parser.inlinePatterns.deregister("html")
+    return sanitize_html(parser.convert(text))
 
 
 def media_file_path(filename):
@@ -575,9 +590,10 @@ def _render_read_article(url_link, fn, entry, content, full=False, share_html=""
             f'<a target="_blank" rel="noopener noreferrer" href="{escape(safe_content_url(enclosure_url), quote=True)}">'
             'enclosure</a>'
         )
-    alternate_link = f'<a href="{escape(alternate_url, quote=True)}">{alternate_label}</a>'
-    back_link = f'<a href="{escape(back_url, quote=True)}">Back to list</a>'
-    actions += alternate_link + back_link
+    alternate_class = ' class="reader-summary"' if full else ' class="reader-full-text"'
+    alternate_link = f'<a{alternate_class} href="{escape(alternate_url, quote=True)}">{alternate_label}</a>'
+    back_link = f'<a class="reader-back" href="{escape(back_url, quote=True)}">Back to list</a>'
+    actions = back_link + actions + alternate_link
 
     image_element = entry.find("image")
     image_url = (
@@ -589,7 +605,7 @@ def _render_read_article(url_link, fn, entry, content, full=False, share_html=""
         if image_url else ""
     )
     share_section = f'<div class="reader-share">{share_html}</div>' if share_html else ""
-    footer = back_link if full else alternate_link + back_link
+    footer = back_link if full else back_link + alternate_link
     return _read_page_start(f"{site_title} - {title}", "reader-page") + f"""
 <article class="reader-card">
   <header class="reader-header">
@@ -628,16 +644,13 @@ def generate_transcription_page(url_link, fn):
             if short_url:
                 share_html = clp_copy_button(f"{title_element.text}:\n{short_url}")
             else:
-                share_url = f"{url_link.rstrip('/')}/read/{quote(fn, safe='')}/share"
+                share_url = f"{url_link.rstrip('/')}/read_ext/{quote(fn, safe='')}/share"
                 share_html = f'<a href="{escape(share_url, quote=True)}">Get shareable link</a>'
 
         output = ""
         if os.path.exists(transcription_path):
-            with open(transcription_path, "r") as stream:
-                string_list = stream.read().split('\n')
-            for line in string_list:
-                if line.strip() != "":
-                    output += f"<p>{escape(line)}</p>"
+            with open(transcription_path, "r", encoding="utf-8") as stream:
+                output = render_markdown(stream.read())
         elif entry.find("summary") is not None and entry.find("summary").text is not None:
             output = sanitize_html(entry.find("summary").text)
         return _render_read_article(url_link, fn, entry, output, share_html=share_html)
@@ -659,12 +672,8 @@ def generate_full_transcription_page(url_link, fn):
         age = datetime.now() - modified_time
         output = ""
         if os.path.exists(srt_path):
-            with open(srt_path, "r") as stream:
-                string_list = filter_subs(stream.read())
-            for chunk in string_list:
-              for line in chunk.splitlines():
-                if line.strip() != "":
-                    output += f"<p>{escape(line)}</p>"
+            with open(srt_path, "r", encoding="utf-8") as stream:
+                output = render_markdown(stream.read())
         elif entry.find("summary") is not None and entry.find("summary").text is not None:
             output = sanitize_html(entry.find("summary").text)
         return _render_read_article(url_link, fn, entry, output, full=True)

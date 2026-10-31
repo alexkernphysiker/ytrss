@@ -150,12 +150,42 @@ def page_start(title, main_class="", refresh_interval=None):
       outline: 3px solid #315eca;
       outline-offset: 2px;
     }
+    .reader-actions a.reader-full-text, .reader-footer a.reader-full-text,
+    .reader-actions a.reader-summary, .reader-footer a.reader-summary {
+      background: #315eca;
+      border-color: #315eca;
+      color: #fff;
+      font-weight: 600;
+    }
+    .reader-actions a.reader-full-text:hover, .reader-footer a.reader-full-text:hover,
+    .reader-actions a.reader-summary:hover, .reader-footer a.reader-summary:hover {
+      background: #254ba2;
+      border-color: #254ba2;
+    }
+    .reader-actions a.reader-back, .reader-footer a.reader-back {
+      background: #e1e6ed;
+      border-color: #b8c2cf;
+      color: #1d2734;
+    }
+    .reader-actions a.reader-back:hover, .reader-footer a.reader-back:hover {
+      background: #d2d9e3;
+    }
     .reader-share { padding: 18px 28px; border-bottom: 1px solid #e1e6ed; }
     .copy-widget { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
     .copy-widget [role="status"] { color: #596575; overflow-wrap: anywhere; }
-    .reader-text { padding: 28px; font-size: 1.05rem; line-height: 1.75; }
-    .reader-text > * { max-width: 75ch; margin-inline: auto; }
+    .reader-text {
+      max-width: calc(75ch + 56px); margin-inline: auto; padding: 28px;
+      font-size: 1.05rem; line-height: 1.75; overflow-wrap: anywhere;
+    }
+    .reader-text > * { max-width: 100%; margin-inline: 0; }
     .reader-text p { margin-top: 0; margin-bottom: 1em; overflow-wrap: anywhere; }
+    .reader-text :is(h1, h2, h3, h4, h5, h6) { line-height: 1.3; margin-block: 1.4em 0.6em; }
+    .reader-text :is(ul, ol) { padding-inline-start: 1.5em; }
+    .reader-text li + li { margin-top: 0.4em; }
+    .reader-text blockquote { border-left: 3px solid #c5ced9; padding-left: 1em; color: #596575; }
+    .reader-text table { display: block; overflow-x: auto; border-collapse: collapse; }
+    .reader-text th, .reader-text td { border: 1px solid #c5ced9; padding: 8px 12px; text-align: start; }
+    .reader-text > :first-child { margin-top: 0; }
     .reader-text > :last-child { margin-bottom: 0; }
     .reader-text img, .reader-text video, .reader-text iframe { max-width: 100%; }
     .reader-text img, .reader-text video { height: auto; }
