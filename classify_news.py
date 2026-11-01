@@ -326,15 +326,15 @@ def topic_vectors(model, topics, batch_size=8):
 
 
 @lru_cache(maxsize=8)
-def _category_context(model, topics_key, signature_key, dimension):
-    return model, signature_key, dimension, topics_key
+def _category_context(model, topics_key, signature_key, dimension, threshold, limit):
+    return model, signature_key, dimension, topics_key, threshold, limit
 
 
-def _cache_category(path, fingerprint, context, category):
+def _cache_category(path, fingerprint, context, categories):
     if time.time_ns() - fingerprint[4] < 1_000_000_000:
         return
     with _CATEGORY_CACHE_LOCK:
-        _CATEGORY_CACHE[path] = fingerprint, context, category
+        _CATEGORY_CACHE[path] = fingerprint, context, tuple(categories)
         _CATEGORY_CACHE.move_to_end(path)
         if len(_CATEGORY_CACHE) > 8192:
             _CATEGORY_CACHE.popitem(last=False)
@@ -355,33 +355,35 @@ def get_news_category(fn):
             else:
                 cached = None
         if cached is not None and cached[1] is None:
-            return None
+            return []
         saved = stored_vector(path.read_bytes()) if cached is None else None
-    except (FileNotFoundError, etree.XMLSyntaxError, ValueError, UnicodeError):
-        return None
+    except (OSError, etree.XMLSyntaxError, ValueError, UnicodeError):
+        return []
     if cached is None and saved is None:
-        _cache_category(path, fingerprint, None, None)
-        return None
+        _cache_category(path, fingerprint, None, [])
+        return []
     topics = get_config("topics")
     if not topics:
-        return None
+        return []
+    threshold = get_config("category_threshold")
+    limit = get_config("max_news_categories")
     context = _category_context(
         model, json.dumps(topics, ensure_ascii=False, separators=(",", ":")),
         json.dumps(model.signature, sort_keys=True, separators=(",", ":")),
-        model.dimension,
+        model.dimension, threshold, limit,
     )
     if cached is not None and cached[1] is context:
-        return cached[2]
+        return list(cached[2])
     if saved is None:
         try:
             saved = stored_vector(path.read_bytes())
-        except (FileNotFoundError, etree.XMLSyntaxError, ValueError, UnicodeError):
-            return None
+        except (OSError, etree.XMLSyntaxError, ValueError, UnicodeError):
+            return []
     if saved is None:
-        _cache_category(path, fingerprint, None, None)
-        return None
+        _cache_category(path, fingerprint, None, [])
+        return []
     vector, signature, _ = saved
-    category = None
+    categories = []
     if signature == model.signature and valid_vector(vector, model.dimension):
         centers = topic_vectors(model, topics)
         scores = {
@@ -389,9 +391,12 @@ def get_news_category(fn):
                        for center in prototypes)
             for topic, prototypes in centers.items()
         }
-        category = max(scores, key=scores.get)
-    _cache_category(path, fingerprint, context, category)
-    return category
+        categories = [
+            topic for topic in sorted(scores, key=scores.get, reverse=True)
+            if scores[topic] > threshold
+        ][:limit]
+    _cache_category(path, fingerprint, context, categories)
+    return categories
 
 
 def positive_integer(value):

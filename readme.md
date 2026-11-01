@@ -176,6 +176,8 @@ For example, merge a fragment like this into the existing configuration:
 
 ```json
 {
+  "category_threshold": 0.86,
+  "max_news_categories": 3,
   "topics": {
     "culture": [
       [
@@ -204,16 +206,27 @@ For example, merge a fragment like this into the existing configuration:
 
 The model embeds the descriptions, averages and normalizes the vectors within
 each prototype, and compares the news vector with those prototypes using cosine
-similarity. A category's score is its best prototype score; the category with
-the highest score wins. Names are display labels, so describe all the subjects
-that belong together. For example, sport needs a prototype under culture if it
-should share that category with cinema and music.
+similarity. A category's score is its best prototype score. Categories with
+scores strictly greater than `category_threshold` (default `0.86`) are ranked
+in descending score order, and at most `max_news_categories` (default `3`)
+are assigned to the item. Both settings are read from `ytrss_config.json`
+on each lookup, so edits take effect without restarting or recomputing news
+embeddings. Equal scores preserve configuration order. Names are display labels,
+so describe all the subjects that belong together. For example, sport needs a
+prototype under culture if it should share that category with cinema and music.
 
-There is no minimum similarity threshold: any item with a compatible embedding
-and a valid, nonempty topic configuration receives one category. Missing,
-invalid, or incompatible embeddings leave the item uncategorized. Changing the
-topic names or descriptions updates classification on the next lookup without
-recomputing news embeddings.
+The comparison is strict: with the default threshold, a score of exactly
+`0.86` does not qualify. An item can belong to up to three categories by default
+or none. Missing, invalid, or incompatible embeddings, an empty topic
+configuration, and scores below or equal to the threshold all produce an empty
+category list. The reader labels these items
+`unclassified` and adds a matching filter after all configured category buttons.
+This is a built-in reader category; reserve the name `unclassified` rather than
+adding it as a topic description.
+
+These scores measure semantic similarity, not classification probabilities.
+Changing topic names or descriptions updates classification on the next lookup
+without recomputing news embeddings.
 
 ### Computing and storing embeddings
 
@@ -254,12 +267,15 @@ or extension:
 from classify_news import get_news_category, save_news_vector
 
 save_news_vector("episode-id")
-category = get_news_category("episode-id")
+categories = get_news_category("episode-id")
 ```
 
 `save_news_vector(fn)` creates or refreshes the saved embedding and returns its
 coordinates. `get_news_category(fn)` uses the existing embedding and returns a
-configured category name, or `None` if no usable embedding is available or
+list containing at most `max_news_categories` configured category names whose
+scores exceed `category_threshold`, ordered from highest to lowest score.
+The defaults are three categories and a threshold of `0.86`. It returns `[]`
+when no category qualifies, metadata or a usable vector is unavailable, or
 `topics` is empty. Category lookup does not compute a new news embedding.
 
 After writing a nonempty annotation/transcript, `transcribe_video()` calls
@@ -270,9 +286,11 @@ above. Manually editing a `.txt` file also requires calling
 
 Prototype vectors and category results are cached in memory. The result cache
 holds up to 8,192 entries and checks XML file metadata, the topic configuration,
-and the encoder identity/signature before reuse. Files changed within the last
-second are not added to the result cache, avoiding stale results after rapid
-writes with identical filesystem timestamps. These caches are rebuilt after a
+the similarity threshold, the category limit, and the encoder identity/signature
+before reuse.
+Returned lists are independent copies, so modifying one does not change cached
+results. Files changed within the last second are not added to the result cache,
+avoiding stale results after rapid writes with identical filesystem timestamps. These caches are rebuilt after a
 process restart.
 
 ### Model download and runtime
@@ -371,11 +389,16 @@ The main output endpoints are:
 - `/feed` serves the combined RSS 2.0 feed (`application/rss+xml`).
 - `/read` lists saved news with category badges, category buttons, and text search.
 - `/read/category` accepts POST form field `category` and lists only that
-  category. Buttons above the search box use names from `topics`; **All news**
-  returns to the complete list.
+  category, including items that also belong to other categories. Buttons above
+  the search box use names from `topics`; `unclassified` is the last button and
+  selects items with an empty category list. **All news** returns to the complete
+  list. Each card shows every matching category, or `unclassified` when none
+  match.
 - `/read/search` accepts POST form field `search_request` and searches titles
   and descriptions.
 - `/read/<episode>` shows the saved annotation/transcript or extracted text.
+  The summary and full-text pages display category badges below the title,
+  ordered by relevance, or `unclassified` when no category matches.
 - `/read/<episode>/full` shows the full subtitle text when available.
 - `/read_ext/<episode>/share` creates a TinyURL for an episode's transcription
   page and redirects back to that page.

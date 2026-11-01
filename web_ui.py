@@ -179,6 +179,12 @@ def page_start(title, main_class="", refresh_interval=None):
       font-weight: 600;
       overflow-wrap: anywhere;
     }
+    .reader-categories {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
     .reader-actions, .reader-footer {
       display: flex;
       flex-wrap: wrap;

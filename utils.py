@@ -397,7 +397,12 @@ def generate_atom_feed(url_link, is_public):
         if age > timedelta(days=get_config()["deliver_days"]):
             continue
         descr = sanitize_html(description_element.text or "")
-        description_element.text = ""
+        news_categories = get_news_category(fn)
+        description_element.text = ",".join(
+            f'<span>{escape(name)}</span>'
+            for name in news_categories
+        )
+
         if os.path.exists(log_path) and not os.path.exists(transcription_path) and not is_public:
             log_content = open(log_path, "r").read()
             description_element.text += "<p>[LOG]</p> <br/>" + escape(log_content) + "<br/>"
@@ -407,7 +412,7 @@ def generate_atom_feed(url_link, is_public):
             auto_transcription = auto_transcription_element.text=="true"
         if os.path.exists(transcription_path):
                 with open(transcription_path, "r", encoding="utf-8") as stream:
-                    description_element.text = render_markdown(stream.read())
+                    description_element.text += render_markdown(stream.read())
                 if get_config()["re-transcription"]:
                     transcribe_link = f"<br/> <a>Get new text version</a> <a>|</a> "
                     for engine, engine_name in get_engine_map().items():
@@ -513,9 +518,17 @@ def generate_transcriptions_list_page(url_link, category_request=None, search_re
             if age < timedelta(hours=get_config()["auto_transcript_hours"]+1):
                 continue # will wait for transcription and final deduplication
 
-        category = get_news_category(fn)
-        if category_request is not None and category != category_request:
-            continue
+        news_categories = get_news_category(fn)
+        if category_request is not None:
+            if category_request == "unclassified":
+                if news_categories:
+                    continue
+            elif category_request not in news_categories:
+                continue
+        category_badges = "".join(
+            f'<span class="news-category">{escape(name)}</span>'
+            for name in news_categories
+        ) or '<span class="news-category">unclassified</span>'
         news_url = f"{url_link.rstrip('/')}/read/{quote(fn, safe='')}"
         image_element = entry.find("image")
         image_url = (
@@ -537,7 +550,7 @@ def generate_transcriptions_list_page(url_link, category_request=None, search_re
         <time class="news-time" datetime="{modified_time.isoformat(timespec='seconds')}">
           {modified_time.strftime("%d.%m.%Y, %H:%M")}
         </time>
-        <span class="news-category">{escape(category or "Uncategorized")}</span>
+        {category_badges}
       </div>
     </div>
   </a>
@@ -560,10 +573,13 @@ def generate_transcriptions_list_page(url_link, category_request=None, search_re
            f'<form class="news-search" method="get" action="{escape(url_link, quote=True)}/read">'
            '<button type="submit">Back to list</button></form>'
        )
+    category_names = [
+        name for name in get_config()["topics"] if name != "unclassified"
+    ] + ["unclassified"]
     category_buttons = "".join(
         f'<button type="submit" name="category" value="{escape(name, quote=True)}"'
         f' aria-pressed="{str(name == category_request).lower()}">{escape(name)}</button>'
-        for name in get_config()["topics"]
+        for name in category_names
     )
     all_current = ' aria-current="page"' if category_request is None else ""
     categories = (
@@ -590,6 +606,10 @@ def _render_read_article(url_link, fn, entry, content, full=False, share_html=""
     back_url = f"{base_url}/read#{quote(fn, safe='')}"
     alternate_label = "Summary" if full else "Full text"
     alternate_url = read_url if full else f"{read_url}/full"
+    category_badges = "".join(
+        f'<span class="news-category">{escape(name)}</span>'
+        for name in get_news_category(fn)
+    ) or '<span class="news-category">unclassified</span>'
 
     link_element = entry.find("link")
     listen_url = safe_content_url(
@@ -638,6 +658,7 @@ def _render_read_article(url_link, fn, entry, content, full=False, share_html=""
     <div class="reader-heading">
       <p class="reader-site">{escape(site_title)}</p>
       <h1 class="reader-title">{escape(title)}</h1>
+      <div class="reader-categories" aria-label="Article categories">{category_badges}</div>
     </div>
   </header>
   <nav class="reader-actions" aria-label="Article actions">{actions}</nav>

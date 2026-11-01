@@ -67,6 +67,8 @@ def default_config():
         "summarize_min_length": 7168,
         "tinyurl_key": "",
         "topics": {},
+        "category_threshold": 0.80,
+        "max_news_categories": 3,
     }
 
 class ConfigStore:
