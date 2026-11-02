@@ -278,9 +278,14 @@ def get_rss_name(link):
     try:
         response = requests.get(link, timeout=20, headers=get_config()["headers"])
         if response.status_code == 200:
-            rss = parse_xml_response(response)  
-            channel = rss.find("channel")
-            source_name = channel.find("title").text
+            rss = parse_xml_response(response)
+            if rss.tag == "{http://www.w3.org/2005/Atom}feed":
+                title = rss.find("{http://www.w3.org/2005/Atom}title")
+            else:
+                title = rss.find("channel/title")
+            source_name = "".join(title.itertext()).strip() if title is not None else ""
+            if not source_name:
+                return ""
             with edit_config() as cfg:
                 cfg["rss_names_dict"][link] = source_name
             return source_name

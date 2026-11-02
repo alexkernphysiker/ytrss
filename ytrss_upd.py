@@ -6,6 +6,7 @@ import yt_dlp
 import string
 import re
 import requests
+import feedparser
 from xml.etree import ElementTree
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -164,7 +165,28 @@ def write_description(entry, description_path):
         stream.write(item_string)
 
 
-def parce_rss_item(link):
+def _fetch_feed_response(link):
+    secure_wait()
+    cfg = get_config()
+    return requests.get(
+        link, timeout=60, headers=cfg["headers"], proxies=cfg.get("proxies-rss"),
+    )
+
+
+def is_atom_item(link, response=None):
+    """Recognize an Atom 1.0 feed; reuse a response when dispatching updates."""
+    try:
+        if response is None:
+            response = _fetch_feed_response(link)
+        return (
+            response.status_code == 200
+            and parse_xml_response(response).tag == "{http://www.w3.org/2005/Atom}feed"
+        )
+    except (requests.RequestException, ElementTree.ParseError):
+        return False
+
+
+def parce_rss_item(link, response=None):
         from lxml import etree
         NS = {
             "itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd",
@@ -177,8 +199,8 @@ def parce_rss_item(link):
             etree.register_namespace(ns_name, NS[ns_name])
 
         try:
-            secure_wait()
-            response = requests.get(link, timeout=60, headers=get_config()["headers"], proxies=get_config().get("proxies-rss"))
+            if response is None:
+                response = _fetch_feed_response(link)
             if response.status_code == 200:
                 rss = parse_xml_response(response)
                 channel = rss.find("channel", NS)
@@ -339,6 +361,161 @@ def parce_rss_item(link):
         except requests.RequestException as e:
             print(f"Error fetching {link}: {e}")
         return
+
+
+def _atom_html_content(detail):
+    value = detail.get("value") or ""
+    if detail.get("type", "text/plain") in ("text", "text/plain"):
+        return "\n".join(f"<p>{escape(line)}</p>" for line in value.splitlines() if line.strip())
+    return value
+
+
+def parce_atom_item(link, response=None):
+    """Import Atom articles/enclosures into the same metadata and queue as RSS."""
+    try:
+        if response is None:
+            response = _fetch_feed_response(link)
+        if response.status_code != 200:
+            print(f"Failed to fetch {link}: HTTP {response.status_code}")
+            return
+        if not is_atom_item(link, response=response):
+            raise ValueError("Atom feed has no Atom 1.0 feed root.")
+        # The final response URL supplies a base for relative Atom/HTML links.
+        parsed = feedparser.parse(
+            response.content,
+            response_headers={"content-location": getattr(response, "url", None) or link},
+        )
+        source_name = parsed.feed.get("title", "")
+        if not source_name:
+            raise ValueError("Atom feed has no title.")
+        print(f"{link}: {source_name}")
+        for entry in parsed.entries:
+            try:
+                title = entry.get("title", "")
+                if not title:
+                    print(f"Skipping entry with no title in source {source_name}")
+                    continue
+                published = entry.get("published") or entry.get("updated")
+                if not published:
+                    print(f"Skipping entry with no published/updated date in source {source_name}")
+                    continue
+                insertion_date = convert_date_to_iso_with_pendulum(published).astimezone(timezone.utc)
+                time_since_insertion = datetime.now(timezone.utc) - insertion_date
+                if time_since_insertion >= timedelta(days=get_config()["deliver_days"]):
+                    continue
+                updated_date = convert_date_to_iso_with_pendulum(entry.get("updated") or published).astimezone(timezone.utc)
+                alternate_links = [
+                    item for item in entry.get("links", [])
+                    if item.get("rel", "alternate") == "alternate" and item.get("href")
+                ]
+                alternate_links.sort(
+                    key=lambda item: item.get("type", "text/html") not in ("text/html", "application/xhtml+xml"),
+                )
+                article_link = alternate_links[0]["href"] if alternate_links else None
+                source_enclosure = next(
+                    (item for item in entry.get("enclosures", []) if item.get("href")), None,
+                )
+                # Atom IDs stay stable even when an article URL or title changes.
+                entry_id = entry.get("id") or article_link
+                if not entry_id and source_enclosure is not None:
+                    entry_id = source_enclosure["href"]
+                if not entry_id:
+                    print(f"Skipping entry with no id, link or enclosure in source {source_name}")
+                    continue
+                fn = hashlib.sha256((link + "\n" + entry_id).encode()).hexdigest()
+                description_path = "yt-video/" + fn + ".desc"
+                description = _atom_html_content(entry.get("summary_detail", {}))
+                for content in entry.get("content", []):
+                    if content.get("value") and content.get("type") in (
+                        "text", "text/plain", "text/html", "application/xhtml+xml",
+                    ):
+                        description = _atom_html_content(content)
+                        break
+                if not os.path.exists(description_path):
+                    duplicate_fn = find_duplicate_episode(
+                        {"id": fn, "title": title, "description": description},
+                        threshold=get_config()["duplicate_detection_threshold"],
+                    )
+                    if duplicate_fn is not None:
+                        if get_enclosure_link(duplicate_fn) is not None or source_enclosure is None:
+                            print(f"Duplicate episode found for {fn}, skipping download. Duplicate ID: {duplicate_fn}")
+                            continue
+                else:
+                    parser = etree.XMLParser(encoding="utf-8", recover=True)
+                    previous = etree.parse(description_path, parser)
+                    if previous.findtext("duplicate") == "true":
+                        print(f"Episode {fn} is marked as duplicate, skipping download.")
+                        continue
+
+                entry_element = ElementTree.Element("entry")
+                ElementTree.SubElement(entry_element, "title").text = "[" + source_name + "] " + title
+                ElementTree.SubElement(entry_element, "id").text = fn
+                if article_link:
+                    ElementTree.SubElement(entry_element, "link", href=article_link)
+                ElementTree.SubElement(entry_element, "published").text = insertion_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+                ElementTree.SubElement(entry_element, "updated").text = updated_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+                ElementTree.SubElement(entry_element, "summary").text = description
+
+                article = None
+                img_url = get_previous_image_url(fn)
+                if img_url is None:
+                    thumbnails = entry.get("media_thumbnail", [])
+                    img_url = next((item["url"] for item in thumbnails if item.get("url")), None)
+                if img_url is None and article_link and description:
+                    img_url = find_largest_image_in_html(description, article_link)
+                if img_url is None and article_link and source_enclosure is None:
+                    article = fetch_readable_article(
+                        article_link, headers=get_config()["headers"],
+                        proxies=get_config().get("proxies-rss"),
+                    )
+                    if article is not None and looks_like_full_article(article["html"]):
+                        img_url = find_metadata_image(article["full_content"], article_link)
+                if img_url:
+                    ElementTree.SubElement(entry_element, "image", href=img_url)
+
+                srt_path = "yt-video/" + fn + ".srt"
+                if source_enclosure is not None:
+                    ElementTree.SubElement(
+                        entry_element, "enclosure", url=source_enclosure["href"],
+                        type=source_enclosure.get("type") or "application/octet-stream",
+                        length=source_enclosure.get("length") or "0",
+                    )
+                else:
+                    if looks_like_full_article(description):
+                        Path(srt_path).write_text(extract_plain_text(description), encoding="utf-8")
+                    if not os.path.exists(srt_path):
+                        if article is None and article_link:
+                            article = fetch_readable_article(
+                                article_link, headers=get_config()["headers"],
+                                proxies=get_config().get("proxies-rss"),
+                            )
+                        if article is not None:
+                            if html_text_length(article["html"]) > html_text_length(description) \
+                                    and looks_like_full_article(article["html"]):
+                                Path(srt_path).write_text(extract_plain_text(article["html"]), encoding="utf-8")
+
+                duration = get_duration(source_enclosure["href"]) if source_enclosure is not None else None
+                if duration is not None:
+                    ElementTree.SubElement(entry_element, "duration").text = str(duration)
+                auto_transcription = link not in get_config()["sources_with_disabled_auto_transcription"]
+                ElementTree.SubElement(entry_element, "auto_transcription").text = "true" if auto_transcription else "false"
+                write_description(entry_element, description_path)
+                mod_time = mktime(insertion_date.timetuple())
+                os.utime(description_path, (mod_time, mod_time))
+                transcription_path = "yt-video/" + fn + ".txt"
+                for path in (srt_path, transcription_path):
+                    if os.path.exists(path):
+                        os.utime(path, (mod_time, mod_time))
+                if get_config()["auto_transcript_hours"] > 0:
+                    if time_since_insertion < timedelta(hours=get_config()["auto_transcript_hours"]):
+                        if auto_transcription and not os.path.exists(transcription_path):
+                            if transcription_queues.enqueue(AUTO_RSS, fn):
+                                print(f"Automatically scheduled Atom transcription {fn}")
+            except Exception:
+                print("Error processing Atom feed entry; skipping it.")
+                traceback.print_exc()
+    except requests.RequestException as error:
+        print(f"Error fetching {link}: {error}")
 
 def parce_yt_item(link):
         secure_wait()
@@ -512,7 +689,11 @@ def update_channels_feed():
             if "youtube.com" in link:
                 parce_yt_item(link)
             else:
-                parce_rss_item(link)
+                response = _fetch_feed_response(link)
+                if is_atom_item(link, response=response):
+                    parce_atom_item(link, response=response)
+                else:
+                    parce_rss_item(link, response=response)
         except Exception:
             print("Error processing feed source; continuing with remaining sources.")
             traceback.print_exc()
