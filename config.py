@@ -90,6 +90,7 @@ def default_config():
             "wystąpienia podsumowanie"
         ),
         "topics": {},
+        "categories": {},
     }
 
 class ConfigStore:
@@ -161,7 +162,8 @@ class ConfigStore:
             yield settings
             self._normalize(settings)
             if (settings != self._config
-                    or list(settings["topics"]) != list(self._config["topics"])):
+                    or any(list(settings[key]) != list(self._config[key])
+                           for key in ("topics", "categories"))):
                 self._write(settings)
                 # Do not let a caller retain a mutable reference to our state.
                 self._config = deepcopy(settings)

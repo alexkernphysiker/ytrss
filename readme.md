@@ -102,7 +102,8 @@ Main settings:
 | wait_for_download_hours | 3 | How long to wait for new YouTube media or subtitles. |
 | yt-dlp-enabled | true | Enable YouTube interaction through yt-dlp. |
 | yt-dlp-formats | format fallbacks | Ordered download format arguments. |
-| topics | {} | Group names mapped to their centroid vectors. |
+| topics | {} | Automatic group phrases mapped to centroid vectors. |
+| categories | {} | Category names mapped to lists of automatic group names. |
 | grouping_stop_words | Multilingual string in config.py | Space-separated words excluded from automatic group names. |
 
 See default_config() in config.py for the complete schema, including proxy
@@ -138,7 +139,10 @@ Capabilities differ by engine:
 
 ## Grouping
 
-Groups are empty by default. Collect some items before configuring them.
+The classification has two levels: automatically discovered groups and
+administrator-defined categories. Both `topics` and `categories` are empty by
+default. Readers see categories; automatic group names are used only in settings.
+
 Items need current saved embeddings to participate in automatic grouping.
 To generate or refresh embeddings for existing items, run:
 
@@ -150,21 +154,28 @@ existing vectors. It supports --data-dir and --batch-size.
 
 Open Grouping in the configuration navigation, after Auto-downloading:
 
-1. Enter the desired number of groups, from 0 to 10.
-2. Select auto-config to discover groups and replace the existing group list.
-3. Edit a group name and select change name to rename it.
+1. Enter the desired number of automatic groups, from 0 to 32, and select
+   auto-config. The field starts with the current automatic group count.
+2. Create categories in the left column. Each new category starts empty.
+   Select a category to manage its groups, or use Rename and Delete beside it.
+3. Select unassigned automatic groups in the right column and use Add selected.
+   Assigned groups appear in the middle column; Remove selected releases them.
 
-The number field starts with the current group count. A value of 0 clears all
-groups. Auto-config may take a minute and replaces existing names as well as
-centroids. Renaming preserves the centroid and group order. Empty, duplicate
-and reserved unclassified names are rejected.
+An automatic group can belong to only one category. Multiple automatic groups
+can share a category. Removing a category releases all its groups. Category names
+must be nonempty and unique; unclassified is reserved. Automatic group names
+cannot be edited.
+
+Every auto-config replaces the automatic groups and clears all category
+memberships, even when some generated names remain the same. Category names
+and their order are preserved. A group count of 0 clears all automatic groups
+and memberships. Processing may take some time.
 
 Discovery uses K-means on existing news vectors. Automatic names are extracted
-phrases ranked by similarity to each group's center, so they may need editing.
-Groups with insufficient naming text receive a Group N label. Discovery skips
-duplicate items and missing, stale or incompatible embeddings. If the requested
-number exceeds the number of distinct usable vectors, the configuration is
-left unchanged.
+phrases ranked by similarity to each group's center. Groups with insufficient
+naming text receive a Group N label. Discovery skips duplicate items and
+missing, stale or incompatible embeddings. If the requested number exceeds the
+number of distinct usable vectors, the configuration is left unchanged.
 
 The grouping_stop_words setting is a single string with words separated by
 spaces. It defaults to the multilingual list in config.py. Matching ignores
@@ -173,27 +184,32 @@ ytrss_config.json before the next auto-config run to change the words excluded
 from candidate names. This affects automatic naming only; news vectors and the
 clustering calculation do not use this setting.
 
-Classification assigns an item to its nearest configured centroid. Every item
-with a compatible vector belongs to one group when groups exist. Other items
-display unclassified. The news-list buttons show only configured groups.
+Classification first finds the nearest automatic group, then looks up its
+category. If that group has no category, the item is unclassified. It does not
+fall back to another group. Items without a usable vector are also displayed
+as unclassified. Navigation shows only administrator-defined categories.
 
-### Topic feeds and OPML
+### Category feeds and OPML
 
-The combined RSS feed at /feed includes each item's group in a standard
-category element. Group names are not added to the item description.
+The combined RSS feed at /feed includes each item's category in a standard
+category element, using unclassified for items without an assigned category.
+Category names are not added to the item description.
 
-Import /feed/categorized as an OPML subscription list in an RSS reader to add
-the configured groups as separate feeds. The list contains one folder named
-after the configured feed title. Its entries point to /feed/category/0,
-/feed/category/1 and so on. Each topic feed contains only that group's items,
-with the same article identifiers, descriptions and media as the combined feed.
-Topic feed titles use "configured feed title - group name" in both RSS and OPML.
+Select Save OPML on the Grouping page to download ytrss.opml and import it into
+an RSS reader. Alternatively, import /feed/categorized as an OPML subscription
+list by URL to add the configured categories as separate feeds. The list contains
+one folder named after the configured feed title. Its entries point to
+/feed/category/0, /feed/category/1 and so on. Each feed contains only that
+category's items, with the same article identifiers, descriptions and media as
+the combined feed. Category feed titles use "configured feed title - category name"
+in both RSS and OPML. Unclassified has no navigation button or separate OPML feed.
 
-IDs are zero-based positions in the topics dictionary. Renaming a group through
-Grouping preserves its position and address. Reordering topics or running
-auto-config can change which group a number represents. A number outside the
-current group list returns HTTP 404. With no configured groups, the OPML
-contains an empty folder and no topic subscriptions.
+IDs are zero-based positions in the categories dictionary. Renaming a category
+through Grouping preserves its position and address. Deleting or reordering
+categories can change which category a number represents. Auto-config preserves
+category IDs but leaves their feeds empty until groups are assigned again.
+A number outside the current category list returns HTTP 404. With no configured
+categories, the OPML contains an empty folder and no category subscriptions.
 
 For example, with the default local address, import
 http://127.0.0.1:5000/feed/categorized using the reader's OPML import option.
@@ -202,9 +218,21 @@ removals automatically requires a reader that supports OPML subscriptions.
 
 ### Group representation and Python API
 
-The topics dictionary maps displayed names to raw 768-coordinate centroid
-arrays. Keep centroids at their original lengths; classification uses Euclidean
-distance, rather than normalizing them for cosine comparison.
+The topics dictionary maps generated group phrases to raw 768-coordinate
+centroid arrays. Keep centroids at their original lengths; classification uses
+Euclidean distance, rather than normalizing them for cosine comparison.
+
+The categories dictionary maps category names to lists of keys from topics.
+For example, after discovery creates groups named "Space exploration" and
+"Medical research", both can be assigned to one category:
+
+    "categories": {
+      "Science": ["Space exploration", "Medical research"],
+      "Culture": []
+    }
+
+Every referenced group must exist in topics and can occur only once across
+all category lists.
 
 The multilingual encoder is
 sentence-transformers/paraphrase-multilingual-mpnet-base-v2. Input is the title
@@ -223,15 +251,18 @@ Python callers can use:
     vector = save_news_vector("episode-id")
     categories = get_news_category("episode-id")
 
-find_groups returns a dictionary suitable for topics and does not change the
-configuration or compute missing news embeddings. get_news_category returns
-[group_name] or [] using the saved vector. Renaming or replacing groups does
-not require recalculating news vectors.
+find_groups accepts a count from 0 to 32 and returns a dictionary suitable for
+topics. It does not change the configuration or compute missing news embeddings.
+get_news_category returns [category_name], or ["unclassified"] when the nearest
+group is unassigned. It returns [] for missing or incompatible vectors, or
+when no automatic groups exist. Reading pages and RSS display those items as
+unclassified. Changing groups, categories or memberships does not require
+recalculating news vectors.
 
 Embeddings include the encoder signature and an input-text hash. Preserve the
 model revision and pooling method when reusing vectors and centroids.
 Classification results are cached in process memory and invalidated when
-metadata or group definitions change.
+metadata, group definitions or category memberships change.
 
 To download the model before starting the server:
 
@@ -245,8 +276,9 @@ After the complete model is cached, Hugging Face network access can be disabled:
 
 - /config opens subscription and processing settings.
 - /read lists saved news with categories and text search.
-- /read/category filters by a configured group.
-- /read/<episode> shows saved annotation or article text.
+- /read/category filters by an administrator-defined category.
+- /read/<episode> shows saved annotation or article text, with its category
+  and automatic group below the title.
 - /read/<episode>/full shows complete subtitles when available.
 - /feed serves the combined RSS 2.0 feed.
 

@@ -14,6 +14,7 @@ from config import edit_config, get_config
 from transcription_queue import transcription_queues
 from web_ui import page_start
 from group_news import MAX_GROUPS, find_groups
+from news_categories import UNCLASSIFIED, category_owners
 from werkzeug.exceptions import BadRequest, Conflict, HTTPException, NotFound
 
  
@@ -139,31 +140,108 @@ def config_page():
 _GROUPING_JOB_LOCK = Lock()
 
 
+def _category_redirect(name=None):
+    values = {"_anchor": "category-editor"}
+    if name is not None:
+        values["category"] = name
+    return redirect(url_for("grouping", **values))
+
+
+def _checked_category_owners(settings):
+    try:
+        return category_owners(settings["topics"], settings["categories"])
+    except ValueError as error:
+        raise BadRequest(str(error)) from error
+
+
+def _require_category(settings, name):
+    if name not in settings["categories"]:
+        raise NotFound("This category no longer exists. Please reload the grouping page.")
+    return settings["categories"][name]
+
+
+def _new_category_name(field):
+    name = request.form.get(field, "").strip()
+    if not name:
+        raise BadRequest("The category name must not be empty.")
+    if name == UNCLASSIFIED:
+        raise BadRequest("The name unclassified is reserved.")
+    return name
+
+
 def _grouping_page():
-    topics = get_config("topics")
-    fields = "".join(
-        '<li class="service-item">'
-        f'<form class="grouping-rename" action="{url_for("change_group_name")}" method="post">'
-        f'<input type="hidden" name="old_name" value="{escape(name, quote=True)}">'
-        f'<input class="grouping-name-input" type="text" name="new_name"'
-        f' aria-label="Group {index} name" value="{escape(name, quote=True)}" required>'
-        '<input type="submit" value="change name"></form></li>'
-        for index, name in enumerate(topics, 1)
-    )
-    if not fields:
-        fields = '<li class="service-item">No groups configured.</li>'
+    settings = get_config()
+    topics, categories = settings["topics"], settings["categories"]
+    owners = _checked_category_owners(settings)
+    selected = request.args.get("category")
+    if selected not in categories:
+        selected = next(iter(categories), None)
+    category_items = []
+    for name in categories:
+        current = ' aria-current="page"' if name == selected else ""
+        active = " is-selected" if name == selected else ""
+        category_items.append(
+            f'<li class="category-item{active}">'
+            f'<a class="category-select" href="{escape(url_for("grouping", category=name, _anchor="category-editor"), quote=True)}"{current}>'
+            f'{escape(name)}</a>'
+            f'<form class="category-edit" action="{url_for("rename_category")}" method="post">'
+            f'<input type="hidden" name="category" value="{escape(name, quote=True)}">'
+            f'<input type="text" name="new_name" value="{escape(name, quote=True)}"'
+            ' aria-label="Category name" required>'
+            '<button type="submit">Rename</button>'
+            f'<button type="submit" formaction="{url_for("delete_category")}" formnovalidate>Delete</button>'
+            '</form></li>'
+        )
+    category_list = "".join(category_items) or '<li class="service-description">No categories created.</li>'
+
+    def group_choices(groups, disabled=False):
+        state = " disabled" if disabled else ""
+        return "".join(
+            '<label class="group-choice">'
+            f'<input type="checkbox" name="group" value="{escape(name, quote=True)}"{state}>'
+            f'<span>{escape(name)}</span></label>'
+            for name in groups
+        )
+
+    assigned = categories.get(selected, [])
+    available = [name for name in topics if name not in owners]
+    target = escape(selected or "", quote=True)
+    assigned_fields = group_choices(assigned) or '<p class="service-description">No groups assigned.</p>'
+    available_fields = group_choices(available, selected is None) or '<p class="service-description">No available groups.</p>'
+    remove_disabled = "" if assigned else " disabled"
+    add_disabled = "" if selected is not None and available else " disabled"
+    selection = escape(selected) if selected is not None else "No category selected"
     content = (
-        '<section class="service-panel"><h2>Automatic grouping</h2>'
-        f'<form id="grouping-auto-config" class="grouping-auto-form"'
-        f' action="{url_for("auto_config_groups")}" method="post">'
-        '<div class="grouping-count-field"><label for="group-count">Number of groups</label>'
+        '<section class="service-panel"><h2>Automatic groups</h2>'
+        f'<form id="grouping-auto-config" class="grouping-auto-form" action="{url_for("auto_config_groups")}" method="post">'
+        '<div class="grouping-count-field"><label for="group-count">Number of automatic groups</label>'
         f'<input type="number" id="group-count" name="group_count" min="0" max="{MAX_GROUPS}"'
         f' step="1" value="{len(topics)}" required></div>'
         '<input type="submit" value="auto-config"></form>'
-        '<p class="service-description">Auto-config replaces the current groups and their names. '
-        'Use 0 to clear all groups. Finding groups may take a minute.</p></section>'
-        '<section><h2 class="service-section-title">Group names</h2>'
-        f'<ul class="service-list">{fields}</ul></section>'
+        '<p class="service-description">Lower-level groups keep their generated names. '
+        'Auto-config replaces the groups and clears every category assignment. '
+        'Use 0 to clear all automatic groups. Processing may take some time.</p></section>'
+        f'<form id="grouping-opml-export" action="{url_for("categorized_feed_list")}" method="get">'
+        '<input type="hidden" name="download" value="1">'
+        '<input type="submit" value="Save OPML"></form>'
+        '<section id="category-editor" class="grouping-columns" aria-label="Category editor">'
+        '<section class="service-panel grouping-column"><h2>Categories</h2>'
+        f'<form class="category-create" action="{url_for("create_category")}" method="post">'
+        '<input type="text" name="name" aria-label="New category name" placeholder="New category name" required>'
+        '<button type="submit">Create category</button></form>'
+        f'<ul class="category-items">{category_list}</ul></section>'
+        '<section class="service-panel grouping-column"><h2>Assigned automatic groups</h2>'
+        f'<p class="service-description">{selection}</p>'
+        f'<form action="{url_for("remove_category_groups")}" method="post">'
+        f'<input type="hidden" name="category" value="{target}">'
+        f'<div class="group-choices">{assigned_fields}</div>'
+        f'<button type="submit"{remove_disabled}>Remove selected</button></form></section>'
+        '<section class="service-panel grouping-column"><h2>Available automatic groups</h2>'
+        '<p class="service-description">These groups do not belong to any category.</p>'
+        f'<form action="{url_for("add_category_groups")}" method="post">'
+        f'<input type="hidden" name="category" value="{target}">'
+        f'<div class="group-choices">{available_fields}</div>'
+        f'<button type="submit"{add_disabled}>Add selected</button></form></section></section>'
         '<script>document.getElementById("grouping-auto-config").addEventListener("submit",function(){'
         'const button=this.querySelector(\'input[type="submit"]\');'
         'button.disabled=true;button.value="Working…";});</script>'
@@ -193,33 +271,88 @@ def auto_config_groups():
         except ValueError as error:
             raise BadRequest(str(error)) from error
         with edit_config() as cfg:
-            if any(cfg[key] != previous[key] for key in ("topics", "grouping_stop_words")):
-                raise Conflict("Group settings changed while auto-config was running. Please try again.")
+            if (any(cfg[key] != previous[key] for key in ("topics", "categories", "grouping_stop_words"))
+                    or any(list(cfg[key]) != list(previous[key]) for key in ("topics", "categories"))):
+                raise Conflict("Group or category settings changed while auto-config was running. Please try again.")
             cfg["topics"] = groups
+            cfg["categories"] = {name: [] for name in cfg["categories"]}
     finally:
         _GROUPING_JOB_LOCK.release()
-    return redirect(url_for("grouping"))
+    return _category_redirect()
 
 
-@app.route("/grouping/change-name", methods=["POST"])
-def change_group_name():
-    old_name = request.form.get("old_name", "")
-    new_name = request.form.get("new_name", "").strip()
-    if not new_name:
-        raise BadRequest("The group name must not be empty.")
-    if new_name == "unclassified":
-        raise BadRequest("The name unclassified is reserved.")
-    with edit_config() as cfg:
-        topics = cfg["topics"]
-        if old_name not in topics:
-            raise NotFound("This group no longer exists. Please reload the grouping page.")
-        if new_name != old_name and new_name in topics:
-            raise Conflict("A group with this name already exists.")
-        cfg["topics"] = {
-            new_name if name == old_name else name: center
-            for name, center in topics.items()
+@app.route("/grouping/categories/create", methods=["POST"])
+def create_category():
+    name = _new_category_name("name")
+    with edit_config() as settings:
+        _checked_category_owners(settings)
+        if name in settings["categories"]:
+            raise Conflict("A category with this name already exists.")
+        settings["categories"][name] = []
+    return _category_redirect(name)
+
+
+@app.route("/grouping/categories/rename", methods=["POST"])
+def rename_category():
+    name = request.form.get("category", "")
+    new_name = _new_category_name("new_name")
+    with edit_config() as settings:
+        _checked_category_owners(settings)
+        _require_category(settings, name)
+        if new_name != name and new_name in settings["categories"]:
+            raise Conflict("A category with this name already exists.")
+        settings["categories"] = {
+            new_name if current == name else current: groups
+            for current, groups in settings["categories"].items()
         }
-    return redirect(url_for("grouping"))
+    return _category_redirect(new_name)
+
+
+@app.route("/grouping/categories/delete", methods=["POST"])
+def delete_category():
+    name = request.form.get("category", "")
+    with edit_config() as settings:
+        _checked_category_owners(settings)
+        _require_category(settings, name)
+        del settings["categories"][name]
+    return _category_redirect()
+
+
+def _requested_groups():
+    groups = request.form.getlist("group")
+    if not groups or len(groups) != len(set(groups)):
+        raise BadRequest("Select at least one automatic group, without duplicates.")
+    return groups
+
+
+@app.route("/grouping/categories/add-groups", methods=["POST"])
+def add_category_groups():
+    name = request.form.get("category", "")
+    groups = _requested_groups()
+    with edit_config() as settings:
+        owners = _checked_category_owners(settings)
+        assigned = _require_category(settings, name)
+        for group in groups:
+            if group not in settings["topics"]:
+                raise NotFound("This automatic group no longer exists.")
+            if group in owners:
+                raise Conflict("A selected group is already assigned. Please reload the grouping page.")
+        assigned.extend(groups)
+    return _category_redirect(name)
+
+
+@app.route("/grouping/categories/remove-groups", methods=["POST"])
+def remove_category_groups():
+    name = request.form.get("category", "")
+    groups = _requested_groups()
+    with edit_config() as settings:
+        _checked_category_owners(settings)
+        assigned = _require_category(settings, name)
+        if any(group not in assigned for group in groups):
+            raise Conflict("Group assignments changed. Please reload the grouping page.")
+        removing = set(groups)
+        settings["categories"][name] = [group for group in assigned if group not in removing]
+    return _category_redirect(name)
 
 
 @app.route("/logs/server")
@@ -587,7 +720,10 @@ def yt_feed():
 
 @app.route("/feed/categorized")
 def categorized_feed_list():
-    return Response(generate_categorized_opml(url_link), mimetype="text/x-opml")
+    response = Response(generate_categorized_opml(url_link), mimetype="text/x-opml")
+    if request.args.get("download") == "1":
+        response.headers.set("Content-Disposition", "attachment", filename="ytrss.opml")
+    return response
 
 
 @app.route("/feed/category/<int:category_id>")

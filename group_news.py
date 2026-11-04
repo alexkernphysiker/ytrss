@@ -4,7 +4,7 @@ import re
 
 from config import get_config
 
-MAX_GROUPS = 10
+MAX_GROUPS = 64
 _WORD = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)*", re.UNICODE)
 _BOUNDARY = re.compile(r"[.!?;:\n\r<>|•*«»“”\"/—–]+")
 _URL = re.compile(r"https?://\S+")

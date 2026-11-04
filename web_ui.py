@@ -179,12 +179,14 @@ def page_start(title, main_class="", refresh_interval=None):
       font-weight: 600;
       overflow-wrap: anywhere;
     }
-    .reader-categories {
+    .reader-categories, .reader-group {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       margin-top: 12px;
     }
+    .reader-taxonomy-label { color: #596575; font-size: 0.85rem; align-self: center; }
+    .news-group { min-width: 0; max-width: 100%; padding: 2px 8px; border-radius: 8px; background: #eef1f5; color: #465363; font-size: 0.85rem; overflow-wrap: anywhere; }
     .reader-actions, .reader-footer {
       display: flex;
       flex-wrap: wrap;
@@ -320,7 +322,22 @@ def page_start(title, main_class="", refresh_interval=None):
     .grouping-auto-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
     .grouping-count-field { display: grid; gap: 6px; }
     .grouping-count-field input { width: 140px; max-width: 100%; }
-    .grouping-name-input { flex: 1 1 240px; min-width: 0; max-width: 100%; }
+    .grouping-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+    .grouping-column { padding: 16px; min-width: 0; }
+    .category-items { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 12px; }
+    .category-item { padding: 12px; border: 1px solid #dce2eb; border-radius: 10px; min-width: 0; }
+    .category-item.is-selected { border-color: #315eca; background: #f2f6ff; }
+    .category-select { display: block; color: #315eca; font-weight: 600; overflow-wrap: anywhere; }
+    .category-edit, .category-create { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .category-edit input[type="text"], .category-create input[type="text"] { width: 100%; min-width: 0; }
+    .group-choices { display: grid; gap: 8px; margin: 12px 0; }
+    .group-choice { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border: 1px solid #e1e6ed; border-radius: 8px; min-width: 0; cursor: pointer; }
+    .group-choice span { min-width: 0; overflow-wrap: anywhere; }
+    .service-content .group-choice input[type="checkbox"] { width: 20px; height: 20px; min-height: 20px; flex: 0 0 20px; padding: 0; margin: 2px 0; }
+    .service-content button:disabled { cursor: default; opacity: 0.5; }
+    @media (max-width: 960px) {
+      .grouping-columns { grid-template-columns: minmax(0, 1fr); }
+    }
     .service-log-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .service-log {
       margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;

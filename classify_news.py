@@ -16,10 +16,12 @@ import sys
 import tempfile
 import time
 from threading import RLock
+from types import MappingProxyType
 
 from lxml import etree
 
 from config import get_config
+from news_categories import UNCLASSIFIED, category_owners
 
 
 REPOSITORY = Path(__file__).resolve().parent
@@ -373,42 +375,54 @@ class CategoryContext:
     signature: dict
     dimension: int
     centroids: tuple
+    owners: object
 
 
 @lru_cache(maxsize=8)
-def _category_context(model, topics_key, signature_key, dimension):
-    centers = topic_centroids(json.loads(topics_key), dimension)
-    return CategoryContext(model, json.loads(signature_key), dimension, centers)
+def _category_context(model, topics_key, categories_key, signature_key, dimension):
+    topics = json.loads(topics_key)
+    centers = topic_centroids(topics, dimension)
+    owners = MappingProxyType(category_owners(topics, json.loads(categories_key)))
+    return CategoryContext(model, json.loads(signature_key), dimension, centers, owners)
 
 
-def get_category_context(topics=None):
-    if topics is None:
-        topics = get_config("topics")
+def get_category_context(topics=None, categories=None):
+    if topics is None or categories is None:
+        settings = get_config()
+        if topics is None:
+            topics = settings["topics"]
+        if categories is None:
+            categories = settings["categories"]
     return _category_context(
         model, json.dumps(topics, ensure_ascii=False, separators=(",", ":")),
+        json.dumps(categories, ensure_ascii=False, separators=(",", ":")),
         json.dumps(model.signature, sort_keys=True, separators=(",", ":")),
         model.dimension,
     )
 
 
-def nearest_category(vector, context):
+def nearest_group(vector, context):
     return min(
         context.centroids,
         key=lambda item: math.dist(vector, item[1]),
     )[0]
 
 
-def _cache_category(path, fingerprint, context, categories):
+def nearest_category(vector, context):
+    return context.owners.get(nearest_group(vector, context), UNCLASSIFIED)
+
+
+def _cache_category(path, fingerprint, context, categories, group=None):
     if time.time_ns() - fingerprint[4] < 1_000_000_000:
         return
     with _CATEGORY_CACHE_LOCK:
-        _CATEGORY_CACHE[path] = fingerprint, context, tuple(categories)
+        _CATEGORY_CACHE[path] = fingerprint, context, tuple(categories), group
         _CATEGORY_CACHE.move_to_end(path)
         if len(_CATEGORY_CACHE) > 8192:
             _CATEGORY_CACHE.popitem(last=False)
 
 
-def get_news_category(fn, context=None):
+def get_news_assignment(fn, context=None):
     try:
         path = desc_path(fn).absolute()
         metadata = path.stat()
@@ -423,13 +437,13 @@ def get_news_category(fn, context=None):
             else:
                 cached = None
         if cached is not None and cached[1] is None:
-            return []
+            return None, []
         saved = stored_vector(path.read_bytes()) if cached is None else None
     except (OSError, etree.XMLSyntaxError, ValueError, UnicodeError):
-        return []
+        return None, []
     if cached is None and saved is None:
         _cache_category(path, fingerprint, None, [])
-        return []
+        return None, []
     expected = model if context is None else context
     if (cached is not None
             and (cached[1].encoder is not (model if context is None else context.encoder)
@@ -438,30 +452,37 @@ def get_news_category(fn, context=None):
         try:
             saved = stored_vector(path.read_bytes())
         except (OSError, etree.XMLSyntaxError, ValueError, UnicodeError):
-            return []
+            return None, []
     if saved is not None and (saved[1] != expected.signature
                               or not valid_vector(saved[0], expected.dimension)):
-        return []
+        return None, []
     if context is None:
         context = get_category_context()
     if not context.centroids:
-        return []
+        return None, []
     if cached is not None and cached[1] is context:
-        return list(cached[2])
+        return cached[3], list(cached[2])
     if saved is None:
         try:
             saved = stored_vector(path.read_bytes())
         except (OSError, etree.XMLSyntaxError, ValueError, UnicodeError):
-            return []
+            return None, []
     if saved is None:
         _cache_category(path, fingerprint, None, [])
-        return []
+        return None, []
     vector, signature, _ = saved
+    group = None
     categories = []
     if signature == context.signature and valid_vector(vector, context.dimension):
-        categories = [nearest_category(vector, context)]
-    _cache_category(path, fingerprint, context, categories)
-    return categories
+        group = nearest_group(vector, context)
+        categories = [context.owners.get(group, UNCLASSIFIED)]
+    _cache_category(path, fingerprint, context, categories, group)
+    return group, categories
+
+
+def get_news_category(fn, context=None):
+    return get_news_assignment(fn, context)[1]
+
 
 
 def positive_integer(value):
