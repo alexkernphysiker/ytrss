@@ -177,6 +177,29 @@ Classification assigns an item to its nearest configured centroid. Every item
 with a compatible vector belongs to one group when groups exist. Other items
 display unclassified. The news-list buttons show only configured groups.
 
+### Topic feeds and OPML
+
+The combined RSS feed at /feed includes each item's group in a standard
+category element. Group names are not added to the item description.
+
+Import /feed/categorized as an OPML subscription list in an RSS reader to add
+the configured groups as separate feeds. The list contains one folder named
+after the configured feed title. Its entries point to /feed/category/0,
+/feed/category/1 and so on. Each topic feed contains only that group's items,
+with the same article identifiers, descriptions and media as the combined feed.
+Topic feed titles use "configured feed title - group name" in both RSS and OPML.
+
+IDs are zero-based positions in the topics dictionary. Renaming a group through
+Grouping preserves its position and address. Reordering topics or running
+auto-config can change which group a number represents. A number outside the
+current group list returns HTTP 404. With no configured groups, the OPML
+contains an empty folder and no topic subscriptions.
+
+For example, with the default local address, import
+http://127.0.0.1:5000/feed/categorized using the reader's OPML import option.
+Ordinary OPML import adds the current list once. Following later additions or
+removals automatically requires a reader that supports OPML subscriptions.
+
 ### Group representation and Python API
 
 The topics dictionary maps displayed names to raw 768-coordinate centroid

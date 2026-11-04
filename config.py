@@ -160,7 +160,8 @@ class ConfigStore:
             settings = deepcopy(self._config)
             yield settings
             self._normalize(settings)
-            if settings != self._config:
+            if (settings != self._config
+                    or list(settings["topics"]) != list(self._config["topics"])):
                 self._write(settings)
                 # Do not let a caller retain a mutable reference to our state.
                 self._config = deepcopy(settings)

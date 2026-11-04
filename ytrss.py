@@ -585,6 +585,19 @@ def yt_feed():
     global url_link
     return Response(generate_atom_feed(url_link, False), mimetype='application/rss+xml')
 
+@app.route("/feed/categorized")
+def categorized_feed_list():
+    return Response(generate_categorized_opml(url_link), mimetype="text/x-opml")
+
+
+@app.route("/feed/category/<int:category_id>")
+def category_feed(category_id):
+    return Response(
+        generate_atom_feed(url_link, False, category_id=category_id),
+        mimetype="application/rss+xml",
+    )
+
+
 @app.route("/file/<path:filename>.<extension>")
 def download(filename, extension):
     file_path = media_file_path(filename)
