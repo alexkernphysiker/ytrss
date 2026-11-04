@@ -66,9 +66,30 @@ def default_config():
         "temporary_block_yt_download": False,
         "summarize_min_length": 7168,
         "tinyurl_key": "",
+        "grouping_stop_words": (
+            "the and for that with from this have will are was were has had not but you your they their our "
+            "its into about more than how why what when where who which also can could would should one two "
+            "all some any other each these those been being through over under after before during between "
+            "without within says said podcast episode video www http https youtube com watch subscribe link "
+            "channel please part та що як про для від або при але вже ще він вона вони його її ми наш нас "
+            "це цей ця ці того тому так щоб має може буде були було бути року років під над без між через "
+            "після коли лише більш також саме тут дуже нам вам вас усе всіх всього далі тому свою свої "
+            "своїх мати маєш собі себе тепер новий нова нове час свою яких який яка яке які хто чи цих цієї "
+            "цю тож навіть знову всех для что как это его она они или уже еще при был было быть лет годы "
+            "так чтобы этой этого этих тому нас podcastу подкаст подкасти подкасту випуск відео "
+            "підписуйтесь підписатися підписка посилання дивіться слухайте підтримати підтримайте patreon "
+            "buymeacoffee telegram instagram facebook spotify google apple youtubecom wszystkich oraz jest "
+            "jak nie się czy dla przez tego jego jej ich jako tym ten ta te to był była było będą będzie "
+            "może można więcej który która które kiedy gdzie dlaczego czym także tylko jeszcze już nas "
+            "nasze was wasze rozmowa rozmowy rozmawiamy podcastu odcinek odcinku kanał kanale subskrybuj "
+            "zapraszam zapraszamy tymczasem czyli albo oraz ale także mamy masz nasz mnie mnie są jest był "
+            "być jestem jesteśmy wszystko wszyscy właśnie bardzo dziś więc ponieważ jeśli dlatego jeden dwa "
+            "przy przed nad pod od do na się sobie siebie source summary description анотація основні тези "
+            "розмови випуску матеріалі запис спершу явиться щодо зокрема statements main appearance his her "
+            "him them may such both using used many most główne tezy mówca wyjaśnienie kolejności "
+            "wystąpienia podsumowanie"
+        ),
         "topics": {},
-        "category_threshold": 0.80,
-        "max_news_categories": 3,
     }
 
 class ConfigStore:

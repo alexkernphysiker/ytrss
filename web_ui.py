@@ -317,6 +317,10 @@ def page_start(title, main_class="", refresh_interval=None):
     .service-field label { overflow-wrap: anywhere; }
     .service-field input, .service-field select { width: 100%; min-width: 0; }
     .service-settings > input[type="submit"] { justify-self: start; }
+    .grouping-auto-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+    .grouping-count-field { display: grid; gap: 6px; }
+    .grouping-count-field input { width: 140px; max-width: 100%; }
+    .grouping-name-input { flex: 1 1 240px; min-width: 0; max-width: 100%; }
     .service-log-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .service-log {
       margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;

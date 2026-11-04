@@ -1,4 +1,5 @@
 from flask import Flask, url_for
+from threading import Lock
 from flask import send_file
 from flask import request
 from flask import redirect
@@ -12,7 +13,8 @@ from feed_discover import discover_rss_feeds
 from config import edit_config, get_config
 from transcription_queue import transcription_queues
 from web_ui import page_start
-from werkzeug.exceptions import BadRequest, HTTPException
+from group_news import MAX_GROUPS, find_groups
+from werkzeug.exceptions import BadRequest, Conflict, HTTPException, NotFound
 
  
 host=get_config().get("host")
@@ -29,6 +31,7 @@ def buttons_on_top(auto_refresh=False):
            "<input type='submit' name='show_rss_list' value='RSS'>" + \
            "<input type='submit' name='auto_transcription' value='Auto-transcription'>" + \
            "<input type='submit' name='auto_download' value='Auto-downloading'>" + \
+           "<input type='submit' name='grouping' value='Grouping'>" + \
             "</form>"
 
 
@@ -132,6 +135,92 @@ def subscription():
 @app.route("/config")
 def config_page():
     return service_page(title="Configuration")
+
+_GROUPING_JOB_LOCK = Lock()
+
+
+def _grouping_page():
+    topics = get_config("topics")
+    fields = "".join(
+        '<li class="service-item">'
+        f'<form class="grouping-rename" action="{url_for("change_group_name")}" method="post">'
+        f'<input type="hidden" name="old_name" value="{escape(name, quote=True)}">'
+        f'<input class="grouping-name-input" type="text" name="new_name"'
+        f' aria-label="Group {index} name" value="{escape(name, quote=True)}" required>'
+        '<input type="submit" value="change name"></form></li>'
+        for index, name in enumerate(topics, 1)
+    )
+    if not fields:
+        fields = '<li class="service-item">No groups configured.</li>'
+    content = (
+        '<section class="service-panel"><h2>Automatic grouping</h2>'
+        f'<form id="grouping-auto-config" class="grouping-auto-form"'
+        f' action="{url_for("auto_config_groups")}" method="post">'
+        '<div class="grouping-count-field"><label for="group-count">Number of groups</label>'
+        f'<input type="number" id="group-count" name="group_count" min="0" max="{MAX_GROUPS}"'
+        f' step="1" value="{len(topics)}" required></div>'
+        '<input type="submit" value="auto-config"></form>'
+        '<p class="service-description">Auto-config replaces the current groups and their names. '
+        'Use 0 to clear all groups. Finding groups may take a minute.</p></section>'
+        '<section><h2 class="service-section-title">Group names</h2>'
+        f'<ul class="service-list">{fields}</ul></section>'
+        '<script>document.getElementById("grouping-auto-config").addEventListener("submit",function(){'
+        'const button=this.querySelector(\'input[type="submit"]\');'
+        'button.disabled=true;button.value="Working…";});</script>'
+    )
+    return service_page(content, "Grouping")
+
+
+@app.route("/grouping")
+def grouping():
+    return _grouping_page()
+
+
+@app.route("/grouping/auto-config", methods=["POST"])
+def auto_config_groups():
+    try:
+        count = int(request.form.get("group_count", ""))
+    except ValueError as error:
+        raise BadRequest("The number of groups must be a whole number.") from error
+    if not 0 <= count <= MAX_GROUPS:
+        raise BadRequest(f"The number of groups must be between 0 and {MAX_GROUPS}.")
+    if not _GROUPING_JOB_LOCK.acquire(blocking=False):
+        raise Conflict("Automatic grouping is already running. Please try again later.")
+    try:
+        previous = get_config()
+        try:
+            groups = find_groups(count)
+        except ValueError as error:
+            raise BadRequest(str(error)) from error
+        with edit_config() as cfg:
+            if any(cfg[key] != previous[key] for key in ("topics", "grouping_stop_words")):
+                raise Conflict("Group settings changed while auto-config was running. Please try again.")
+            cfg["topics"] = groups
+    finally:
+        _GROUPING_JOB_LOCK.release()
+    return redirect(url_for("grouping"))
+
+
+@app.route("/grouping/change-name", methods=["POST"])
+def change_group_name():
+    old_name = request.form.get("old_name", "")
+    new_name = request.form.get("new_name", "").strip()
+    if not new_name:
+        raise BadRequest("The group name must not be empty.")
+    if new_name == "unclassified":
+        raise BadRequest("The name unclassified is reserved.")
+    with edit_config() as cfg:
+        topics = cfg["topics"]
+        if old_name not in topics:
+            raise NotFound("This group no longer exists. Please reload the grouping page.")
+        if new_name != old_name and new_name in topics:
+            raise Conflict("A group with this name already exists.")
+        cfg["topics"] = {
+            new_name if name == old_name else name: center
+            for name, center in topics.items()
+        }
+    return redirect(url_for("grouping"))
+
 
 @app.route("/logs/server")
 def logs_server():

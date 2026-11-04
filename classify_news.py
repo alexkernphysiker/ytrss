@@ -24,7 +24,10 @@ from config import get_config
 
 REPOSITORY = Path(__file__).resolve().parent
 DATA_DIRECTORY = REPOSITORY / "yt-video"
-MODEL_NAME = "intfloat/multilingual-e5-small"
+MODEL_NAME = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+MODEL_REVISION = "4328cf26390c98c5e3c738b4460a05b95f4911f5"
+MAX_SEQUENCE_TOKENS = 128
+CHUNK_OVERLAP_TOKENS = 16
 MAX_TEXT_CHARACTERS = 50_000
 _CATEGORY_CACHE = OrderedDict()
 _CATEGORY_CACHE_LOCK = RLock()
@@ -99,7 +102,7 @@ class News:
 
     @property
     def text_sha256(self):
-        return hashlib.sha256(("query: " + self.text).encode("utf-8")).hexdigest()
+        return hashlib.sha256(self.text.encode("utf-8")).hexdigest()
 
 
 def read_news(fn, directory=None):
@@ -153,6 +156,64 @@ def stored_vector(source):
         return None
 
 
+class ChunkedModel:
+    def __init__(self, model):
+        self.model = model
+
+    def encode(self, texts, batch_size=8, normalize_embeddings=False,
+               show_progress_bar=False):
+        if normalize_embeddings is not True:
+            raise ValueError("Only normalized embeddings are supported.")
+        if not texts:
+            return []
+        if batch_size < 1:
+            raise ValueError("Batch size must be positive.")
+
+        import numpy as np
+        import torch
+
+        tokenizer = self.model.tokenizer
+        special_tokens = tokenizer.num_special_tokens_to_add(pair=False)
+        chunks, owners, weights = [], [], []
+        for index, text in enumerate(texts):
+            encoded = tokenizer(
+                text, max_length=MAX_SEQUENCE_TOKENS, truncation=True,
+                stride=CHUNK_OVERLAP_TOKENS, return_overflowing_tokens=True,
+                return_attention_mask=True, padding=False,
+            )
+            for position in range(len(encoded["input_ids"])):
+                features = {key: encoded[key][position] for key in tokenizer.model_input_names
+                            if key in encoded}
+                payload_tokens = len(features["input_ids"]) - special_tokens
+                weight = payload_tokens - (CHUNK_OVERLAP_TOKENS if position else 0)
+                if weight <= 0:
+                    raise ValueError("Text chunks must contain new payload tokens.")
+                chunks.append(features)
+                owners.append(index)
+                weights.append(weight)
+
+        owners = np.asarray(owners, dtype=np.int32)
+        weights = np.asarray(weights, dtype=np.int32)
+        dimension = self.model.get_embedding_dimension()
+        sums = np.zeros((len(texts), dimension), dtype=np.float64)
+        totals = np.zeros(len(texts), dtype=np.float64)
+        with torch.inference_mode():
+            for start in range(0, len(chunks), batch_size):
+                end = min(start + batch_size, len(chunks))
+                features = tokenizer.pad(chunks[start:end], padding=True, return_tensors="pt")
+                vectors = self.model(features)["sentence_embedding"]
+                vectors = torch.nn.functional.normalize(vectors, p=2, dim=1).cpu().numpy()
+                for offset, chunk in enumerate(range(start, end)):
+                    owner = owners[chunk]
+                    sums[owner] += vectors[offset] * weights[chunk]
+                    totals[owner] += weights[chunk]
+        averages = sums / totals[:, None]
+        norms = np.linalg.norm(averages, axis=1, keepdims=True)
+        if not np.isfinite(averages).all() or not np.all(norms > 0):
+            raise ValueError("The model returned invalid chunk embeddings.")
+        return (averages / norms).astype(np.float32)
+
+
 class Encoder:
     def __init__(self, model, signature, dimension):
         self.model = model
@@ -161,36 +222,38 @@ class Encoder:
         self.vectors = {}
         self.hits = 0
         self.misses = 0
+        self.lock = RLock()
 
     def encode(self, texts, **options):
-        if options.get("normalize_embeddings") is not True:
-            raise ValueError("Only normalized embeddings are supported.")
-        keys = [hashlib.sha256(text.encode("utf-8")).hexdigest() for text in texts]
-        missing = {}
-        for key, text in zip(keys, texts, strict=True):
-            if valid_vector(self.vectors.get(key), self.dimension):
-                self.hits += 1
-            else:
-                missing[key] = text
-        if missing:
-            encoded = self.model.encode(list(missing.values()), **options)
-            if len(encoded) != len(missing):
-                raise ValueError("The model returned an incorrect number of embeddings.")
-            for key, vector in zip(missing, encoded, strict=True):
-                values = [float(value) for value in vector]
-                if not valid_vector(values, self.dimension):
-                    raise ValueError("The model returned an invalid normalized embedding.")
-                self.vectors[key] = values
-            self.misses += len(missing)
-        return [self.vectors[key] for key in keys]
+        with self.lock:
+            if options.get("normalize_embeddings") is not True:
+                raise ValueError("Only normalized embeddings are supported.")
+            keys = [hashlib.sha256(text.encode("utf-8")).hexdigest() for text in texts]
+            missing = {}
+            for key, text in zip(keys, texts, strict=True):
+                if valid_vector(self.vectors.get(key), self.dimension):
+                    self.hits += 1
+                else:
+                    missing[key] = text
+            if missing:
+                encoded = self.model.encode(list(missing.values()), **options)
+                if len(encoded) != len(missing):
+                    raise ValueError("The model returned an incorrect number of embeddings.")
+                for key, vector in zip(missing, encoded, strict=True):
+                    values = [float(value) for value in vector]
+                    if not valid_vector(values, self.dimension):
+                        raise ValueError("The model returned an invalid normalized embedding.")
+                    self.vectors[key] = values
+                self.misses += len(missing)
+            return [self.vectors[key] for key in keys]
 
 
-def load_model(threads=1):
+def load_model(threads=2):
     return _load_model(threads)
 
 
 @lru_cache(maxsize=1)
-def _load_model(threads = 1):
+def _load_model(threads=2):
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
     os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 
@@ -200,18 +263,23 @@ def _load_model(threads = 1):
 
     torch.set_num_threads(threads)
     model = SentenceTransformer(
-        MODEL_NAME, device="cpu",
+        MODEL_NAME, revision=MODEL_REVISION, device="cpu",
         trust_remote_code=False, model_kwargs={"use_safetensors": True},
     )
-    model.max_seq_length = 512
+    model.eval()
+    if model.max_seq_length != MAX_SEQUENCE_TOKENS or not model.tokenizer.is_fast:
+        raise ValueError("The encoder requires the pinned 128-token fast tokenizer.")
     signature = {
         "model": MODEL_NAME,
-        "revision": getattr(model[0].auto_model.config, "_commit_hash", None),
+        "revision": MODEL_REVISION,
+        "chunk_overlap_tokens": CHUNK_OVERLAP_TOKENS,
+        "chunk_pooling": "l2_chunks_new_token_weighted_mean_l2",
+        "input_prefix": "",
         "max_seq_length": model.max_seq_length,
         "sentence_transformers": version("sentence-transformers"),
         "torch": torch.__version__,
     }
-    return Encoder(model, signature, model.get_embedding_dimension())
+    return Encoder(ChunkedModel(model), signature, model.get_embedding_dimension())
 
 model = load_model()
 
@@ -267,7 +335,7 @@ def save_vectors(news, model, batch_size=8):
         else:
             pending.append((index, item))
     encoded = model.encode(
-        ["query: " + item.text for _, item in pending], batch_size=batch_size,
+        [item.text for _, item in pending], batch_size=batch_size,
         normalize_embeddings=True, show_progress_bar=False,
     ) if pending else []
     if len(encoded) != len(pending):
@@ -285,49 +353,49 @@ def save_news_vector(fn):
     return vectors[0]
 
 
-def topic_vectors(model, topics, batch_size=8):
+def topic_centroids(topics, dimension):
     if not isinstance(topics, dict):
-        raise ValueError("topics must be an object containing category descriptions.")
-    cache_key = json.dumps(topics, ensure_ascii=False, separators=(",", ":"))
-    cached = getattr(model, "topic_cache", None)
-    if cached is not None and cached[0] == cache_key:
-        return cached[1]
-    descriptions = []
-    for name, prototypes in topics.items():
-        if not isinstance(name, str) or not name or not isinstance(prototypes, (list, tuple)) or not prototypes:
-            raise ValueError("Each topic must have a name and at least one prototype.")
-        for prototype in prototypes:
-            if (not isinstance(prototype, (list, tuple)) or not prototype
-                    or any(not isinstance(text, str) or not text.strip() for text in prototype)):
-                raise ValueError("Each topic prototype must contain nonempty descriptions.")
-            descriptions.extend("query: " + text for text in prototype)
-    encoded = model.encode(descriptions, batch_size=batch_size,
-                           normalize_embeddings=True, show_progress_bar=False)
-    if len(encoded) != len(descriptions):
-        raise ValueError("The model returned an incorrect number of topic embeddings.")
-    result = {}
-    offset = 0
-    for name, prototypes in topics.items():
-        result[name] = []
-        for prototype in prototypes:
-            vectors = encoded[offset:offset + len(prototype)]
-            if any(not valid_vector([float(value) for value in vector], model.dimension)
-                   for vector in vectors):
-                raise ValueError(f"Invalid topic embedding: {name}")
-            average = [math.fsum(float(vector[i]) for vector in vectors) / len(vectors)
-                       for i in range(model.dimension)]
-            norm = math.sqrt(math.fsum(value * value for value in average))
-            if not math.isfinite(norm) or norm == 0:
-                raise ValueError(f"Invalid topic prototype: {name}")
-            result[name].append([value / norm for value in average])
-            offset += len(prototype)
-    model.topic_cache = (cache_key, result)
-    return result
+        raise ValueError("topics must map group names to centroid vectors.")
+    result = []
+    for name, vector in topics.items():
+        if (not isinstance(name, str) or not name.strip() or name == "unclassified"
+                or not isinstance(vector, list) or len(vector) != dimension
+                or any(not isinstance(value, (int, float)) or isinstance(value, bool)
+                       or not math.isfinite(value) for value in vector)):
+            raise ValueError("Each topic must have a name and a finite centroid matching the news dimension.")
+        result.append((name, tuple(float(value) for value in vector)))
+    return tuple(result)
+
+
+@dataclass(frozen=True)
+class CategoryContext:
+    encoder: Encoder
+    signature: dict
+    dimension: int
+    centroids: tuple
 
 
 @lru_cache(maxsize=8)
-def _category_context(model, topics_key, signature_key, dimension, threshold, limit):
-    return model, signature_key, dimension, topics_key, threshold, limit
+def _category_context(model, topics_key, signature_key, dimension):
+    centers = topic_centroids(json.loads(topics_key), dimension)
+    return CategoryContext(model, json.loads(signature_key), dimension, centers)
+
+
+def get_category_context(topics=None):
+    if topics is None:
+        topics = get_config("topics")
+    return _category_context(
+        model, json.dumps(topics, ensure_ascii=False, separators=(",", ":")),
+        json.dumps(model.signature, sort_keys=True, separators=(",", ":")),
+        model.dimension,
+    )
+
+
+def nearest_category(vector, context):
+    return min(
+        context.centroids,
+        key=lambda item: math.dist(vector, item[1]),
+    )[0]
 
 
 def _cache_category(path, fingerprint, context, categories):
@@ -340,7 +408,7 @@ def _cache_category(path, fingerprint, context, categories):
             _CATEGORY_CACHE.popitem(last=False)
 
 
-def get_news_category(fn):
+def get_news_category(fn, context=None):
     try:
         path = desc_path(fn).absolute()
         metadata = path.stat()
@@ -362,16 +430,22 @@ def get_news_category(fn):
     if cached is None and saved is None:
         _cache_category(path, fingerprint, None, [])
         return []
-    topics = get_config("topics")
-    if not topics:
+    expected = model if context is None else context
+    if (cached is not None
+            and (cached[1].encoder is not (model if context is None else context.encoder)
+                 or cached[1].signature != expected.signature
+                 or cached[1].dimension != expected.dimension)):
+        try:
+            saved = stored_vector(path.read_bytes())
+        except (OSError, etree.XMLSyntaxError, ValueError, UnicodeError):
+            return []
+    if saved is not None and (saved[1] != expected.signature
+                              or not valid_vector(saved[0], expected.dimension)):
         return []
-    threshold = get_config("category_threshold")
-    limit = get_config("max_news_categories")
-    context = _category_context(
-        model, json.dumps(topics, ensure_ascii=False, separators=(",", ":")),
-        json.dumps(model.signature, sort_keys=True, separators=(",", ":")),
-        model.dimension, threshold, limit,
-    )
+    if context is None:
+        context = get_category_context()
+    if not context.centroids:
+        return []
     if cached is not None and cached[1] is context:
         return list(cached[2])
     if saved is None:
@@ -384,17 +458,8 @@ def get_news_category(fn):
         return []
     vector, signature, _ = saved
     categories = []
-    if signature == model.signature and valid_vector(vector, model.dimension):
-        centers = topic_vectors(model, topics)
-        scores = {
-            topic: max(math.fsum(a * b for a, b in zip(vector, center, strict=True))
-                       for center in prototypes)
-            for topic, prototypes in centers.items()
-        }
-        categories = [
-            topic for topic in sorted(scores, key=scores.get, reverse=True)
-            if scores[topic] > threshold
-        ][:limit]
+    if signature == context.signature and valid_vector(vector, context.dimension):
+        categories = [nearest_category(vector, context)]
     _cache_category(path, fingerprint, context, categories)
     return categories
 
