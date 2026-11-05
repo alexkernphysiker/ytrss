@@ -146,32 +146,58 @@ def clp_copy_button(text: str) -> str:
 
 seed()
 
-def filter_subs(long_text, max_length = 0):
-    output=""
-    prev_line=""
-    for line in long_text.splitlines():
-        if line.strip() == "":
+def clean_subtitles(text):
+    """Remove SRT/VTT framing while retaining the actual caption words."""
+    if not isinstance(text, str):
+        raise TypeError("Subtitle text must be a string.")
+    lines = text.lstrip("\ufeff").splitlines()
+    output = []
+    previous = None
+    in_metadata = False
+    for index, raw in enumerate(lines):
+        line = raw.strip()
+        if not line:
+            in_metadata = False
             continue
-        if "-->" in line and "align:" in line and "position:" in line:
+        if re.match(r"^(NOTE(?:\s|$)|STYLE$|REGION$)", line):
+            in_metadata = True
             continue
-        if "<c>" in line or "</c>" in line:
+        if in_metadata:
             continue
-        if line.strip()==prev_line:
+        if re.match(r"^(WEBVTT(?:\s|$)|Kind:\s|Language:\s)", line):
             continue
+        if "-->" in line and re.match(r"^\d{1,2}:\d{2}", line):
+            continue
+        if line.isdecimal() and index + 1 < len(lines) and "-->" in lines[index + 1]:
+            continue
+        line = re.sub(r"<(?:/?(?:c(?:\.[\w-]+)*|v|lang|b|i|u|ruby|rt))(?:\s[^>]*)?>", "", line)
+        line = re.sub(r"<\d{1,2}:\d{2}(?::\d{2})?[.,]\d+>", "", line)
+        line = html.unescape(line).strip()
+        if line and line != previous:
+            output.append(line)
+            previous = line
+    return "\n".join(output)
 
-        prev_line = line.strip()
-        if max_length > 0:
-            if len(output) + len(line) + 1 > max_length:
-                per_sentence = output.split(".\n")
-                if len(per_sentence) > 1:
-                    yield (".\n".join(per_sentence[:-1]) + ".\n").replace("? ", "?\n").replace("! ", "!\n").replace(">> ", "\n>> ")
-                    output = per_sentence[-1]
-                else:
-                    yield output
-                    output=""
-        output += line.replace(". ", ".\n") + " "
-    if output != "":
-        yield output
+
+def filter_subs(long_text, max_length=0):
+    """Yield nonempty speech chunks, enforcing even an unbroken-line limit."""
+    text = clean_subtitles(long_text)
+    if not text:
+        return
+    if max_length <= 0:
+        yield text
+        return
+    while len(text) > max_length:
+        cut = max(text.rfind("\n", 0, max_length + 1),
+                  text.rfind(" ", 0, max_length + 1))
+        if cut <= 0:
+            cut = max_length
+        chunk = text[:cut].strip()
+        if chunk:
+            yield chunk
+        text = text[cut:].lstrip()
+    if text:
+        yield text
 
 
 def secure_wait():

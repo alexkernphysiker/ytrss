@@ -40,4 +40,11 @@ class TranscriptionQueues:
             }
 
 
+    def restore(self, queue_name, filenames):
+        """Return failed jobs before later arrivals, preserving FIFO and deduplication."""
+        with self._lock:
+            pending = self._queues.setdefault(queue_name, {})
+            self._queues[queue_name] = dict.fromkeys([*filenames, *pending])
+
+
 transcription_queues = TranscriptionQueues()

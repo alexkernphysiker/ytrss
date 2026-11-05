@@ -7,7 +7,7 @@ from flask import Response
 from pathlib import PurePath
 from tinyurl import get_share_url
 from utils import *
-from ytrss_transcribe import get_engine_map
+from ytrss_transcribe import get_engine_map, prepare_transcription_retry
 from podcast_search import *
 from feed_discover import discover_rss_feeds
 from config import edit_config, get_config
@@ -617,6 +617,7 @@ def transcribe(engine, filename):
         return _service_message(f"Unknown transcription engine {engine}", "Transcription")
 
     def remove_old_output():
+        prepare_transcription_retry(filename, engine)
         Path(f"yt-video/{filename}.log").unlink(missing_ok=True)
         Path(f"yt-video/{filename}.txt").unlink(missing_ok=True)
 

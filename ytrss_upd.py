@@ -20,7 +20,7 @@ from repeatings_detector import find_duplicate_episode
 from utils import *
 from config import get_config
 from extract_page import *
-from ytrss_transcribe import get_enclosure_link
+from ytrss_transcribe import get_enclosure_link, has_transcription
 from transcription_queue import AUTO_RSS, AUTO_YOUTUBE, transcription_queues
 
 def cleanup():
@@ -346,7 +346,7 @@ def parce_rss_item(link, response=None):
                             if get_config()["auto_transcript_hours"] > 0:
                                 if time_since_insertion < timedelta(hours=get_config()["auto_transcript_hours"]):
                                     print(f"Processing auto-transcription for video {fn}")
-                                    if not os.path.exists(transcription_path) and not link in get_config()["sources_with_disabled_auto_transcription"]:
+                                    if not has_transcription(fn) and not link in get_config()["sources_with_disabled_auto_transcription"]:
                                         if transcription_queues.enqueue(AUTO_RSS, fn):
                                             print(f"Automatically scheduled video transcription_rss {fn}")
                                         else:
@@ -508,7 +508,7 @@ def parce_atom_item(link, response=None):
                         os.utime(path, (mod_time, mod_time))
                 if get_config()["auto_transcript_hours"] > 0:
                     if time_since_insertion < timedelta(hours=get_config()["auto_transcript_hours"]):
-                        if auto_transcription and not os.path.exists(transcription_path):
+                        if auto_transcription and not has_transcription(fn):
                             if transcription_queues.enqueue(AUTO_RSS, fn):
                                 print(f"Automatically scheduled Atom transcription {fn}")
             except Exception:
@@ -657,7 +657,7 @@ def parce_yt_item(link):
                                 if time_since_insertion < timedelta(hours=get_config()["auto_transcript_hours"]):
                                     print(f"Processing auto-transcription for video {fn}")
                                     transcription_path = "yt-video/" + fn + ".txt"
-                                    if not os.path.exists(transcription_path) and not source_id in get_config()["sources_with_disabled_auto_transcription"]:
+                                    if not has_transcription(fn) and not source_id in get_config()["sources_with_disabled_auto_transcription"]:
                                         if transcription_queues.enqueue(AUTO_YOUTUBE, fn):
                                             print(f"Automatically scheduled video transcription {fn}")
                                         else:
