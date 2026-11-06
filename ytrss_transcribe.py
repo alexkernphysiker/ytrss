@@ -34,7 +34,7 @@ def get_engine_map(cfg=None):
     res["srt"] = "Just download subtitles from YT"
     return res
 
-TEXT_CHUNK_LENGTH = 12000
+TEXT_CHUNK_LENGTH = 0
 _RETRY_STATE = {}
 _POSTPROCESS_PENDING = set()
 _TEMPORARY_AUDIO = {}
