@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from time import sleep
 import os
 import re
@@ -219,10 +219,10 @@ def convert_date_to_iso_with_pendulum(date):
         "MST": "-7", "MDT": "-6",
         "PST": "-8", "PDT": "-7",
         "HST": "-10", "AKST": "-9", "AKDT": "-8",
-        "CEDT": "+2", "EET": "+2", "EEST": "+3",
-        "CES": "+1", "MET": "+1" 
+        "CEDT": "+2", "CEST": "+2", "EET": "+2", "EEST": "+3",
+        "CES": "+1", "CET": "+1", "MET": "+1"
     }.items():
-        date_cp.replace(tzcode, tzoffs)
+        date_cp = re.sub(rf"\b{tzcode}\b", f"{int(tzoffs):+03d}00", date_cp)
     return pendulum.parse(date_cp, strict=False)
 
 
@@ -471,8 +471,8 @@ def generate_atom_feed(url_link, is_public, category_id=None):
         if enclosure_element is not None:
             enclosure_element.set("url", enclosure_element.get("url").replace("__URL_LINK__", url_link))
 
-        modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
-        age = datetime.now() - modified_time
+        modified_time = datetime.fromtimestamp(os.path.getmtime(description_path), timezone.utc)
+        age = datetime.now(timezone.utc) - modified_time
         if age > timedelta(days=settings["deliver_days"]):
             continue
         descr = sanitize_html(description_element.text or "")
@@ -579,7 +579,7 @@ def generate_transcriptions_list_page(url_link, category_request=None, search_re
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
         try:
             with description_path.open("rb") as stream:
-                modified_time = datetime.fromtimestamp(os.fstat(stream.fileno()).st_mtime)
+                modified_time = datetime.fromtimestamp(os.fstat(stream.fileno()).st_mtime, timezone.utc)
                 entry = etree.parse(stream, parser1)
         except FileNotFoundError:
             continue
@@ -594,7 +594,7 @@ def generate_transcriptions_list_page(url_link, category_request=None, search_re
             if title_element is not None and search_request.lower() not in title_element.text.lower():
                 if description_element is not None and (description_element.text is None or search_request.lower() not in description_element.text.lower()):
                     continue
-        age = datetime.now() - modified_time
+        age = datetime.now(timezone.utc) - modified_time
 
         auto_transcription = False
         auto_transcription_element = entry.find("auto_transcription")
@@ -623,14 +623,15 @@ def generate_transcriptions_list_page(url_link, category_request=None, search_re
                 f'<img class="news-image" src="{escape(safe_content_url(image_url), quote=True)}"'
                 ' alt="" loading="lazy" decoding="async">'
             )
+        server_time = modified_time.astimezone()
         output = f"""<li class="news-card" id="{escape(fn, quote=True)}">
   <a class="news-link" href="{escape(news_url, quote=True)}">
     {image_html}
     <div class="news-content">
       <h2 class="news-title">{escape(title_element.text or "Untitled")}</h2>
       <div class="news-meta">
-        <time class="news-time" datetime="{modified_time.isoformat(timespec='seconds')}">
-          {modified_time.strftime("%d.%m.%Y, %H:%M")}
+        <time class="news-time" datetime="{server_time.isoformat(timespec='seconds')}">
+          {server_time.strftime("%d.%m.%Y, %H:%M (%Z, UTC%z)")}
         </time>
         {category_badges}
       </div>
@@ -769,8 +770,8 @@ def generate_transcription_page(url_link, fn):
         entry = etree.parse(description_path, parser1)
 
         title_element = entry.find("title")
-        modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
-        age = datetime.now() - modified_time
+        modified_time = datetime.fromtimestamp(os.path.getmtime(description_path), timezone.utc)
+        age = datetime.now(timezone.utc) - modified_time
         share_html = ""
         if get_config()["tinyurl_key"]:
             short_url = get_share_url(fn)
@@ -801,8 +802,8 @@ def generate_full_transcription_page(url_link, fn):
         entry = etree.parse(description_path, parser1)
 
         title_element = entry.find("title")
-        modified_time = datetime.fromtimestamp(os.path.getmtime(description_path))
-        age = datetime.now() - modified_time
+        modified_time = datetime.fromtimestamp(os.path.getmtime(description_path), timezone.utc)
+        age = datetime.now(timezone.utc) - modified_time
         output = ""
         if os.path.exists(srt_path):
             with open(srt_path, "r", encoding="utf-8") as stream:

@@ -6,7 +6,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from lxml import etree
 from repeatings_detector import find_duplicate_episode, mark_episode_as_duplicate
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from utils import secure_wait, filter_subs
 from config import get_config
 from lang_detect import *
@@ -140,7 +140,8 @@ def prepare_transcription_retry(filename, engine):
 
 def _wait_for_youtube(filename):
     path = Path("yt-video", filename + ".desc")
-    if get_video_link(path) and datetime.now() - datetime.fromtimestamp(path.stat().st_mtime) < timedelta(
+    if get_video_link(path) and datetime.now(timezone.utc) - datetime.fromtimestamp(
+            path.stat().st_mtime, timezone.utc) < timedelta(
             hours=get_config()["wait_for_download_hours"]):
         raise TranscriptionPending("Waiting for YouTube subtitles.")
 

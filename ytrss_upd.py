@@ -10,7 +10,6 @@ import feedparser
 from xml.etree import ElementTree
 from datetime import datetime, timedelta, timezone
 import hashlib
-from time import mktime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import arrow
@@ -219,7 +218,7 @@ def parce_rss_item(link, response=None):
                         if published is None or not published.text:
                             print(f"Skipping entry with no published date in source {source_name}")
                             continue
-                        insertion_date = convert_date_to_iso_with_pendulum(published.text)
+                        insertion_date = convert_date_to_iso_with_pendulum(published.text).astimezone(timezone.utc)
                         time_since_insertion = datetime.now(timezone.utc) - insertion_date
                         media_description = entry.find("description", NS)
                         media_thumbnail = entry.find("itunes:image", NS)
@@ -336,7 +335,7 @@ def parce_rss_item(link, response=None):
                             auto_transcription_element.text = "true" if link not in get_config()["sources_with_disabled_auto_transcription"] else "false"
                             description_path = "yt-video/" + fn + ".desc"
                             write_description(entry_element, description_path)
-                            modTime = mktime(insertion_date.timetuple())
+                            modTime = insertion_date.timestamp()
                             os.utime(description_path, (modTime, modTime))
                             if os.path.exists(srt_path):
                                 os.utime(srt_path, (modTime, modTime))
@@ -500,7 +499,7 @@ def parce_atom_item(link, response=None):
                 auto_transcription = link not in get_config()["sources_with_disabled_auto_transcription"]
                 ElementTree.SubElement(entry_element, "auto_transcription").text = "true" if auto_transcription else "false"
                 write_description(entry_element, description_path)
-                mod_time = mktime(insertion_date.timetuple())
+                mod_time = insertion_date.timestamp()
                 os.utime(description_path, (mod_time, mod_time))
                 transcription_path = "yt-video/" + fn + ".txt"
                 for path in (srt_path, transcription_path):
@@ -548,7 +547,7 @@ def parce_yt_item(link):
                         if published is None or not published.text:
                             print(f"Skipping entry with no published date in source {source_name}")
                             continue
-                        insertion_date =convert_date_to_iso_with_pendulum(published.text)
+                        insertion_date = convert_date_to_iso_with_pendulum(published.text).astimezone(timezone.utc)
                         time_since_insertion = datetime.now(timezone.utc) - insertion_date
                         count_all += 1
                         media_group = entry.find("{http://search.yahoo.com/mrss/}group")
@@ -615,7 +614,7 @@ def parce_yt_item(link):
                                     print(f"Downloading is disabled for source {source_id}")
                             if os.path.exists(file_path):
                                 length = os.path.getsize(file_path)
-                                modTime = mktime(insertion_date.timetuple())
+                                modTime = insertion_date.timestamp()
                                 os.utime(file_path, (modTime, modTime))
                                 enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url="__URL_LINK__/file/"+fn+".mp4", type="video/mp4", length=str(length))
                                 duration = get_duration(file_path)
@@ -651,7 +650,7 @@ def parce_yt_item(link):
                             auto_transcription_element = ElementTree.SubElement(entry_element, "auto_transcription")
                             auto_transcription_element.text = "true" if source_id not in get_config()["sources_with_disabled_auto_transcription"] else "false"
                             write_description(entry_element, description_path)
-                            modTime = mktime(insertion_date.timetuple())
+                            modTime = insertion_date.timestamp()
                             os.utime(description_path, (modTime, modTime))
                             if get_config()["auto_transcript_hours"] > 0:
                                 if time_since_insertion < timedelta(hours=get_config()["auto_transcript_hours"]):
