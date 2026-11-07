@@ -117,9 +117,9 @@ Add API keys only for the features to enable:
 | Key | Feature |
 | --- | --- |
 | google_search_api_key | YouTube channel and playlist search. |
-| gemini_api_key | Gemini summaries and transcripts. |
-| openai_api_key | OpenAI summaries and transcripts. |
-| claude_api_key | Claude summaries and transcripts. |
+| thinking.gemini.api_key | Gemini summaries and transcripts. |
+| thinking.openai.api_key | OpenAI summaries and transcripts. |
+| thinking.claude.api_key | Claude summaries and transcripts. |
 | tinyurl_key | Short sharing links for saved text. |
 
 The srt engine downloads YouTube subtitles without an AI provider key.
@@ -137,28 +137,42 @@ Capabilities differ by engine:
 - OpenAI can use subtitles, downloaded YouTube media or podcast audio.
 - Gemini can use subtitles, a YouTube URL, podcast audio or article URL context.
 
-### Thinking settings
+### Provider and thinking settings
 
-The optional thinking dictionary in ytrss_config.json controls reasoning for
-each provider. Its defaults preserve the current lowest-thinking settings:
+The thinking dictionary in ytrss_config.json groups each provider's API key,
+model names and reasoning settings. Its defaults are:
 
     {
       "thinking": {
-        "gemini": {"thinking_level": "low"},
-        "openai": {"effort": "none"},
-        "claude": {"type": "disabled", "effort": "low"}
+        "gemini": {
+          "api_key": "",
+          "model": "gemini-3.8-flash",
+          "thinking_level": "low"
+        },
+        "openai": {
+          "api_key": "",
+          "model": "gpt-5.6",
+          "audio_model": "gpt-4o-transcribe-diarize",
+          "effort": "none"
+        },
+        "claude": {
+          "api_key": "",
+          "model": "claude-opus-5",
+          "type": "disabled",
+          "effort": "low"
+        }
       }
     }
 
-Gemini uses the same level for text, YouTube, podcast audio and article URL
-context. OpenAI's setting applies to text requests; its audio transcription
-endpoint has no reasoning-effort parameter. Claude's type controls thinking
-mode, while effort controls response effort.
+Gemini uses model and thinking_level for text, YouTube, podcast audio and
+article URL context. OpenAI uses model for text and audio_model for speech
+recognition; effort applies only to text requests. Claude's type controls
+thinking mode, while effort controls response effort.
 
-Missing dictionaries and fields use their defaults, so individual values can
-be overridden without repeating the full block. Removing the block restores
-the defaults. JSON edits are read for subsequent jobs; an in-progress job keeps
-its configuration snapshot. Accepted values depend on the configured model.
+Missing dictionaries and fields use their defaults. API keys default to empty,
+which disables their providers. The old top-level provider keys and model names
+are not used. JSON edits are read for subsequent jobs; an in-progress job keeps
+its configuration snapshot. Accepted thinking values depend on the model.
 After choosing another model, use thinking settings supported by that model.
 
 ## Grouping

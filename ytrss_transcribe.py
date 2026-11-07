@@ -25,11 +25,11 @@ def get_engine_map(cfg=None):
     if cfg is None:
         cfg = get_config()
     res = dict()
-    if cfg["gemini_api_key"] != "":
+    if cfg["thinking"]["gemini"]["api_key"] != "":
         res["gemini_s"] = "Gemini"
-    if cfg["openai_api_key"] != "":
+    if cfg["thinking"]["openai"]["api_key"] != "":
         res["openai_s"] = "OpenAI"
-    if cfg["claude_api_key"] != "":
+    if cfg["thinking"]["claude"]["api_key"] != "":
         res["claude_s"] = "Claude"
     res["srt"] = "Just download subtitles from YT"
     return res
@@ -447,14 +447,14 @@ class _OpenAIEngine:
     def __init__(self, cfg):
         from openai import OpenAI
         self.cfg = cfg
-        self.client = OpenAI(api_key=cfg["openai_api_key"])
+        self.client = OpenAI(api_key=cfg["thinking"]["openai"]["api_key"])
 
     def request(self, prompt, chunk):
         _require_text(chunk, "OpenAI input")
         return _openai_response_text(self.client.responses.create(
-            model=self.cfg["open_ai_text_model"],
+            model=self.cfg["thinking"]["openai"]["model"],
             input=prompt + "\nText:\n" + chunk,
-            reasoning=self.cfg["thinking"]["openai"],
+            reasoning={"effort": self.cfg["thinking"]["openai"]["effort"]},
         ))
 
     def transcribe(self, filename, lang):
@@ -469,7 +469,7 @@ class _OpenAIEngine:
             for chunk in chunks:
                 with open(chunk, "rb") as stream:
                     response = self.client.audio.transcriptions.create(
-                        model=self.cfg["open_ai_audio_model"], file=stream,
+                        model=self.cfg["thinking"]["openai"]["audio_model"], file=stream,
                         response_format="diarized_json", chunking_strategy="auto", language=lang,
                     )
                 speech = []
@@ -491,7 +491,7 @@ class _GeminiEngine:
         from google.genai import types
         self.cfg = cfg
         self.types = types
-        self.client = genai.Client(api_key=cfg["gemini_api_key"])
+        self.client = genai.Client(api_key=cfg["thinking"]["gemini"]["api_key"])
         self.generation_config = types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(
                 thinking_level=cfg["thinking"]["gemini"]["thinking_level"]),
@@ -500,7 +500,7 @@ class _GeminiEngine:
     def request(self, prompt, chunk):
         _require_text(chunk, "Gemini input")
         return _gemini_response_text(self.client.models.generate_content(
-            model=self.cfg["gemini_model"], contents=[prompt, "Text:\n" + chunk],
+            model=self.cfg["thinking"]["gemini"]["model"], contents=[prompt, "Text:\n" + chunk],
             config=self.generation_config))
 
     def transcribe(self, filename, lang):
@@ -508,7 +508,7 @@ class _GeminiEngine:
         if youtube:
             _wait_for_youtube(filename)
             return _gemini_response_text(self.client.models.generate_content(
-                model=self.cfg["gemini_model"], contents=self.types.Content(parts=[
+                model=self.cfg["thinking"]["gemini"]["model"], contents=self.types.Content(parts=[
                     self.types.Part.from_uri(file_uri=youtube, mime_type="video/mp4"),
                     self.types.Part.from_text(text=make_verbatim_prompt()),
                 ]), config=self.generation_config))
@@ -521,7 +521,7 @@ class _GeminiEngine:
         uploaded = self.client.files.upload(file=audio)
         try:
             return _gemini_response_text(self.client.models.generate_content(
-                model=self.cfg["gemini_model"],
+                model=self.cfg["thinking"]["gemini"]["model"],
                 contents=[uploaded, make_verbatim_prompt()],
                 config=self.generation_config))
         finally:
@@ -532,7 +532,7 @@ class _GeminiEngine:
 
     def page_text(self, filename, lang):
         interaction = self.client.interactions.create(
-            model=self.cfg["gemini_model"],
+            model=self.cfg["thinking"]["gemini"]["model"],
             input=make_page_text_prompt(lang, get_page_link(filename)),
             tools=[{"type": "url_context"}, {"type": "google_search"}],
             generation_config={"thinking_level": self.cfg["thinking"]["gemini"]["thinking_level"]})
@@ -552,12 +552,12 @@ class _ClaudeEngine:
     def __init__(self, cfg):
         import anthropic
         self.cfg = cfg
-        self.client = anthropic.Client(api_key=cfg["claude_api_key"])
+        self.client = anthropic.Client(api_key=cfg["thinking"]["claude"]["api_key"])
 
     def request(self, prompt, chunk):
         _require_text(chunk, "Claude input")
         with self.client.messages.stream(
-                model=self.cfg["claude_model"], max_tokens=16000,
+                model=self.cfg["thinking"]["claude"]["model"], max_tokens=16000,
                 thinking={"type": self.cfg["thinking"]["claude"]["type"]},
                 output_config={"effort": self.cfg["thinking"]["claude"]["effort"]},
                 messages=[{"role": "user", "content": [
