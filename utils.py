@@ -394,7 +394,9 @@ def generate_categorized_opml(url_link):
     etree.SubElement(head, "title").text = title
     body = etree.SubElement(root, "body")
     folder = etree.SubElement(body, "outline", text=title)
-    for category_id, name in enumerate(settings["categories"]):
+    category_feeds = list(enumerate(settings["categories"]))
+    category_feeds.append((UNCLASSIFIED, UNCLASSIFIED))
+    for category_id, name in category_feeds:
         label = remove_invalid_xml_characters(f"{settings['title']} - {name}")
         etree.SubElement(
             folder, "outline", type="rss", text=label, title=label,
@@ -412,11 +414,14 @@ def generate_atom_feed(url_link, is_public, category_id=None):
     category_name = None
     feed_path = "/feed"
     if category_id is not None:
-        names = list(settings["categories"])
-        if (isinstance(category_id, bool) or not isinstance(category_id, int)
-                or not 0 <= category_id < len(names)):
-            raise NotFound("This category does not exist.")
-        category_name = names[category_id]
+        if category_id == UNCLASSIFIED:
+            category_name = UNCLASSIFIED
+        else:
+            names = list(settings["categories"])
+            if (isinstance(category_id, bool) or not isinstance(category_id, int)
+                    or not 0 <= category_id < len(names)):
+                raise NotFound("This category does not exist.")
+            category_name = names[category_id]
         feed_path = f"/feed/category/{category_id}"
     feed_title = escape(remove_invalid_xml_characters(
         settings["title"] if category_name is None else f"{settings['title']} - {category_name}",
@@ -650,9 +655,7 @@ def generate_transcriptions_list_page(url_link, category_request=None, search_re
            f'<form class="news-search" method="get" action="{escape(url_link, quote=True)}/read">'
            '<button type="submit">Back to list</button></form>'
        )
-    category_names = [
-        name for name in settings["categories"] if name != UNCLASSIFIED
-    ]
+    category_names = list(settings["categories"]) + [UNCLASSIFIED]
     category_buttons = "".join(
         f'<button type="submit" name="category" value="{escape(name, quote=True)}"'
         f' aria-pressed="{str(name == category_request).lower()}">{escape(name)}</button>'

@@ -33,6 +33,11 @@ def default_config():
         "open_ai_audio_model": "gpt-4o-transcribe-diarize",
         "claude_api_key": "",
         "claude_model": "claude-opus-5",
+        "thinking": {
+            "gemini": {"thinking_level": "low"},
+            "openai": {"effort": "none"},
+            "claude": {"type": "disabled", "effort": "low"},
+        },
         "yt-dlp-enabled": True,
         "yt-dlp-options": "",
         "yt-dlp-options-rss-podcasts": "",
@@ -114,6 +119,16 @@ class ConfigStore:
             delay = 10
         settings["delay-between-fetches"] = max(10, delay)
 
+        thinking = settings.get("thinking")
+        if not isinstance(thinking, dict):
+            thinking = {}
+        for engine, defaults in default_config()["thinking"].items():
+            overrides = thinking.get(engine)
+            if not isinstance(overrides, dict):
+                overrides = {}
+            thinking[engine] = {**defaults, **overrides}
+        settings["thinking"] = thinking
+
     def _reload(self):
         # Keep support for edits made directly in the JSON file. Unchanged
         # settings are served from memory rather than parsed on every access.
@@ -127,6 +142,8 @@ class ConfigStore:
                 signature = self._signature_for(os.fstat(stream.fileno()))
                 settings = json.load(stream)
             self._config.update(settings)
+            # Removing this optional block restores its defaults on reload.
+            self._config["thinking"] = settings.get("thinking", {})
             self._normalize(self._config)
             self._signature = signature
 

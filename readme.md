@@ -137,6 +137,30 @@ Capabilities differ by engine:
 - OpenAI can use subtitles, downloaded YouTube media or podcast audio.
 - Gemini can use subtitles, a YouTube URL, podcast audio or article URL context.
 
+### Thinking settings
+
+The optional thinking dictionary in ytrss_config.json controls reasoning for
+each provider. Its defaults preserve the current lowest-thinking settings:
+
+    {
+      "thinking": {
+        "gemini": {"thinking_level": "low"},
+        "openai": {"effort": "none"},
+        "claude": {"type": "disabled", "effort": "low"}
+      }
+    }
+
+Gemini uses the same level for text, YouTube, podcast audio and article URL
+context. OpenAI's setting applies to text requests; its audio transcription
+endpoint has no reasoning-effort parameter. Claude's type controls thinking
+mode, while effort controls response effort.
+
+Missing dictionaries and fields use their defaults, so individual values can
+be overridden without repeating the full block. Removing the block restores
+the defaults. JSON edits are read for subsequent jobs; an in-progress job keeps
+its configuration snapshot. Accepted values depend on the configured model.
+After choosing another model, use thinking settings supported by that model.
+
 ## Grouping
 
 The classification has two levels: automatically discovered groups and
@@ -187,7 +211,8 @@ clustering calculation do not use this setting.
 Classification first finds the nearest automatic group, then looks up its
 category. If that group has no category, the item is unclassified. It does not
 fall back to another group. Items without a usable vector are also displayed
-as unclassified. Navigation shows only administrator-defined categories.
+as unclassified. Navigation shows administrator-defined categories followed by
+an unclassified button for all items without an assigned category.
 
 ### Category feeds and OPML
 
@@ -197,19 +222,23 @@ Category names are not added to the item description.
 
 Select Save OPML on the Grouping page to download ytrss.opml and import it into
 an RSS reader. Alternatively, import /feed/categorized as an OPML subscription
-list by URL to add the configured categories as separate feeds. The list contains
-one folder named after the configured feed title. Its entries point to
-/feed/category/0, /feed/category/1 and so on. Each feed contains only that
+list by URL to add the configured categories and unclassified as separate feeds.
+The list contains one folder named after the configured feed title. Configured
+category entries point to /feed/category/0, /feed/category/1 and so on, followed
+by the built-in /feed/category/unclassified feed. Each feed contains only that
 category's items, with the same article identifiers, descriptions and media as
 the combined feed. Category feed titles use "configured feed title - category name"
-in both RSS and OPML. Unclassified has no navigation button or separate OPML feed.
+in both RSS and OPML. The unclassified feed includes items without a usable
+vector and items whose nearest automatic group has no assigned category. Its
+address is stable when administrator-defined categories change.
 
 IDs are zero-based positions in the categories dictionary. Renaming a category
 through Grouping preserves its position and address. Deleting or reordering
 categories can change which category a number represents. Auto-config preserves
 category IDs but leaves their feeds empty until groups are assigned again.
 A number outside the current category list returns HTTP 404. With no configured
-categories, the OPML contains an empty folder and no category subscriptions.
+categories, the OPML still contains the unclassified subscription. Unclassified
+is built in and does not need an entry in the categories configuration.
 
 For example, with the default local address, import
 http://127.0.0.1:5000/feed/categorized using the reader's OPML import option.
@@ -276,7 +305,7 @@ After the complete model is cached, Hugging Face network access can be disabled:
 
 - /config opens subscription and processing settings.
 - /read lists saved news with categories and text search.
-- /read/category filters by an administrator-defined category.
+- /read/category filters by an administrator-defined category or unclassified.
 - /read/<episode> shows saved annotation or article text, with its category
   and automatic group below the title.
 - /read/<episode>/full shows complete subtitles when available.

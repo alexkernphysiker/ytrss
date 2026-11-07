@@ -727,6 +727,7 @@ def categorized_feed_list():
     return response
 
 
+@app.route("/feed/category/unclassified", defaults={"category_id": UNCLASSIFIED})
 @app.route("/feed/category/<int:category_id>")
 def category_feed(category_id):
     return Response(

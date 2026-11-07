@@ -454,6 +454,7 @@ class _OpenAIEngine:
         return _openai_response_text(self.client.responses.create(
             model=self.cfg["open_ai_text_model"],
             input=prompt + "\nText:\n" + chunk,
+            reasoning=self.cfg["thinking"]["openai"],
         ))
 
     def transcribe(self, filename, lang):
@@ -492,6 +493,8 @@ class _GeminiEngine:
         self.types = types
         self.client = genai.Client(api_key=cfg["gemini_api_key"])
         self.generation_config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(
+                thinking_level=cfg["thinking"]["gemini"]["thinking_level"]),
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
 
     def request(self, prompt, chunk):
@@ -531,7 +534,8 @@ class _GeminiEngine:
         interaction = self.client.interactions.create(
             model=self.cfg["gemini_model"],
             input=make_page_text_prompt(lang, get_page_link(filename)),
-            tools=[{"type": "url_context"}, {"type": "google_search"}])
+            tools=[{"type": "url_context"}, {"type": "google_search"}],
+            generation_config={"thinking_level": self.cfg["thinking"]["gemini"]["thinking_level"]})
         if interaction.status != "completed":
             raise ValueError(f"Gemini page interaction not completed: {interaction.status}")
         blocks = []
@@ -554,6 +558,8 @@ class _ClaudeEngine:
         _require_text(chunk, "Claude input")
         with self.client.messages.stream(
                 model=self.cfg["claude_model"], max_tokens=16000,
+                thinking={"type": self.cfg["thinking"]["claude"]["type"]},
+                output_config={"effort": self.cfg["thinking"]["claude"]["effort"]},
                 messages=[{"role": "user", "content": [
                     {"type": "text", "text": prompt},
                     {"type": "text", "text": "Subtitles:\n" + chunk},
