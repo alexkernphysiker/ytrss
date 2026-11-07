@@ -2,7 +2,9 @@
 
 YTRSS is a self-hosted YouTube and RSS aggregator with a web interface. It
 collects subscriptions into one RSS 2.0 feed, saves media and article text,
-creates transcripts or summaries, and groups saved items by their content.
+creates transcripts or summaries, and groups saved items by their content. For
+Android, we recommend [RSS Reader Offline | Podcast](https://play.google.com/store/apps/details?id=com.vanniktech.rssreader)
+because the YTRSS author tests this tool with that app.
 
 ## Requirements
 
@@ -58,7 +60,13 @@ can also be added by their IDs.
 
 The news list is available at [http://127.0.0.1:5000/read](http://127.0.0.1:5000/read).
 Add [http://127.0.0.1:5000/feed](http://127.0.0.1:5000/feed) to an RSS or podcast
-reader. Use the corresponding address if the host or port is changed.
+reader running on the same machine as YTRSS.
+
+For a phone or another device, use the reachable address of the YTRSS
+installation, such as https://ytrss.example.com/feed. The address 127.0.0.1
+refers to the device running the reader. Set url_link to the installation's
+base URL and configure remote access as described in
+[Configuration](#configuration) and [Access control](#access-control).
 
 The launcher runs the web server, feed updater and transcriber together.
 Keep one launcher process running; do not start the three modules as separate
