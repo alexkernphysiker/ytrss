@@ -356,6 +356,23 @@ The launcher writes ytrss.log, ytrss_upd.log and ytrss_transcribe.log in its
 working directory. Consult these for startup failures, failed downloads and
 transcription errors.
 
+Transcription diagnostics also go to each material's yt-video/<id>.log. Entries
+include the processing stage, provider/model, response completion status,
+available token counters, request time and output length. Audio progress records
+each part's number, duration and time range. OpenAI and Gemini use the same
+audio splitter, with a target maximum of 1000 seconds per part (local files are
+balanced into similar lengths). Gemini uploads and transcribes each podcast
+audio part separately and deletes its provider-side upload afterwards. Results
+are joined in source order; formatting and summarization start only after all
+parts succeed. Temporary local segments are removed on success or failure.
+Gemini's direct YouTube URL requests still use one part.
+An empty response for an audio part of at least 30 seconds emits
+audio.part.suspicious_empty. If duration is unavailable, the log records that
+uncertainty instead. Empty or abnormally terminated responses are rejected
+before a final result is published. A normal STOP is a technical completion
+signal and does not prove that every spoken word was transcribed. Prompts,
+transcript content and API keys are not included in these diagnostic entries.
+
 - If media processing fails, verify that ffmpeg, ffprobe and yt-dlp are on PATH.
 - If a provider engine is absent, check its API key and configured model.
 - If RSS transcription is skipped, check the selected engine and its credentials.

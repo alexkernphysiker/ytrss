@@ -4,6 +4,8 @@ import shlex
 import sys
 from pathlib import Path
 from dataclasses import dataclass
+from contextlib import contextmanager
+from contextvars import ContextVar
 from lxml import etree
 from repeatings_detector import find_duplicate_episode, mark_episode_as_duplicate
 from datetime import datetime, timedelta, timezone
@@ -35,6 +37,8 @@ def get_engine_map(cfg=None):
     return res
 
 TEXT_CHUNK_LENGTH = 0
+SUSPICIOUS_EMPTY_AUDIO_SECONDS = 30.0
+_TRACE_CONTEXT = ContextVar("transcription_trace", default=None)
 _RETRY_STATE = {}
 _POSTPROCESS_PENDING = set()
 _TEMPORARY_AUDIO = {}
@@ -43,6 +47,148 @@ _RETRY_LOCK = RLock()
 
 class TranscriptionPending(ValueError):
     """Source is not ready yet; keep the job for a later pass."""
+
+
+@contextmanager
+def _trace_stage(**fields):
+    context = {**(_TRACE_CONTEXT.get() or {}), **fields}
+    token = _TRACE_CONTEXT.set(context)
+    try:
+        yield
+    finally:
+        _TRACE_CONTEXT.reset(token)
+
+
+def _trace(event, **fields):
+    context = _TRACE_CONTEXT.get()
+    if context is None:
+        return
+    details = {**context, **fields}
+    filename = details.pop("filename", None)
+    level = details.pop("level", "INFO")
+    payload = json.dumps(details, ensure_ascii=False, sort_keys=True, default=str)
+    timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
+    print(f"{timestamp} {level} Transcription {filename or '-'} {event} {payload}", flush=True)
+    if filename:
+        try:
+            write_log(filename, f"{level} {event} {payload}")
+        except OSError as error:
+            print(f"{timestamp} WARNING Transcription {filename} log.write_failed "
+                  f"{type(error).__name__}", flush=True)
+
+
+def _usage_values(usage):
+    # Only numeric counters; never dump SDK responses, prompts or credentials.
+    paths = {
+        "input_tokens": ("prompt_token_count", "input_tokens", "total_input_tokens"),
+        "output_tokens": ("candidates_token_count", "output_tokens", "total_output_tokens"),
+        "thinking_tokens": ("thoughts_token_count", "output_tokens_details.reasoning_tokens",
+                            "total_thought_tokens"),
+        "total_tokens": ("total_token_count", "total_tokens"),
+        "cached_input_tokens": ("cached_content_token_count", "input_tokens_details.cached_tokens",
+                                "cache_read_input_tokens", "total_cached_tokens"),
+        "cache_creation_tokens": ("cache_creation_input_tokens",),
+        "audio_seconds": ("seconds",),
+    }
+    result = {}
+    for label, alternatives in paths.items():
+        for path in alternatives:
+            value = usage
+            for field in path.split("."):
+                value = value.get(field) if isinstance(value, dict) else getattr(value, field, None)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
+                result[label] = value
+                break
+    return result
+
+
+def _model_request(call, parse):
+    context = _TRACE_CONTEXT.get() or {}
+    prefix = "audio.part" if context.get("stage") == "audio_transcription" else "request"
+    started = monotonic()
+    _trace(prefix + ".start")
+    try:
+        text = parse(call())
+    except Exception as error:
+        _trace(prefix + ".failed", level="ERROR", error_type=type(error).__name__,
+               elapsed_seconds=round(monotonic() - started, 3))
+        raise
+    _trace(prefix + ".completed", technical_validation="passed",
+           elapsed_seconds=round(monotonic() - started, 3), output_chars=len(text))
+    return text
+
+
+def _log_empty_audio(text):
+    context = _TRACE_CONTEXT.get() or {}
+    if context.get("stage") != "audio_transcription":
+        return
+    if isinstance(text, str) and any(character.isalnum() for character in text):
+        return
+    duration = context.get("audio_seconds")
+    suspicious = duration >= SUSPICIOUS_EMPTY_AUDIO_SECONDS if duration is not None else None
+    _trace("audio.part.suspicious_empty" if suspicious else "audio.part.empty",
+           level="WARNING", suspicious=suspicious,
+           empty_audio_threshold_seconds=SUSPICIOUS_EMPTY_AUDIO_SECONDS)
+
+
+def _logged_audio_duration(path):
+    try:
+        return _audio_duration(path)
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+        _trace("audio.duration.unavailable", level="WARNING", error_type=type(error).__name__)
+        return None
+
+
+def _description_audio_duration(filename):
+    path = Path("yt-video", filename + ".desc")
+    try:
+        raw = etree.parse(path).findtext("duration")
+        values = [float(value) for value in raw.split(":")]
+        duration = 0.0
+        for value in values:
+            duration = duration * 60 + value
+        return duration if math.isfinite(duration) and duration > 0 else None
+    except (OSError, ValueError, TypeError, AttributeError, etree.XMLSyntaxError):
+        return None
+
+
+def _openai_audio_response_text(response):
+    segments = list(getattr(response, "segments", None) or [])
+    texts = [getattr(segment, "text", None) for segment in segments]
+    _trace("response", provider="openai", endpoint="audio.transcriptions",
+           completion_status="not_provided_by_endpoint", segments=len(segments),
+           usage=_usage_values(getattr(response, "usage", None)))
+    _log_empty_audio("".join(text for text in texts if isinstance(text, str)))
+    speech = []
+    previous = None
+    for segment in segments:
+        words = _require_text(segment.text, "audio segment")
+        speech.append(("\n- " if segment.speaker != previous else " ") + words)
+        previous = segment.speaker
+    return _require_text("".join(speech), "audio transcript")
+
+
+def _claude_response_text(final, output):
+    _trace("response", provider="claude", finish_reason=final.stop_reason,
+           usage=_usage_values(getattr(final, "usage", None)))
+    if final.stop_reason != "end_turn":
+        raise ValueError(f"Claude generation did not finish normally: {final.stop_reason}")
+    return _require_text(output, "Claude response")
+
+
+def _gemini_page_response_text(interaction):
+    _trace("response", provider="gemini", endpoint="interactions", status=interaction.status,
+           usage=_usage_values(getattr(interaction, "usage", None)))
+    if interaction.status != "completed":
+        raise ValueError(f"Gemini page interaction not completed: {interaction.status}")
+    blocks = []
+    steps = getattr(interaction, "steps", None) or getattr(interaction, "outputs", [])
+    for step in steps:
+        if step.type == "text":
+            blocks.append(step.text)
+        elif step.type == "model_output":
+            blocks.extend(block.text for block in step.content if block.type == "text")
+    return _require_text("\n".join(blocks), "Gemini page text")
 
 
 def _require_text(text, stage="transcription"):
@@ -105,8 +251,15 @@ def _chunks(text):
 
 def _map_text(text, request):
     # Publish only once every source chunk has a complete, nonempty result.
-    return "\n\n".join(_require_text(request(chunk), "processed chunk")
-                       for chunk in _chunks(text))
+    chunks = _chunks(text)
+    result = []
+    for index, chunk in enumerate(chunks, 1):
+        with _trace_stage(text_part=index, text_parts=len(chunks)):
+            _trace("text.part.start", input_chars=len(chunk))
+            output = _require_text(request(chunk), "processed chunk")
+            _trace("text.part.completed", output_chars=len(output))
+            result.append(output)
+    return "\n\n".join(result)
 
 
 def _cache_is_valid(path):
@@ -209,12 +362,14 @@ def download_subtitles(filename):
             content = _speech(path.read_text(encoding="utf-8"))
             if _usable(content):
                 # An existing .srt is readable text; raw/legacy sources need formatting.
+                _trace("subtitles.cache_hit", cache=path.suffix, input_chars=len(content))
                 return content, path != srt_path
             path.unlink()
     link = get_video_link(description_path)
     if not link or not get_config().get("yt-dlp-enabled"):
         return "", False
     lang = detect_language(description_path) or "en"
+    _trace("subtitles.download.start", language=lang)
     secure_wait()
     with TemporaryDirectory(prefix=".subtitles-", dir="yt-video") as directory:
         command = [
@@ -225,6 +380,7 @@ def download_subtitles(filename):
         result = subprocess.run(command, capture_output=True, timeout=600)
         if result.returncode != 0:
             # Never promote a destination printed before yt-dlp subsequently failed.
+            _trace("subtitles.download.failed", level="WARNING", exit_code=result.returncode)
             write_log(filename, f"Subtitle download failed (exit {result.returncode}).")
             return "", False
         for path in sorted(Path(directory).iterdir()):
@@ -232,6 +388,7 @@ def download_subtitles(filename):
                 continue
             content = _speech(path.read_text(encoding="utf-8"))
             if _usable(content):
+                _trace("subtitles.download.completed", input_chars=len(content))
                 return save_raw_subtitles(filename, content), True
     return "", False
 
@@ -349,6 +506,7 @@ def split_mp3_file(mp3_file_path, chunk_length_s=1000):
         durations = [_audio_duration(path) for path in paths]
         if source_duration is not None and abs(sum(durations) - source_duration) > max(1.0, source_duration * 0.02):
             raise ValueError("Audio segmentation did not cover the whole source.")
+        _trace("audio.parts.prepared", parts=len(paths), audio_seconds=sum(durations))
         for path in paths:
             yield str(path)
 
@@ -406,28 +564,50 @@ def write_log(filename, message):
 
 
 def _openai_response_text(response):
-    if response.status != "completed":
-        raise ValueError(f"OpenAI response was not completed: {response.status}")
+    status = response.status
+    _trace("response", provider="openai", status=status,
+           incomplete_reason=getattr(getattr(response, "incomplete_details", None), "reason", None),
+           usage=_usage_values(getattr(response, "usage", None)))
+    if status != "completed":
+        raise ValueError(f"OpenAI response was not completed: {status}")
     return _require_text(response.output_text, "OpenAI response")
 
 
 def _gemini_response_text(response):
-    candidates = response.candidates
+    candidates = response.candidates or []
+    reasons = [getattr(candidate.finish_reason, "name", candidate.finish_reason)
+               for candidate in candidates]
+    feedback = getattr(response, "prompt_feedback", None)
+    blocked = getattr(feedback, "block_reason", None)
+    _trace("response", provider="gemini", candidates=len(candidates),
+           finish_reasons=reasons, block_reason=getattr(blocked, "name", blocked),
+           usage=_usage_values(getattr(response, "usage_metadata", None)))
     if not candidates:
-        raise ValueError(f"Gemini returned no candidates; feedback={getattr(response, 'prompt_feedback', None)}")
-    for candidate in candidates:
-        reason = candidate.finish_reason
-        reason = getattr(reason, "name", reason)
+        _log_empty_audio(None)
+        raise ValueError(f"Gemini returned no candidates; feedback={feedback}")
+    try:
+        text = response.text
+    except (AttributeError, TypeError, ValueError):
+        text = None
+    _log_empty_audio(text)
+    for reason in reasons:
         if reason != "STOP":
             raise ValueError(f"Gemini generation did not finish normally: {reason}")
-    return _require_text(response.text, "Gemini response")
+    return _require_text(text, "Gemini response")
 
 
 def _translate_if_needed(text, request):
     text = _require_text(text, "translation source")
-    if detect_language_from_text(text) not in get_config()["transcription-prompts"]:
-        prompt = f"Translate the supplied text into {get_config()['default_language']}. Return only the translation."
-        return _map_text(text, lambda chunk: request(prompt, chunk))
+    language = detect_language_from_text(text)
+    if language not in get_config()["transcription-prompts"]:
+        target = get_config()["default_language"]
+        with _trace_stage(stage="translation"):
+            _trace("translation.start", detected_language=language, target_language=target)
+            output = _map_text(text, lambda chunk: request(
+                f"Translate the supplied text into {target}. Return only the translation.", chunk))
+            _trace("translation.completed", output_chars=len(output))
+            return output
+    _trace("translation.skipped", detected_language=language)
     return text
 
 
@@ -444,6 +624,30 @@ def make_verbatim_prompt():
     )
 
 
+def _transcribe_audio_parts(audio, request):
+    """Keep temporary segments alive until every part has been transcribed."""
+    parts = []
+    chunks = split_mp3_file(audio)
+    offset = 0.0
+    try:
+        for index, chunk in enumerate(chunks, 1):
+            duration = _logged_audio_duration(chunk)
+            end = offset + duration if offset is not None and duration is not None else None
+            with _trace_stage(audio_part=index, audio_seconds=duration,
+                              audio_start_seconds=offset, audio_end_seconds=end):
+                parts.append(_model_request(
+                    lambda: request(chunk),
+                    lambda text: _require_text(text, "audio transcript part")))
+            offset = end
+    finally:
+        if hasattr(chunks, "close"):
+            chunks.close()
+    output = _require_text("\n".join(parts), "audio transcript")
+    _trace("audio.all_parts.completed", parts=len(parts), audio_seconds=offset,
+           output_chars=len(output))
+    return output
+
+
 class _OpenAIEngine:
     def __init__(self, cfg):
         from openai import OpenAI
@@ -452,11 +656,13 @@ class _OpenAIEngine:
 
     def request(self, prompt, chunk):
         _require_text(chunk, "OpenAI input")
-        return _openai_response_text(self.client.responses.create(
-            model=self.cfg["thinking"]["openai"]["model"],
-            input=prompt + "\nText:\n" + chunk,
-            reasoning={"effort": self.cfg["thinking"]["openai"]["effort"]},
-        ))
+        with _trace_stage(provider="openai", model=self.cfg["thinking"]["openai"]["model"],
+                          thinking=self.cfg["thinking"]["openai"]["effort"]):
+            return _model_request(lambda: self.client.responses.create(
+                model=self.cfg["thinking"]["openai"]["model"],
+                input=prompt + "\nText:\n" + chunk,
+                reasoning={"effort": self.cfg["thinking"]["openai"]["effort"]},
+            ), _openai_response_text)
 
     def transcribe(self, filename, lang):
         _wait_for_youtube(filename)
@@ -464,26 +670,19 @@ class _OpenAIEngine:
         audio = convert_video_to_audio(video) if video.exists() else get_enclosure_link(filename)
         if not audio:
             raise ValueError("No usable audio source.")
-        parts = []
-        chunks = split_mp3_file(audio)
-        try:
-            for chunk in chunks:
+        with _trace_stage(filename=filename, stage="audio_transcription", provider="openai",
+                          model=self.cfg["thinking"]["openai"]["audio_model"]):
+            _trace("audio.source.ready", source="local_video" if video.exists() else "podcast",
+                   part_seconds_limit=1000)
+
+            def request_part(chunk):
                 with open(chunk, "rb") as stream:
-                    response = self.client.audio.transcriptions.create(
+                    return _openai_audio_response_text(self.client.audio.transcriptions.create(
                         model=self.cfg["thinking"]["openai"]["audio_model"], file=stream,
                         response_format="diarized_json", chunking_strategy="auto", language=lang,
-                    )
-                speech = []
-                previous = None
-                for segment in response.segments:
-                    words = _require_text(segment.text, "audio segment")
-                    speech.append(("\n- " if segment.speaker != previous else " ") + words)
-                    previous = segment.speaker
-                parts.append(_require_text("".join(speech), "audio transcript"))
-        finally:
-            if hasattr(chunks, "close"):
-                chunks.close()
-        return _require_text("\n".join(parts), "audio transcript")
+                    ))
+
+            return _transcribe_audio_parts(audio, request_part)
 
 
 class _GeminiEngine:
@@ -500,53 +699,70 @@ class _GeminiEngine:
 
     def request(self, prompt, chunk):
         _require_text(chunk, "Gemini input")
-        return _gemini_response_text(self.client.models.generate_content(
-            model=self.cfg["thinking"]["gemini"]["model"], contents=[prompt, "Text:\n" + chunk],
-            config=self.generation_config))
+        with _trace_stage(provider="gemini", model=self.cfg["thinking"]["gemini"]["model"],
+                          thinking=self.cfg["thinking"]["gemini"]["thinking_level"]):
+            return _model_request(lambda: self.client.models.generate_content(
+                model=self.cfg["thinking"]["gemini"]["model"], contents=[prompt, "Text:\n" + chunk],
+                config=self.generation_config), _gemini_response_text)
 
     def transcribe(self, filename, lang):
-        youtube = get_video_link(Path("yt-video", filename + ".desc"))
-        if youtube:
-            _wait_for_youtube(filename)
-            return _gemini_response_text(self.client.models.generate_content(
-                model=self.cfg["thinking"]["gemini"]["model"], contents=self.types.Content(parts=[
-                    self.types.Part.from_uri(file_uri=youtube, mime_type="video/mp4"),
-                    self.types.Part.from_text(text=make_verbatim_prompt()),
-                ]), config=self.generation_config))
-        enclosure = get_enclosure_link(filename)
-        if not enclosure:
-            return self.page_text(filename, lang)
-        audio = download_audio_file(enclosure, filename)
-        if not audio:
-            raise ValueError("Podcast audio download failed.")
-        uploaded = self.client.files.upload(file=audio)
-        try:
-            return _gemini_response_text(self.client.models.generate_content(
-                model=self.cfg["thinking"]["gemini"]["model"],
-                contents=[uploaded, make_verbatim_prompt()],
-                config=self.generation_config))
-        finally:
-            try:
-                self.client.files.delete(name=uploaded.name)
-            except Exception as error:
-                write_log(filename, f"Audio upload cleanup failed: {type(error).__name__}")
+        with _trace_stage(filename=filename, stage="audio_transcription", provider="gemini",
+                          model=self.cfg["thinking"]["gemini"]["model"],
+                          thinking=self.cfg["thinking"]["gemini"]["thinking_level"]):
+            youtube = get_video_link(Path("yt-video", filename + ".desc"))
+            if youtube:
+                _wait_for_youtube(filename)
+                duration = _description_audio_duration(filename)
+                with _trace_stage(source="youtube", audio_seconds=duration,
+                                  audio_end_seconds=duration, audio_start_seconds=0.0,
+                                  audio_part=1, audio_parts=1):
+                    return _model_request(lambda: self.client.models.generate_content(
+                        model=self.cfg["thinking"]["gemini"]["model"], contents=self.types.Content(parts=[
+                            self.types.Part.from_uri(file_uri=youtube, mime_type="video/mp4"),
+                            self.types.Part.from_text(text=make_verbatim_prompt()),
+                        ]), config=self.generation_config), _gemini_response_text)
+            enclosure = get_enclosure_link(filename)
+            if not enclosure:
+                return self.page_text(filename, lang)
+            _trace("audio.download.start", source="podcast")
+            audio = download_audio_file(enclosure, filename)
+            if not audio:
+                raise ValueError("Podcast audio download failed.")
+            _trace("audio.download.completed", source="podcast",
+                   bytes=Path(audio).stat().st_size if Path(audio).is_file() else None)
+            with _trace_stage(source="podcast"):
+                _trace("audio.source.ready", part_seconds_limit=1000)
+
+                def request_part(chunk):
+                    _trace("audio.upload.start")
+                    uploaded = self.client.files.upload(file=chunk)
+                    _trace("audio.upload.completed")
+                    try:
+                        return _gemini_response_text(self.client.models.generate_content(
+                            model=self.cfg["thinking"]["gemini"]["model"],
+                            contents=[uploaded, make_verbatim_prompt()],
+                            config=self.generation_config))
+                    finally:
+                        try:
+                            self.client.files.delete(name=uploaded.name)
+                            _trace("audio.upload.deleted")
+                        except Exception as error:
+                            _trace("audio.upload.cleanup_failed", level="WARNING",
+                                   error_type=type(error).__name__)
+
+                return _transcribe_audio_parts(audio, request_part)
 
     def page_text(self, filename, lang):
-        interaction = self.client.interactions.create(
-            model=self.cfg["thinking"]["gemini"]["model"],
-            input=make_page_text_prompt(lang, get_page_link(filename)),
-            tools=[{"type": "url_context"}, {"type": "google_search"}],
-            generation_config={"thinking_level": self.cfg["thinking"]["gemini"]["thinking_level"]})
-        if interaction.status != "completed":
-            raise ValueError(f"Gemini page interaction not completed: {interaction.status}")
-        blocks = []
-        steps = getattr(interaction, "steps", None) or getattr(interaction, "outputs", [])
-        for step in steps:
-            if step.type == "text":
-                blocks.append(step.text)
-            elif step.type == "model_output":
-                blocks.extend(block.text for block in step.content if block.type == "text")
-        return _PageText(_require_text("\n".join(blocks), "Gemini page text"))
+        with _trace_stage(filename=filename, stage="article", provider="gemini",
+                          model=self.cfg["thinking"]["gemini"]["model"],
+                          thinking=self.cfg["thinking"]["gemini"]["thinking_level"]):
+            output = _model_request(lambda: self.client.interactions.create(
+                model=self.cfg["thinking"]["gemini"]["model"],
+                input=make_page_text_prompt(lang, get_page_link(filename)),
+                tools=[{"type": "url_context"}, {"type": "google_search"}],
+                generation_config={"thinking_level": self.cfg["thinking"]["gemini"]["thinking_level"]}),
+                _gemini_page_response_text)
+            return _PageText(output)
 
 
 class _ClaudeEngine:
@@ -557,48 +773,72 @@ class _ClaudeEngine:
 
     def request(self, prompt, chunk):
         _require_text(chunk, "Claude input")
-        with self.client.messages.stream(
-                model=self.cfg["thinking"]["claude"]["model"], max_tokens=16000,
-                thinking={"type": self.cfg["thinking"]["claude"]["type"]},
-                output_config={"effort": self.cfg["thinking"]["claude"]["effort"]},
-                messages=[{"role": "user", "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "text", "text": "Subtitles:\n" + chunk},
-                ]}]) as stream:
-            output = "".join(stream.text_stream)
-            final = stream.get_final_message()
-        if final.stop_reason != "end_turn":
-            raise ValueError(f"Claude generation did not finish normally: {final.stop_reason}")
-        return _require_text(output, "Claude response")
+        def consume():
+            with self.client.messages.stream(
+                    model=self.cfg["thinking"]["claude"]["model"], max_tokens=16000,
+                    thinking={"type": self.cfg["thinking"]["claude"]["type"]},
+                    output_config={"effort": self.cfg["thinking"]["claude"]["effort"]},
+                    messages=[{"role": "user", "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "text", "text": "Subtitles:\n" + chunk},
+                    ]}]) as stream:
+                output = "".join(stream.text_stream)
+                return stream.get_final_message(), output
+        with _trace_stage(provider="claude", model=self.cfg["thinking"]["claude"]["model"],
+                          thinking=self.cfg["thinking"]["claude"]["type"],
+                          effort=self.cfg["thinking"]["claude"]["effort"]):
+            return _model_request(consume, lambda result: _claude_response_text(*result))
 
     def transcribe(self, filename, lang):
         raise ValueError("Claude requires subtitles")
 
 
 def _run_model_transcription(filename, engine_factory, summarize=True):
-    cfg = get_config()
-    lang = detect_language(Path("yt-video", filename + ".desc")) or "en"
-    title, description = get_video_title_and_description(filename) or ("", "")
-    engine = engine_factory(cfg)
-    text, needs_formatting = download_subtitles(filename)
-    text = _speech(text)
-    if not _usable(text):
-        acquired = engine.transcribe(filename, lang)
-        if isinstance(acquired, _PageText):
-            return _require_text(acquired.text, "page text")
-        text = save_raw_subtitles(filename, acquired)
-        needs_formatting = True
-    source_text = text
-    if needs_formatting:
-        text = _map_text(text, lambda chunk: engine.request(
-            make_prompt(lang, False, title, description), chunk))
-    text = _translate_if_needed(text, engine.request)
-    if needs_formatting or text != source_text:
-        save_subtitles(filename, text)
-    if not summarize or len(text) <= cfg["summarize_min_length"]:
-        return text
-    return _map_text(text, lambda chunk: engine.request(
-        make_prompt(lang, True, title, description), chunk))
+    existing = _TRACE_CONTEXT.get() or {}
+    engine_name = existing.get("engine") or getattr(engine_factory, "__name__", type(engine_factory).__name__)
+    with _trace_stage(filename=filename, engine=engine_name, stage="pipeline"):
+        cfg = get_config()
+        lang = detect_language(Path("yt-video", filename + ".desc")) or "en"
+        title, description = get_video_title_and_description(filename) or ("", "")
+        _trace("pipeline.start", language=lang, summarize=summarize)
+        engine = engine_factory(cfg)
+        with _trace_stage(stage="subtitles"):
+            _trace("subtitles.lookup.start")
+            text, needs_formatting = download_subtitles(filename)
+            text = _speech(text)
+            _trace("subtitles.lookup.completed", usable=_usable(text),
+                   input_chars=len(text), needs_formatting=needs_formatting)
+        if not _usable(text):
+            with _trace_stage(stage="audio_transcription"):
+                acquired = engine.transcribe(filename, lang)
+            if isinstance(acquired, _PageText):
+                return _require_text(acquired.text, "page text")
+            text = save_raw_subtitles(filename, acquired)
+            _trace("raw.saved", output_chars=len(text))
+            needs_formatting = True
+        source_text = text
+        if needs_formatting:
+            with _trace_stage(stage="formatting"):
+                _trace("formatting.start", input_chars=len(text))
+                text = _map_text(text, lambda chunk: engine.request(
+                    make_prompt(lang, False, title, description), chunk))
+                _trace("formatting.completed", output_chars=len(text))
+        else:
+            _trace("formatting.skipped", reason="readable_cached_text")
+        text = _translate_if_needed(text, engine.request)
+        if needs_formatting or text != source_text:
+            save_subtitles(filename, text)
+            _trace("full_text.saved", output_chars=len(text))
+        if not summarize or len(text) <= cfg["summarize_min_length"]:
+            _trace("summary.skipped", reason="disabled" if not summarize else "short_text",
+                   input_chars=len(text), minimum_chars=cfg["summarize_min_length"])
+            return text
+        with _trace_stage(stage="summary"):
+            _trace("summary.start", input_chars=len(text))
+            output = _map_text(text, lambda chunk: engine.request(
+                make_prompt(lang, True, title, description), chunk))
+            _trace("summary.completed", output_chars=len(output))
+            return output
 
 
 def run_openai(filename, summarize=True):
@@ -627,29 +867,38 @@ def transcribe_video(filename, engine):
     path = Path("yt-video", filename + ".txt")
     reference = Path("yt-video", filename + ".desc")
     key = _retry_key(filename, engine)
-    try:
-        if not _cache_is_valid(path):
-            engines = {"openai_s": run_openai, "gemini_s": run_gemini,
-                       "claude_s": run_claude, "srt": run_srt}
-            if engine not in engines:
-                raise ValueError(f"Unknown transcript engine: {engine}")
-            text = _require_text(engines[engine](filename), f"{engine} final result")
-            _atomic_text(path, text, reference)
-            print(f"Transcription for {filename} completed")
-            _POSTPROCESS_PENDING.add(key)
-        if key in _POSTPROCESS_PENDING:
-            _postprocess(filename)
-            _POSTPROCESS_PENDING.discard(key)
-        return True
-    except Exception as error:
-        print(f"Transcription failed for {filename} [{engine}]: {type(error).__name__}: {error}")
+    with _trace_stage(filename=filename, engine=engine, stage="job"):
+        _trace("job.start")
         try:
-            write_log(filename, f"Transcription error [{engine}]: {type(error).__name__}: {error}")
-        except OSError as log_error:
-            print(f"Could not write transcription log: {log_error}")
-        return False
-    finally:
-        _cleanup_temporary_audio(filename)
+            if not _cache_is_valid(path):
+                engines = {"openai_s": run_openai, "gemini_s": run_gemini,
+                           "claude_s": run_claude, "srt": run_srt}
+                if engine not in engines:
+                    raise ValueError(f"Unknown transcript engine: {engine}")
+                text = _require_text(engines[engine](filename), f"{engine} final result")
+                _atomic_text(path, text, reference)
+                _trace("result.saved", output_chars=len(text))
+                print(f"Transcription for {filename} completed")
+                _POSTPROCESS_PENDING.add(key)
+            else:
+                _trace("result.cache_hit")
+            if key in _POSTPROCESS_PENDING:
+                _trace("postprocess.start")
+                _postprocess(filename)
+                _POSTPROCESS_PENDING.discard(key)
+                _trace("postprocess.completed")
+            _trace("job.completed")
+            return True
+        except Exception as error:
+            _trace("job.failed", level="ERROR", error_type=type(error).__name__)
+            print(f"Transcription failed for {filename} [{engine}]: {type(error).__name__}: {error}")
+            try:
+                write_log(filename, f"Transcription error [{engine}]: {type(error).__name__}: {error}")
+            except OSError as log_error:
+                print(f"Could not write transcription log: {log_error}")
+            return False
+        finally:
+            _cleanup_temporary_audio(filename)
 
 
 def run_transcription():
@@ -687,7 +936,10 @@ def run_transcription():
                     success = False
                 if success is False:
                     with _RETRY_LOCK:
-                        _RETRY_STATE[key] = (attempts + 1, monotonic() + min(3600, 60 * 2 ** min(attempts, 6)))
+                        delay = min(3600, 60 * 2 ** min(attempts, 6))
+                        _RETRY_STATE[key] = (attempts + 1, monotonic() + delay)
+                    with _trace_stage(filename=filename, engine=engine, stage="queue"):
+                        _trace("retry.scheduled", attempt=attempts + 1, delay_seconds=delay)
                     retry.append(filename)
                 else:
                     with _RETRY_LOCK:
