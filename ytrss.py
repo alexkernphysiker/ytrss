@@ -655,6 +655,7 @@ def show_rss_list():
     search = '<div class="service-search-grid">' + ''.join(
         _search_panel(title, action, field, button) for title, action, field, button in (
             ("Search Podcasts with iTunes API", "/search/rss", "podcast_search_query", "Search"),
+            ("Search Podcasts with Podcast Index", "/search/podcast-index", "podcast_index_search_query", "Search"),
             ("Search RSS with Feedly", "/search/rss2", "rss_search_query", "Search"),
             ("Discover RSS by site URL", "/search/rss3", "site_url", "Search"),
             ("Add direct RSS link", "/subscribe/rss", "rss_link", "Add"),
@@ -697,6 +698,18 @@ def search_rss():
         else:
             items += _source_item(title, "/subscribe/rss", link=url, status="(Subscribed)")
     return service_page(_source_section("Search results", items) + _back_form("/show_rss_list"), "Podcast search")
+
+@app.route("/search/podcast-index", methods=['POST'])
+def search_podcast_index():
+    query = request.form['podcast_index_search_query']
+    subscriptions = get_config()["rss_subscriptions"]
+    items = ""
+    for title, link, descr, url in search_podcast_index_api(query):
+        if link not in subscriptions:
+            items += _source_item(title, "/subscribe/rss", "rss_link", link, "Subscribe", url, descr)
+        else:
+            items += _source_item(title, "/subscribe/rss", link=url, status="(Subscribed)")
+    return service_page(_source_section("Search results", items) + _back_form("/show_rss_list"), "Podcast Index search")
 
 @app.route("/search/rss2", methods=['POST'])
 def search_rss2():

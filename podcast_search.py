@@ -1,6 +1,7 @@
 # podcast_search.py
 import requests
 from typing import List, Tuple
+from config import get_config
 
 def search_podcast_itunes_api(query: str) -> List[Tuple[str, str, str]]:
     url = "https://itunes.apple.com/search"
@@ -28,6 +29,32 @@ def search_podcast_itunes_api(query: str) -> List[Tuple[str, str, str]]:
     except ValueError:
         print("Could not parse the response (expected JSON).")
         return []
+
+def search_podcast_index_api(query: str) -> List[Tuple[str, str, str, str]]:
+    url = "https://api.podcastindex.org/search"
+    params = {"term": query}
+    headers = {"User-Agent": get_config()["headers"]["User-Agent"]}
+
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        results = []
+        for item in data.get("results", []):
+            title = item.get("collectionName")
+            feed_url = item.get("feedUrl")
+            description = item.get("collectionExplicitness") or ""
+            link = item.get("collectionViewUrl") or ""
+            if title and feed_url:
+                results.append((title, feed_url, description, link))
+        return results
+    except requests.exceptions.RequestException as e:
+        print(f"Podcast Index API connection error: {e}")
+        return []
+    except ValueError:
+        print("Could not parse the Podcast Index response (expected JSON).")
+        return []
+
 
 def search_rss_feeds(query: str) -> List[Tuple[str, str, str, str]]:
     url = "https://api.feedly.com/v3/search/feeds"
