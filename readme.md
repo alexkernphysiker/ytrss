@@ -108,6 +108,7 @@ Main settings:
 | auto_transcript_engine | srt | Default engine for YouTube items. |
 | auto_transcript_engine_rss | gemini_s | Default engine for RSS items. |
 | wait_for_download_hours | 3 | How long to wait for new YouTube media or subtitles. |
+| duplicate_max_age_difference_days | 1 | Maximum absolute publication-time difference for duplicate candidates, in 24-hour days. |
 | yt-dlp-enabled | true | Enable YouTube interaction through yt-dlp. |
 | yt-dlp-formats | format fallbacks | Ordered download format arguments. |
 | topics | {} | Automatic group phrases mapped to centroid vectors. |
@@ -117,6 +118,13 @@ Main settings:
 See default_config() in config.py for the complete schema, including proxy
 settings, provider models, prompts, duplicate-detection thresholds and
 source-specific options.
+
+Under Auto-transcription, **Maximum age difference for duplicates (days)** applies
+to duplicate searches both during feed ingestion and after transcription. A pair
+exactly at the configured limit remains eligible; pairs beyond it and items
+without a usable publication date are skipped. Dates are compared in UTC, with
+older offset-free dates interpreted as UTC. A value of 0 allows only identical
+publication times. Existing duplicate markers are not recalculated automatically.
 
 ### Transcription providers
 

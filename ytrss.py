@@ -98,10 +98,11 @@ def _back_form(action):
     return f'<form class="service-back" action="{action}" method="get"><input type="submit" value="Back"></form>'
 
 
-def _number_field(name, label, value, minimum, maximum):
+def _number_field(name, label, value, minimum, maximum=None):
+    maximum_attribute = f' max="{maximum}"' if maximum is not None else ""
     return (
         f'<div class="service-field"><label for="{name}">{escape(label)}</label>'
-        f'<input type="number" id="{name}" name="{name}" min="{minimum}" max="{maximum}"'
+        f'<input type="number" id="{name}" name="{name}" min="{minimum}"{maximum_attribute}'
         f' value="{escape(str(value), quote=True)}"></div>'
     )
 
@@ -564,6 +565,7 @@ def auto_transcription():
         ("auto_transcript_hours", "auto-transcript items not older than (Hr):", 3, 96),
         ("wait_for_download_hours", "wait for subtitles (Hr):", 0, 6),
         ("duplicate_detection_threshold_transcription", "Duplicate Detection Threshold for Transcription:", 0, 100),
+        ("duplicate_max_age_difference_days", "Maximum age difference for duplicates (days):", 0, None),
         ("summarize_min_length", "Minimum text length for summarization:", 0, 100000),
     ))
     settings = (
@@ -599,12 +601,20 @@ def enable_auto_transcription():
 
 @app.route("/auto-transcription-cfg", methods=['POST'])
 def auto_transcription_cfg():
+    try:
+        duplicate_days = int(request.form.get(
+            "duplicate_max_age_difference_days", get_config()["duplicate_max_age_difference_days"]))
+    except ValueError as error:
+        raise BadRequest("Maximum age difference for duplicates must be a non-negative whole number.") from error
+    if duplicate_days < 0:
+        raise BadRequest("Maximum age difference for duplicates must be a non-negative whole number.")
     with edit_config() as cfg:
         cfg["auto_transcript_engine"] = request.form['default_engine']
         cfg["auto_transcript_engine_rss"] = request.form['auto_transcript_engine_rss']
         cfg["auto_transcript_hours"] = int(request.form['auto_transcript_hours'])
         cfg["wait_for_download_hours"] = int(request.form['wait_for_download_hours'])
         cfg["duplicate_detection_threshold_transcription"] = int(request.form['duplicate_detection_threshold_transcription'])
+        cfg["duplicate_max_age_difference_days"] = duplicate_days
         cfg["summarize_min_length"] = int(request.form['summarize_min_length'])
     return redirect(url_for('auto_transcription'))
 

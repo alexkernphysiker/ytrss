@@ -70,6 +70,7 @@ def default_config():
         "default_language": "en",
         "duplicate_detection_threshold": 100,
         "duplicate_detection_threshold_transcription": 100,
+        "duplicate_max_age_difference_days": 1,
         "headers" : {
             "User-Agent": "ytrss/0.1 (+https://github.com/alexkernphysiker/ytrss)",
             "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*;q=0.8"
@@ -125,6 +126,12 @@ class ConfigStore:
         except (TypeError, ValueError, OverflowError):
             delay = 10
         settings["delay-between-fetches"] = max(10, delay)
+
+        try:
+            duplicate_days = int(settings.get("duplicate_max_age_difference_days", 1))
+        except (TypeError, ValueError, OverflowError):
+            duplicate_days = 1
+        settings["duplicate_max_age_difference_days"] = max(0, duplicate_days)
 
         thinking = settings.get("thinking")
         if not isinstance(thinking, dict):

@@ -257,6 +257,7 @@ def parce_rss_item(link, response=None):
                                     "id": fn,
                                     "title": title.text if title.text is not None else "",
                                     "description": media_description.text if media_description is not None else "",
+                                    "published": published_element.text,
                                 }
                                 duplicate_fn = find_duplicate_episode(new_episode, threshold=get_config()["duplicate_detection_threshold"])
                                 if duplicate_fn is not None:
@@ -432,7 +433,8 @@ def parce_atom_item(link, response=None):
                         break
                 if not os.path.exists(description_path):
                     duplicate_fn = find_duplicate_episode(
-                        {"id": fn, "title": title, "description": description},
+                        {"id": fn, "title": title, "description": description,
+                         "published": insertion_date.isoformat()},
                         threshold=get_config()["duplicate_detection_threshold"],
                     )
                     if duplicate_fn is not None:
@@ -581,6 +583,7 @@ def parce_yt_item(link):
                                     "id": fn,
                                     "title": title_element.text if title_element.text is not None else "",
                                     "description": media_description.text if media_description is not None else "",
+                                    "published": published_element.text,
                                 }
                                 duplicate_fn = find_duplicate_episode(new_episode, threshold=get_config()["duplicate_detection_threshold"])
                                 if duplicate_fn is not None:
