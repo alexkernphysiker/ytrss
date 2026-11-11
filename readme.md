@@ -381,6 +381,29 @@ before a final result is published. A normal STOP is a technical completion
 signal and does not prove that every spoken word was transcribed. Prompts,
 transcript content and API keys are not included in these diagnostic entries.
 
+
+Before formatting raw text, the transcription module applies the existing
+looks_like_full_article heuristic to its paragraphs. A short raw transcript is
+supplemented with a full RSS description when available; otherwise it fetches
+the linked page using the existing non-AI article extractor. A full page text
+takes precedence over a short description. If neither source passes the
+heuristic, both available texts are appended. The original transcript stays
+first, and additions are labelled [RSS description] and [Page text]. Exact
+duplicate additions are skipped; page extraction failures preserve the raw
+text and any available description. Changes are saved in .raw_srt before
+formatting. Existing readable .srt files are reused without enrichment.
+raw.enrichment.* log entries record checks and source selection without dumping
+the text. This reuses extract_page and the existing trafilatura dependency.
+When the resulting raw text passes the same heuristic, duplicate detection runs
+before formatting, translation or summarization, using the configured
+duplicate_detection_threshold_transcription and publication-date window.
+The detector can compare .raw_srt files without any formatted transcript.
+Readable .srt caches also receive the early duplicate check, without being
+copied into .raw_srt.
+A successfully marked duplicate completes the queue job without model calls
+for the remaining stages and without creating a final .txt; its .raw_srt stays
+available. raw.duplicate.* and job.duplicate_skipped record that decision.
+
 - If media processing fails, verify that ffmpeg, ffprobe and yt-dlp are on PATH.
 - If a provider engine is absent, check its API key and configured model.
 - If RSS transcription is skipped, check the selected engine and its credentials.

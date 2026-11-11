@@ -2,11 +2,13 @@ import os
 import subprocess
 import shlex
 import sys
+from html import escape
 from pathlib import Path
 from dataclasses import dataclass
 from contextlib import contextmanager
 from contextvars import ContextVar
-from lxml import etree
+from lxml import etree, html as lxml_html
+from extract_page import fetch_readable_article, looks_like_full_article
 from repeatings_detector import find_duplicate_episode, mark_episode_as_duplicate
 from datetime import datetime, timedelta, timezone
 from utils import secure_wait, filter_subs
@@ -47,6 +49,14 @@ _RETRY_LOCK = RLock()
 
 class TranscriptionPending(ValueError):
     """Source is not ready yet; keep the job for a later pass."""
+
+
+class TranscriptionDuplicate(Exception):
+    """The raw text already belongs to another visible material."""
+
+    def __init__(self, duplicate_of):
+        self.duplicate_of = duplicate_of
+        super().__init__("Duplicate raw transcript")
 
 
 @contextmanager
@@ -401,6 +411,125 @@ def save_raw_subtitles(filename, text):
     return text
 
 
+def _context_plain_text(value):
+    """Keep paragraph boundaries when converting RSS/page HTML into plain text."""
+    if not isinstance(value, str) or not value.strip():
+        return ""
+    try:
+        document = lxml_html.fragment_fromstring(value, create_parent="div")
+    except (ValueError, TypeError, etree.ParserError):
+        return ""
+    for element in document.xpath(".//script | .//style | .//noscript"):
+        element.drop_tree()
+    for element in document.xpath(".//p | .//div | .//li | .//blockquote | "
+                                  ".//h1 | .//h2 | .//h3 | .//br"):
+        element.tail = "\n" + (element.tail or "")
+    return "\n".join(line.strip() for line in document.text_content().splitlines() if line.strip())
+
+
+def _raw_text_looks_full(text):
+    # The existing heuristic expects HTML paragraphs, not a plain transcript.
+    paragraphs = "".join(f"<p>{escape(line)}</p>" for line in text.splitlines() if line.strip())
+    return looks_like_full_article(paragraphs)
+
+
+def _supplement_raw_text(filename, text, description=None):
+    text = _require_text(text, "raw transcription")
+    with _trace_stage(stage="raw_enrichment"):
+        raw_full = _raw_text_looks_full(text)
+        _trace("raw.enrichment.checked", input_chars=len(text), looks_full=raw_full)
+        if raw_full:
+            return text
+        if description is None:
+            _, description = get_video_title_and_description(filename) or ("", "")
+        rss_text = _context_plain_text(description)
+        rss_full = _raw_text_looks_full(rss_text)
+        _trace("raw.enrichment.description", input_chars=len(rss_text), looks_full=rss_full)
+        page_text = ""
+        page_full = False
+        if not rss_full:
+            link = get_page_link(filename)
+            try:
+                url = urlsplit(link or "")
+                usable_link = url.scheme in ("http", "https") and bool(url.netloc)
+            except ValueError:
+                usable_link = False
+            if usable_link:
+                _trace("raw.enrichment.page.start")
+                cfg = get_config()
+                try:
+                    article = fetch_readable_article(
+                        link, headers=cfg.get("headers"), proxies=cfg.get("proxies-rss"))
+                    if article:
+                        page_text = (article.get("text") or
+                                     _context_plain_text(article.get("html"))).strip()
+                        page_full = _raw_text_looks_full(page_text)
+                    _trace("raw.enrichment.page.completed", input_chars=len(page_text),
+                           looks_full=page_full)
+                except Exception as error:
+                    page_text = ""
+                    page_full = False
+                    _trace("raw.enrichment.page.failed", level="WARNING",
+                           error_type=type(error).__name__)
+            else:
+                _trace("raw.enrichment.page.skipped", reason="no_http_page_link")
+        candidates = ([("RSS description", rss_text)] if rss_full else
+                      [("Page text", page_text)] if page_full else
+                      [("RSS description", rss_text), ("Page text", page_text)])
+        output = text
+        added = []
+        for label, candidate in candidates:
+            normalized = " ".join(candidate.split())
+            if not normalized or not any(character.isalnum() for character in candidate):
+                continue
+            if normalized in " ".join(output.split()):
+                _trace("raw.enrichment.duplicate_skipped", source=label)
+                continue
+            output += f"\n\n[{label}]\n{candidate}"
+            added.append(label)
+        _trace("raw.enrichment.completed", sources=added, output_chars=len(output),
+               added_chars=len(output) - len(text))
+        return output
+
+
+def _check_raw_duplicate(filename, text, persist_raw=True):
+    if not _raw_text_looks_full(text):
+        return
+    with _trace_stage(stage="raw_duplicate"):
+        _trace("raw.duplicate.start", input_chars=len(text))
+        # The detector prefers .raw_srt and does not need a formatted transcript.
+        raw_path = Path("yt-video", filename + ".raw_srt")
+        if persist_raw and (not raw_path.is_file() or raw_path.read_text(encoding="utf-8") != text):
+            save_raw_subtitles(filename, text)
+        title, description = get_video_title_and_description(filename) or ("", "")
+        try:
+            duplicate = find_duplicate_episode(
+                {"id": filename, "title": title, "description": description},
+                threshold=get_config()["duplicate_detection_threshold_transcription"])
+            _trace("raw.duplicate.completed", duplicate_of=duplicate)
+            if duplicate is None:
+                return
+            mark_episode_as_duplicate(filename, duplicate)
+            entry = etree.parse(Path("yt-video", filename + ".desc"))
+            if entry.findtext("duplicate") != "true" or entry.findtext("duplicate_of") != duplicate:
+                _trace("raw.duplicate.mark_failed", level="WARNING", duplicate_of=duplicate)
+                return
+        except Exception as error:
+            _trace("raw.duplicate.failed", level="WARNING", error_type=type(error).__name__)
+            return
+        _trace("raw.duplicate.skipped", duplicate_of=duplicate)
+        raise TranscriptionDuplicate(duplicate)
+
+
+def _enrich_raw_subtitles(filename, text, description=None):
+    enriched = _supplement_raw_text(filename, text, description)
+    if enriched != text:
+        enriched = save_raw_subtitles(filename, enriched)
+        _trace("raw.enriched.saved", output_chars=len(enriched))
+    _check_raw_duplicate(filename, enriched)
+    return enriched
+
+
 def save_subtitles(filename, text):
     text = _require_text(_speech(text) if isinstance(text, str) else text, "subtitles")
     _atomic_text(Path("yt-video", filename + ".srt"), text,
@@ -412,10 +541,9 @@ def get_video_title_and_description(filename):
     if os.path.exists(description_path):
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
         entry = etree.parse(description_path, parser1)
-        title = entry.find("title").text
-        description_element = entry.find("summary")
-        descr = description_element.text if description_element.text is not None else ""
-        return title,descr
+        title = entry.findtext("title") or ""
+        descr = entry.findtext("summary") or entry.findtext("description") or ""
+        return title, descr
 
 def make_prompt(lang, summarize = False, title = "", description = ""):
             cfg = get_config()
@@ -549,7 +677,10 @@ def run_srt(filename):
     text, needs_formatting = download_subtitles(filename)
     text = _require_text(_speech(text), "subtitles")
     if needs_formatting:
+        text = _enrich_raw_subtitles(filename, text)
         save_subtitles(filename, text)
+    else:
+        _check_raw_duplicate(filename, text, persist_raw=False)
     return text
 
 
@@ -801,7 +932,14 @@ def _run_model_transcription(filename, engine_factory, summarize=True):
         lang = detect_language(Path("yt-video", filename + ".desc")) or "en"
         title, description = get_video_title_and_description(filename) or ("", "")
         _trace("pipeline.start", language=lang, summarize=summarize)
-        engine = engine_factory(cfg)
+        engine = None
+
+        def request(prompt, chunk):
+            nonlocal engine
+            if engine is None:
+                engine = engine_factory(cfg)
+            return engine.request(prompt, chunk)
+
         with _trace_stage(stage="subtitles"):
             _trace("subtitles.lookup.start")
             text, needs_formatting = download_subtitles(filename)
@@ -810,22 +948,28 @@ def _run_model_transcription(filename, engine_factory, summarize=True):
                    input_chars=len(text), needs_formatting=needs_formatting)
         if not _usable(text):
             with _trace_stage(stage="audio_transcription"):
+                engine = engine_factory(cfg)
                 acquired = engine.transcribe(filename, lang)
             if isinstance(acquired, _PageText):
-                return _require_text(acquired.text, "page text")
+                return _enrich_raw_subtitles(
+                    filename, _require_text(acquired.text, "page text"), description)
             text = save_raw_subtitles(filename, acquired)
             _trace("raw.saved", output_chars=len(text))
             needs_formatting = True
+        if needs_formatting:
+            text = _enrich_raw_subtitles(filename, text, description)
+        else:
+            _check_raw_duplicate(filename, text, persist_raw=False)
         source_text = text
         if needs_formatting:
             with _trace_stage(stage="formatting"):
                 _trace("formatting.start", input_chars=len(text))
-                text = _map_text(text, lambda chunk: engine.request(
+                text = _map_text(text, lambda chunk: request(
                     make_prompt(lang, False, title, description), chunk))
                 _trace("formatting.completed", output_chars=len(text))
         else:
             _trace("formatting.skipped", reason="readable_cached_text")
-        text = _translate_if_needed(text, engine.request)
+        text = _translate_if_needed(text, request)
         if needs_formatting or text != source_text:
             save_subtitles(filename, text)
             _trace("full_text.saved", output_chars=len(text))
@@ -835,7 +979,7 @@ def _run_model_transcription(filename, engine_factory, summarize=True):
             return text
         with _trace_stage(stage="summary"):
             _trace("summary.start", input_chars=len(text))
-            output = _map_text(text, lambda chunk: engine.request(
+            output = _map_text(text, lambda chunk: request(
                 make_prompt(lang, True, title, description), chunk))
             _trace("summary.completed", output_chars=len(output))
             return output
@@ -888,6 +1032,10 @@ def transcribe_video(filename, engine):
                 _POSTPROCESS_PENDING.discard(key)
                 _trace("postprocess.completed")
             _trace("job.completed")
+            return True
+        except TranscriptionDuplicate as duplicate:
+            _POSTPROCESS_PENDING.discard(key)
+            _trace("job.duplicate_skipped", duplicate_of=duplicate.duplicate_of)
             return True
         except Exception as error:
             _trace("job.failed", level="ERROR", error_type=type(error).__name__)
