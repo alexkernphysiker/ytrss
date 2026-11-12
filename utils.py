@@ -567,7 +567,8 @@ def generate_transcriptions_list_page(url_link, category_request=None, search_re
     settings = get_config()
     category_context = get_category_context(settings["topics"], settings["categories"])
     from lxml import etree
-    page_start = _read_page_start(settings["title"])
+    refresh_interval = 300 if category_request is None and search_request is None else None
+    page_start = _read_page_start(settings["title"], refresh_interval=refresh_interval)
     ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
     MEDIA_NS = "http://search.yahoo.com/mrss/"
     etree.register_namespace("itunes", ITUNES_NS)
