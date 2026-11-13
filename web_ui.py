@@ -3,6 +3,27 @@
 from html import escape
 
 
+THIRD_PARTY_CONTENT_NOTICE = (
+    'YTRSS is provided solely as a news aggregation tool intended for personal use. '
+    'Summaries and transcripts of third-party materials are produced by automated means. '
+    'Neither YTRSS nor its operator claims authorship of, or any copyright or other '
+    'intellectual property rights in, the underlying materials. All such rights remain '
+    'vested in their respective rights holders. Readers are encouraged to visit and '
+    'consult the original source publications by following the links provided in this interface.'
+)
+
+
+def _content_notice(tag):
+    return (
+        f'<{tag} class="legal-notice" lang="en" aria-label="Third-party content notice">'
+        f'<small>{escape(THIRD_PARTY_CONTENT_NOTICE)}</small></{tag}>'
+    )
+
+
+def page_end():
+    return '</main>' + _content_notice("footer") + '</body></html>'
+
+
 def page_start(title, main_class="", refresh_interval=None):
     refresh_meta = (
         f'<meta http-equiv="refresh" content="{escape(str(refresh_interval), quote=True)}">'
@@ -22,12 +43,20 @@ def page_start(title, main_class="", refresh_interval=None):
     * { box-sizing: border-box; }
     body {
       margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
       background: #f4f5f7;
       color: #1d2734;
       font-family: system-ui, sans-serif;
       line-height: 1.5;
     }
-    main { max-width: 1400px; margin-inline: auto; padding: 16px; }
+    main { width: 100%; flex: 1; max-width: 1400px; margin-inline: auto; padding: 16px; }
+    .legal-notice {
+      width: 100%; max-width: 1400px; margin-inline: auto; padding: 10px 16px;
+      color: #596575; font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere;
+    }
+    .legal-notice small { font-size: inherit; }
     .news-search {
       display: flex;
       flex-wrap: wrap;
@@ -368,4 +397,4 @@ def page_start(title, main_class="", refresh_interval=None):
   </script>
 </head>
 <body>
-""" + f'<main class="{escape(main_class, quote=True)}">'
+""" + _content_notice("aside") + f'<main class="{escape(main_class, quote=True)}">'

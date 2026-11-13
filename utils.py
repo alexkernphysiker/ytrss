@@ -19,7 +19,7 @@ from html import escape
 from markdown import Markdown
 from urllib.parse import quote, urlsplit
 from werkzeug.exceptions import NotFound
-from web_ui import page_start as _read_page_start
+from web_ui import page_end as _read_page_end, page_start as _read_page_start
 from classify_news import get_category_context, get_news_assignment, get_news_category
 from news_categories import UNCLASSIFIED
 
@@ -677,7 +677,7 @@ def generate_transcriptions_list_page(url_link, category_request=None, search_re
         + categories
         + search
         + f'<ul class="news-grid">{output}</ul>'
-        + '</main></body></html>'
+        + _read_page_end()
     )
 
 def _render_read_article(url_link, fn, entry, content, full=False, share_html=""):
@@ -755,7 +755,7 @@ def _render_read_article(url_link, fn, entry, content, full=False, share_html=""
   <div class="reader-text">{content}</div>
   <nav class="reader-footer" aria-label="Article navigation">{footer}</nav>
 </article>
-</main></body></html>"""
+""" + _read_page_end()
 
 
 def generate_transcription_page(url_link, fn):

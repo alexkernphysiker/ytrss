@@ -12,7 +12,7 @@ from podcast_search import *
 from feed_discover import discover_rss_feeds
 from config import edit_config, get_config
 from transcription_queue import transcription_queues
-from web_ui import page_start
+from web_ui import page_end, page_start
 from group_news import MAX_GROUPS, find_groups
 from news_categories import UNCLASSIFIED, category_owners
 from werkzeug.exceptions import BadRequest, Conflict, HTTPException, NotFound
@@ -46,7 +46,7 @@ def service_page(content="", title="Configuration", auto_refresh=False):
 </header>
 <nav class="service-nav" aria-label="Service navigation">{buttons_on_top()}</nav>
 <div class="service-content">{content}</div>
-</main></body></html>"""
+""" + page_end()
 
 
 def _service_message(message, title="Status"):

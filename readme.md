@@ -1,10 +1,29 @@
 # ytrss
 
-YTRSS is a self-hosted YouTube and RSS aggregator with a web interface. It
-collects subscriptions into one RSS 2.0 feed, saves media and article text,
-creates transcripts or summaries, and groups saved items by their content. For
-Android, we recommend [RSS Reader Offline | Podcast](https://play.google.com/store/apps/details?id=com.vanniktech.rssreader)
+YTRSS is a self-hosted YouTube and RSS news aggregator intended for personal
+use. It provides a web interface, collects subscriptions into one RSS 2.0
+feed, saves media and article text, creates transcripts or summaries, and
+groups saved items by their content. For Android, we recommend [RSS Reader Offline | Podcast](https://play.google.com/store/apps/details?id=com.vanniktech.rssreader)
 because the YTRSS author tests this tool with that app.
+
+## License and third-party content
+
+YTRSS source code is licensed under the [Mozilla Public License, version 2.0
+(MPL-2.0)](LICENSE). The official license text is also available from
+[Mozilla](https://www.mozilla.org/MPL/2.0/).
+
+YTRSS is provided solely as a news aggregation tool intended for personal use.
+Summaries and transcripts of third-party materials are produced by automated
+means. Neither YTRSS nor its operator claims authorship of, or any copyright
+or other intellectual property rights in, the underlying materials. All such
+rights remain vested in their respective rights holders. Readers are
+encouraged to visit and consult the original source publications by following
+the links provided in this interface.
+
+The software license governs the YTRSS source code. Third-party materials
+remain subject to their respective ownership and licensing terms. The
+personal-use description states the service's intended purpose; the rights
+granted under MPL-2.0 remain unchanged.
 
 ## Requirements
 
