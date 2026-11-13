@@ -759,6 +759,12 @@ def category_feed(category_id):
     )
 
 
+@app.route("/favicon.ico")
+@app.route("/file/favicon.ico")
+def favicon():
+    return app.send_static_file("favicon.ico")
+
+
 @app.route("/file/<path:filename>.<extension>")
 def download(filename, extension):
     file_path = media_file_path(filename)

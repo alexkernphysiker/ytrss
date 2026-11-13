@@ -13,6 +13,8 @@ def page_start(title, main_class="", refresh_interval=None):
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/file/favicon.ico" type="image/vnd.microsoft.icon"
+        sizes="16x16 32x32 48x48 64x64">
 """ + \
   f"<title>{escape(title)}</title>{refresh_meta}" + \
 """
