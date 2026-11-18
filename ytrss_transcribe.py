@@ -550,7 +550,7 @@ def _check_raw_duplicate(filename, text, persist_raw=True):
             if duplicate is None:
                 return
             mark_episode_as_duplicate(filename, duplicate)
-            entry = etree.parse(Path("yt-video", filename + ".desc"))
+            entry = etree.parse(Path("yt-video", filename + ".desc"), etree.XMLParser(encoding="utf-8", recover=True))
             if entry.findtext("duplicate") != "true" or entry.findtext("duplicate_of") != duplicate:
                 _trace("raw.duplicate.mark_failed", level="WARNING", duplicate_of=duplicate)
                 return
