@@ -10,6 +10,7 @@ import feedparser
 from xml.etree import ElementTree
 from datetime import datetime, timedelta, timezone
 import hashlib
+import math
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import arrow
@@ -103,16 +104,56 @@ def download_video(link, filename):
 
 def get_duration(file_path):
     command = [
-        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "ffprobe", "-v", "error", "-rw_timeout", "10000000",
+        "-show_entries", "format=duration",
         "-of", "default=noprint_wrappers=1:nokey=1", "-i", os.fspath(file_path),
     ]
     try:
         result = subprocess.run(command, capture_output=True, timeout=60, check=True)
-        output = int(float(result.stdout.decode().strip()))
-        return output
+        output = float(result.stdout.decode().strip())
+        return output if math.isfinite(output) and output > 0 else None
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, ValueError):
         print("duration estimation error")
         return None
+
+
+ARTICLE_MAX_MEDIA_SECONDS = 60
+
+
+def _select_media_enclosure(enclosures):
+    """Prefer the first long attachment; keep unknown durations as media."""
+    durations = {}
+    selected = unknown = None
+    for enclosure in enclosures:
+        url = enclosure["url"]
+        if url not in durations:
+            durations[url] = get_duration(url)
+        duration = durations[url]
+        if duration is None:
+            if unknown is None:
+                unknown = enclosure
+        elif duration > ARTICLE_MAX_MEDIA_SECONDS and selected is None:
+            selected = enclosure
+    if selected is None:
+        selected = unknown
+    if selected is None:
+        return None, None
+    return selected, durations[selected["url"]]
+
+
+def _write_enclosures(entry, enclosures, selected):
+    # Keep attachments; shared transcription helpers use content_kind to avoid
+    # transcribing illustrations that accompany an article.
+    ElementTree.SubElement(entry, "content_kind").text = (
+        "article" if selected is None else "media")
+    ordered = ([selected] if selected is not None else []) + [
+        enclosure for enclosure in enclosures if enclosure is not selected]
+    for enclosure in ordered:
+        ElementTree.SubElement(
+            entry, "enclosure", url=enclosure["url"],
+            type=enclosure.get("type") or "application/octet-stream",
+            length=enclosure.get("length") or "0")
+
 
 def get_previous_image_url(fn):
     NS = {
@@ -237,6 +278,10 @@ def parce_rss_item(link, response=None):
                             if media_thumbnail is not None:
                                 thumbnail_element = ElementTree.SubElement(entry_element, "image", href=media_thumbnail.get("href"))
                             chars = re.escape(string.punctuation)
+                            source_enclosures = [
+                                dict(enclosure.attrib) for enclosure in entry.findall("enclosure", NS)
+                                if enclosure.get("url")]
+                            # Keep the original first attachment in the stable RSS ID.
                             source_enclosure = entry.find("enclosure", NS)
                             id_element = ElementTree.SubElement(entry_element, "id")
                             fn = ""
@@ -276,6 +321,7 @@ def parce_rss_item(link, response=None):
 
 
 
+                            source_enclosure, duration = _select_media_enclosure(source_enclosures)
                             article = None
                             description_element = ElementTree.SubElement(entry_element, "summary")
                             description_element.text = ""
@@ -307,9 +353,8 @@ def parce_rss_item(link, response=None):
                                     thumbnail_element = ElementTree.SubElement(entry_element, "image", href=img_url)
 
                             srt_path = "yt-video/" + fn + ".srt"
-                            if source_enclosure is not None:
-                                enclosure_element = ElementTree.SubElement(entry_element, "enclosure", url=source_enclosure.get("url"), type=source_enclosure.get("type"), length = source_enclosure.get("length"))
-                            else:
+                            _write_enclosures(entry_element, source_enclosures, source_enclosure)
+                            if source_enclosure is None:
                                 if looks_like_full_article(description_element.text):
                                     with open(srt_path, "w") as f:
                                         f.write(extract_plain_text(description_element.text))
@@ -328,10 +373,9 @@ def parce_rss_item(link, response=None):
                                                 f.write(extract_plain_text(article["html"]))
                                                 print("Extracted page text is longer than description. It is considered as full text.")
 
-                            duration = get_duration(source_enclosure.get("url")) if source_enclosure is not None else None
                             if duration is not None:
                                 duration_element = ElementTree.SubElement(entry_element, "duration")
-                                duration_element.text = str(duration)
+                                duration_element.text = f"{duration:.15g}"
                             auto_transcription_element = ElementTree.SubElement(entry_element, "auto_transcription")
                             auto_transcription_element.text = "true" if link not in get_config()["sources_with_disabled_auto_transcription"] else "false"
                             description_path = "yt-video/" + fn + ".desc"
@@ -412,13 +456,15 @@ def parce_atom_item(link, response=None):
                     key=lambda item: item.get("type", "text/html") not in ("text/html", "application/xhtml+xml"),
                 )
                 article_link = alternate_links[0]["href"] if alternate_links else None
-                source_enclosure = next(
-                    (item for item in entry.get("enclosures", []) if item.get("href")), None,
-                )
+                source_enclosures = [
+                    {"url": item["href"], "type": item.get("type"),
+                     "length": item.get("length")}
+                    for item in entry.get("enclosures", []) if item.get("href")]
+                source_enclosure = source_enclosures[0] if source_enclosures else None
                 # Atom IDs stay stable even when an article URL or title changes.
                 entry_id = entry.get("id") or article_link
                 if not entry_id and source_enclosure is not None:
-                    entry_id = source_enclosure["href"]
+                    entry_id = source_enclosure["url"]
                 if not entry_id:
                     print(f"Skipping entry with no id, link or enclosure in source {source_name}")
                     continue
@@ -457,6 +503,7 @@ def parce_atom_item(link, response=None):
                 ElementTree.SubElement(entry_element, "updated").text = updated_date.strftime("%Y-%m-%dT%H:%M:%SZ")
                 ElementTree.SubElement(entry_element, "summary").text = description
 
+                source_enclosure, duration = _select_media_enclosure(source_enclosures)
                 article = None
                 img_url = get_previous_image_url(fn)
                 if img_url is None:
@@ -475,13 +522,8 @@ def parce_atom_item(link, response=None):
                     ElementTree.SubElement(entry_element, "image", href=img_url)
 
                 srt_path = "yt-video/" + fn + ".srt"
-                if source_enclosure is not None:
-                    ElementTree.SubElement(
-                        entry_element, "enclosure", url=source_enclosure["href"],
-                        type=source_enclosure.get("type") or "application/octet-stream",
-                        length=source_enclosure.get("length") or "0",
-                    )
-                else:
+                _write_enclosures(entry_element, source_enclosures, source_enclosure)
+                if source_enclosure is None:
                     if looks_like_full_article(description):
                         Path(srt_path).write_text(extract_plain_text(description), encoding="utf-8")
                     if not os.path.exists(srt_path):
@@ -495,9 +537,8 @@ def parce_atom_item(link, response=None):
                                     and looks_like_full_article(article["html"]):
                                 Path(srt_path).write_text(extract_plain_text(article["html"]), encoding="utf-8")
 
-                duration = get_duration(source_enclosure["href"]) if source_enclosure is not None else None
                 if duration is not None:
-                    ElementTree.SubElement(entry_element, "duration").text = str(duration)
+                    ElementTree.SubElement(entry_element, "duration").text = f"{duration:.15g}"
                 auto_transcription = link not in get_config()["sources_with_disabled_auto_transcription"]
                 ElementTree.SubElement(entry_element, "auto_transcription").text = "true" if auto_transcription else "false"
                 write_description(entry_element, description_path)

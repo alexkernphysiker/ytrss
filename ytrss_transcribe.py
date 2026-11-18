@@ -636,6 +636,8 @@ def get_enclosure_link(filename):
     if os.path.exists(description_path):
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
         entry = etree.parse(description_path, parser1)
+        if entry.findtext("content_kind") == "article":
+            return None
         enclosure_element = entry.find("enclosure")
         if enclosure_element is not None:
             enclosure =  enclosure_element.get("url")
@@ -706,6 +708,8 @@ def get_video_link(description_path):
     if os.path.exists(description_path):
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
         entry = etree.parse(description_path, parser1)
+        if entry.findtext("content_kind") == "article":
+            return None
         link_element = entry.find("link")
         if link_element is not None:
             link = link_element.get("href")
