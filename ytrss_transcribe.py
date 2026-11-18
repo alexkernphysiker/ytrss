@@ -21,7 +21,7 @@ import math
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from threading import RLock
 from time import monotonic
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 from utils import clean_subtitles
 from classify_news import save_news_vector
 
@@ -49,6 +49,36 @@ _RETRY_LOCK = RLock()
 
 class TranscriptionPending(ValueError):
     """Source is not ready yet; keep the job for a later pass."""
+
+
+_GEMINI_REFUSAL_NOTICES = {
+    "PROHIBITED_CONTENT": (
+        "Gemini refused to process this material.\n\n"
+        "Reason: Gemini classified the material as prohibited content."
+    ),
+    "RECITATION": (
+        "Gemini refused to process this material.\n\n"
+        "Reason: Gemini detected a possible copyright or recitation restriction."
+    ),
+}
+
+
+_PROVIDER_REFUSAL_NAMES = {"openai": "OpenAI", "claude": "Claude"}
+
+
+class _ProviderRefusal(ValueError):
+    """An explicit provider refusal that should be published instead of retried."""
+
+    def __init__(self, provider, reason, explanation=None):
+        self.provider = provider
+        self.reason = reason
+        self.explanation = explanation
+        super().__init__(f"{provider} refused to process this material: {reason}")
+
+
+class _GeminiRefusal(_ProviderRefusal):
+    def __init__(self, reason):
+        super().__init__("gemini", reason)
 
 
 class TranscriptionDuplicate(Exception):
@@ -181,6 +211,9 @@ def _openai_audio_response_text(response):
 def _claude_response_text(final, output):
     _trace("response", provider="claude", finish_reason=final.stop_reason,
            usage=_usage_values(getattr(final, "usage", None)))
+    if final.stop_reason == "refusal":
+        details = getattr(final, "stop_details", None)
+        raise _ProviderRefusal("claude", "refusal", getattr(details, "explanation", None))
     if final.stop_reason != "end_turn":
         raise ValueError(f"Claude generation did not finish normally: {final.stop_reason}")
     return _require_text(output, "Claude response")
@@ -190,6 +223,11 @@ def _gemini_page_response_text(interaction):
     _trace("response", provider="gemini", endpoint="interactions", status=interaction.status,
            usage=_usage_values(getattr(interaction, "usage", None)))
     if interaction.status != "completed":
+        error = getattr(interaction, "error", None)
+        code = error.get("code") if isinstance(error, dict) else getattr(error, "code", None)
+        reason = _gemini_refusal_reason(code)
+        if reason:
+            raise _GeminiRefusal(reason)
         raise ValueError(f"Gemini page interaction not completed: {interaction.status}")
     blocks = []
     steps = getattr(interaction, "steps", None) or getattr(interaction, "outputs", [])
@@ -290,10 +328,12 @@ def _retry_key(filename, engine):
 
 
 def prepare_transcription_retry(filename, engine):
-    """Reset only invalid subtitle caches and this job's retry delay."""
+    """Reset invalid caches, saved provider refusals and this job's retry delay."""
     for suffix in (".raw_srt", ".srt", ".source.srt"):
         path = Path("yt-video", filename + suffix)
-        if path.exists() and not _cache_is_valid(path):
+        if path.exists() and (
+                not _cache_is_valid(path) or
+                (suffix == ".srt" and _is_refusal_notice(path.read_text(encoding="utf-8")))):
             path.unlink()
     key = _retry_key(filename, engine)
     with _RETRY_LOCK:
@@ -696,12 +736,92 @@ def write_log(filename, message):
 
 def _openai_response_text(response):
     status = response.status
+    incomplete_reason = getattr(getattr(response, "incomplete_details", None), "reason", None)
     _trace("response", provider="openai", status=status,
-           incomplete_reason=getattr(getattr(response, "incomplete_details", None), "reason", None),
+           incomplete_reason=incomplete_reason,
            usage=_usage_values(getattr(response, "usage", None)))
+    # A completed response can contain a refusal, even alongside partial text.
+    for item in getattr(response, "output", None) or []:
+        if getattr(item, "type", None) == "message":
+            for block in getattr(item, "content", None) or []:
+                if getattr(block, "type", None) == "refusal":
+                    raise _ProviderRefusal("openai", "refusal", getattr(block, "refusal", None))
+    if incomplete_reason == "content_filter":
+        raise _ProviderRefusal("openai", "content_filter")
     if status != "completed":
         raise ValueError(f"OpenAI response was not completed: {status}")
     return _require_text(response.output_text, "OpenAI response")
+
+
+def _gemini_refusal_reason(value):
+    value = getattr(value, "name", value)
+    if isinstance(value, str):
+        value = value.upper()
+        if value in _GEMINI_REFUSAL_NOTICES:
+            return value
+    return None
+
+
+def _is_gemini_refusal(text):
+    return any(text.startswith(notice) for notice in _GEMINI_REFUSAL_NOTICES.values())
+
+
+def _is_refusal_notice(text):
+    return _is_gemini_refusal(text) or any(
+        text.startswith(f"{name} refused to process this material.\n\nReason: ")
+        for name in _PROVIDER_REFUSAL_NAMES.values())
+
+
+def _gemini_api_refusal(error):
+    from google.genai.errors import APIError
+    if not isinstance(error, APIError):
+        return None
+    reason = _gemini_refusal_reason(error.status)
+    details = error.details
+    if not reason and isinstance(details, dict):
+        details = details.get("error", details)
+        if isinstance(details, dict):
+            reason = (_gemini_refusal_reason(details.get("code")) or
+                      _gemini_refusal_reason(details.get("status")))
+    return reason
+
+
+def _gemini_refusal_notice(filename, reason):
+    notice = _GEMINI_REFUSAL_NOTICES[reason]
+    if reason == "PROHIBITED_CONTENT":
+        notice += "\n\nApparently, the content was a little too revealing."
+    return _refusal_source_link(filename, notice)
+
+
+def _provider_refusal_notice(filename, refusal):
+    if refusal.provider == "gemini":
+        return _gemini_refusal_notice(filename, refusal.reason)
+    name = _PROVIDER_REFUSAL_NAMES[refusal.provider]
+    if isinstance(refusal.explanation, str) and refusal.explanation.strip():
+        # Provider feedback is plain text, not trusted Markdown or HTML.
+        reason = re.sub(r"([\\`*_{}\[\]()<>])", r"\\\1",
+                        " ".join(refusal.explanation.split()))
+    elif refusal.reason == "content_filter":
+        reason = "OpenAI blocked processing with its content filter."
+    else:
+        reason = f"{name} declined the request without providing a detailed reason."
+    notice = (f"{name} refused to process this material.\n\nReason: {reason}"
+              "\n\nApparently, the content was a little too revealing.")
+    return _refusal_source_link(filename, notice)
+
+
+def _refusal_source_link(filename, notice):
+    url = (get_page_link(filename) or "").strip()
+    try:
+        parsed = urlsplit(url)
+        valid = (parsed.scheme.lower() in ("http", "https") and parsed.netloc and
+                 not any(ord(character) < 32 or ord(character) == 127 for character in url))
+    except ValueError:
+        valid = False
+    if valid:
+        url = quote(url, safe=":/?#[]@!$&'()*+,;=%")
+        notice += f"\n\n[Open the original material](<{url}>)"
+    return notice
 
 
 def _gemini_response_text(response):
@@ -713,6 +833,10 @@ def _gemini_response_text(response):
     _trace("response", provider="gemini", candidates=len(candidates),
            finish_reasons=reasons, block_reason=getattr(blocked, "name", blocked),
            usage=_usage_values(getattr(response, "usage_metadata", None)))
+    for code in [blocked, *reasons]:
+        reason = _gemini_refusal_reason(code)
+        if reason:
+            raise _GeminiRefusal(reason)
     if not candidates:
         _log_empty_audio(None)
         raise ValueError(f"Gemini returned no candidates; feedback={feedback}")
@@ -985,16 +1109,41 @@ def _run_model_transcription(filename, engine_factory, summarize=True):
             return output
 
 
+def _run_with_refusal_notice(filename, engine_factory, summarize, provider):
+    full_text_path = Path("yt-video", filename + ".srt")
+    # If only the final .txt write failed, finish publishing without another API call.
+    if full_text_path.is_file():
+        cached = full_text_path.read_text(encoding="utf-8")
+        if _is_refusal_notice(cached):
+            _trace("refusal.cache_hit")
+            return cached
+    try:
+        return _run_model_transcription(filename, engine_factory, summarize)
+    except _ProviderRefusal as refusal:
+        if refusal.provider != provider:
+            raise
+        notice = _provider_refusal_notice(filename, refusal)
+        reason = refusal.reason
+    except Exception as error:
+        reason = _gemini_api_refusal(error) if provider == "gemini" else None
+        if reason is None:
+            raise
+        notice = _gemini_refusal_notice(filename, reason)
+    _atomic_text(full_text_path, notice, Path("yt-video", filename + ".desc"))
+    _trace("refusal.saved", level="WARNING", provider=provider, reason=reason)
+    return notice
+
+
 def run_openai(filename, summarize=True):
-    return _run_model_transcription(filename, _OpenAIEngine, summarize)
+    return _run_with_refusal_notice(filename, _OpenAIEngine, summarize, "openai")
 
 
 def run_gemini(filename, summarize=True):
-    return _run_model_transcription(filename, _GeminiEngine, summarize)
+    return _run_with_refusal_notice(filename, _GeminiEngine, summarize, "gemini")
 
 
 def run_claude(filename, summarize=True):
-    return _run_model_transcription(filename, _ClaudeEngine, summarize)
+    return _run_with_refusal_notice(filename, _ClaudeEngine, summarize, "claude")
 
 
 def _postprocess(filename):
@@ -1023,7 +1172,11 @@ def transcribe_video(filename, engine):
                 _atomic_text(path, text, reference)
                 _trace("result.saved", output_chars=len(text))
                 print(f"Transcription for {filename} completed")
-                _POSTPROCESS_PENDING.add(key)
+                if _is_refusal_notice(text):
+                    # Boilerplate refusals are not news to deduplicate or classify.
+                    _POSTPROCESS_PENDING.discard(key)
+                else:
+                    _POSTPROCESS_PENDING.add(key)
             else:
                 _trace("result.cache_hit")
             if key in _POSTPROCESS_PENDING:
