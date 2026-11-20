@@ -57,9 +57,10 @@ def perform_test_language_detection():
     for description_path in Path("yt-video").glob("*.desc"):
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
         entry = etree.parse(description_path, parser1)
-        title_element = entry.find("title")
-        description_element = entry.find("summary")
-        text = title_element.text if title_element.text else "" + "\n" + description_element.text if description_element.text else ""
+        text = "\n".join((
+            entry.findtext("title") or "",
+            entry.findtext("summary") or entry.findtext("description") or "",
+        ))
         detected_languages = detect_languages(text)
         print(f"Detected languages for '{text}':")
         for lang_prob in detected_languages:
@@ -74,9 +75,10 @@ def detect_language(description_path) -> str:
     if os.path.exists(description_path):
         parser1 = etree.XMLParser(encoding="utf-8", recover=True)
         entry = etree.parse(description_path, parser1)
-        title_element = entry.find("title")
-        description_element = entry.find("summary")
-        text = title_element.text if title_element.text else "" + "\n" + description_element.text if description_element.text else ""
+        text = "\n".join((
+            entry.findtext("title") or "",
+            entry.findtext("summary") or entry.findtext("description") or "",
+        ))
         detected_languages = detect_languages(text)
         if detected_languages:
             if len(detected_languages) > 0 and detected_languages[0].probability > 0.6:

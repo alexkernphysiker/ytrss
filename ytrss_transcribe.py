@@ -418,7 +418,7 @@ def download_subtitles(filename):
     link = get_video_link(description_path)
     if not link or not get_config().get("yt-dlp-enabled"):
         return "", False
-    lang = detect_language(description_path) or "en"
+    lang = detect_language(description_path) or get_config()["default_language"]
     _trace("subtitles.download.start", language=lang)
     secure_wait()
     with TemporaryDirectory(prefix=".subtitles-", dir="yt-video") as directory:
@@ -1057,7 +1057,7 @@ def _run_model_transcription(filename, engine_factory, summarize=True):
     engine_name = existing.get("engine") or getattr(engine_factory, "__name__", type(engine_factory).__name__)
     with _trace_stage(filename=filename, engine=engine_name, stage="pipeline"):
         cfg = get_config()
-        lang = detect_language(Path("yt-video", filename + ".desc")) or "en"
+        lang = detect_language(Path("yt-video", filename + ".desc")) or cfg["default_language"]
         title, description = get_video_title_and_description(filename) or ("", "")
         _trace("pipeline.start", language=lang, summarize=summarize)
         engine = None
@@ -1089,6 +1089,7 @@ def _run_model_transcription(filename, engine_factory, summarize=True):
         else:
             _check_raw_duplicate(filename, text, persist_raw=False)
         source_text = text
+        lang = detect_language_from_text(text) or cfg["default_language"]
         if needs_formatting:
             with _trace_stage(stage="formatting"):
                 _trace("formatting.start", input_chars=len(text))
