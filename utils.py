@@ -239,6 +239,16 @@ def remove_invalid_xml_characters(value):
     )
 
 
+def get_channel_description(description_path):
+    """Return the RSS channel description from a .desc file, or None if absent."""
+    if not os.path.exists(description_path):
+        return None
+    parser = etree.XMLParser(encoding="utf-8", recover=True,
+                             resolve_entities=False, no_network=True)
+    entry = etree.parse(description_path, parser)
+    return entry.findtext("channel_description")
+
+
 def update_names_dicts():
     channel_names_dict = {}
     playlist_names_dict = {}

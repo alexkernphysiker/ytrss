@@ -11,7 +11,7 @@ from lxml import etree, html as lxml_html
 from extract_page import fetch_readable_article, looks_like_full_article
 from repeatings_detector import find_duplicate_episode, mark_episode_as_duplicate
 from datetime import datetime, timedelta, timezone
-from utils import secure_wait, filter_subs
+from utils import secure_wait, filter_subs, get_channel_description
 from config import get_config
 from lang_detect import *
 from transcription_queue import AUTO_RSS, AUTO_YOUTUBE, transcription_queues
@@ -585,7 +585,7 @@ def get_video_title_and_description(filename):
         descr = entry.findtext("summary") or entry.findtext("description") or ""
         return title, descr
 
-def make_prompt(lang, summarize = False, title = "", description = ""):
+def make_prompt(lang, summarize = False, title = "", description = "", channel_description=None):
             cfg = get_config()
             if lang not in cfg["transcription-prompts"]:
                 lang = cfg["default_language"]
@@ -596,14 +596,16 @@ def make_prompt(lang, summarize = False, title = "", description = ""):
                         cfg["transcription-prompts"][lang][2] + \
                         "\n" + \
                        (f"Title: \"{title}\". " if title!="" else "") + \
-                       (f"Description: \"{description}\". " if description!="" else "")
+                       (f"Description: \"{description}\". " if description!="" else "") + \
+                       (f"Channel description: \"{channel_description}\". " if channel_description else "")
             else:
                 return cfg["transcription-prompts"][lang][0] + \
                         "\n" + \
                         cfg["transcription-prompts"][lang][2] + \
                         "\n" + \
                        (f"Title: \"{title}\". " if title!="" else "") + \
-                       (f"Description: \"{description}\". " if description!="" else "")
+                       (f"Description: \"{description}\". " if description!="" else "") + \
+                       (f"Channel description: \"{channel_description}\". " if channel_description else "")
 
 def make_page_text_prompt(lang, link):
     cfg = get_config()
@@ -1059,6 +1061,7 @@ def _run_model_transcription(filename, engine_factory, summarize=True):
         cfg = get_config()
         lang = detect_language(Path("yt-video", filename + ".desc")) or cfg["default_language"]
         title, description = get_video_title_and_description(filename) or ("", "")
+        channel_description = get_channel_description(Path("yt-video", filename + ".desc"))
         _trace("pipeline.start", language=lang, summarize=summarize)
         engine = None
 
@@ -1094,7 +1097,8 @@ def _run_model_transcription(filename, engine_factory, summarize=True):
             with _trace_stage(stage="formatting"):
                 _trace("formatting.start", input_chars=len(text))
                 text = _map_text(text, lambda chunk: request(
-                    make_prompt(lang, False, title, description), chunk))
+                    make_prompt(lang, False, title, description,
+                                channel_description=channel_description), chunk))
                 _trace("formatting.completed", output_chars=len(text))
         else:
             _trace("formatting.skipped", reason="readable_cached_text")
@@ -1109,7 +1113,8 @@ def _run_model_transcription(filename, engine_factory, summarize=True):
         with _trace_stage(stage="summary"):
             _trace("summary.start", input_chars=len(text))
             output = _map_text(text, lambda chunk: request(
-                make_prompt(lang, True, title, description), chunk))
+                make_prompt(lang, True, title, description,
+                            channel_description=channel_description), chunk))
             _trace("summary.completed", output_chars=len(output))
             return output
 

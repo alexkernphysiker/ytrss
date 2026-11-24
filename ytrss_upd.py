@@ -247,6 +247,7 @@ def parce_rss_item(link, response=None):
                 if channel is None or channel.find("title", NS) is None:
                     raise ValueError("RSS feed has no channel/title.")
                 source_name = channel.find("title", NS).text or ""
+                channel_description = channel.findtext("description", namespaces=NS)
                 print(f"{link}: {source_name}")
                 for entry in channel.findall("item", NS):
                     try:
@@ -265,6 +266,8 @@ def parce_rss_item(link, response=None):
                         media_thumbnail = entry.find("itunes:image", NS)
                         if time_since_insertion < timedelta(days=get_config()["deliver_days"]):
                             entry_element = ElementTree.Element("entry")
+                            if channel_description is not None:
+                                ElementTree.SubElement(entry_element, "channel_description").text = channel_description
                             title_element = ElementTree.SubElement(entry_element, "title")
                             title_element.text = "[" + source_name + "] " + title.text
                             print(f"Title: {title_element.text}")
